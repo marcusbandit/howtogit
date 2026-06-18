@@ -39,6 +39,12 @@
     <ul class="tree__list" id="tree-list"></ul>
   </aside>
 
+  <!-- the remote repo, revealed by git remote add and filled by git push -->
+  <aside id="remotetree" class="tree tree--remote" aria-label="remote repository">
+    <p class="tree__title">the remote</p>
+    <ul class="tree__list" id="remote-list"></ul>
+  </aside>
+
   <!-- the infinite board where the graph gets drawn -->
   <main id="board" aria-label="git graph">
     <svg id="graph" aria-hidden="true">

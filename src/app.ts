@@ -16,6 +16,7 @@ const COLORS = {
   main: "#2e5c9e",
   feature: "#c0492f",
   green: "#3f7a4e",
+  remote: "#6b5ca5",
 } as const;
 
 // the board is drawn ~20% larger than 1:1 by shrinking the viewBox under the
@@ -50,6 +51,8 @@ const partsEl = need<HTMLElement>("parts");
 const nudgeEl = need<HTMLElement>("nudge");
 const treeEl = need<HTMLElement>("filetree");
 const treeList = need<HTMLElement>("tree-list");
+const remoteTreeEl = need<HTMLElement>("remotetree");
+const remoteList = need<HTMLElement>("remote-list");
 const timelineEl = need<HTMLElement>("timeline");
 const brandRule = needSel<SVGSVGElement>(".brand__rule");
 const cliRule = needSel<SVGSVGElement>(".cli__rule");
@@ -322,6 +325,21 @@ async function doCommit(message = "first commit"): Promise<void> {
   caption(message, node.x, node.y + node.r + 32, 320);
 }
 
+// the address of the remote, captured from `git remote add`
+let remoteUrl = "https://github.com/you/my-site.git";
+
+// connecting a remote changes no graph; the remote panel slides in afterwards
+async function doRemoteAdd(arg?: string): Promise<void> {
+  if (arg) remoteUrl = arg;
+}
+
+// push: stamp origin/main onto the pushed commit; the remote panel then fills
+async function doPush(): Promise<void> {
+  const head = headNode();
+  if (!head) return;
+  pill(gLabels, "origin/main", head.x, head.y + head.r + 66, COLORS.remote, 7, 120);
+}
+
 // ---- step machine ---------------------------------------------------
 type Tone = "cmd" | "flag" | "val";
 interface Part { t: string; tone: Tone; why: string; }
@@ -386,14 +404,49 @@ const steps: Step[] = [
     },
     run: doCommit,
   },
+  {
+    key: "remote",
+    cmd: "git remote add origin https://github.com/you/my-site.git",
+    test: (s) => /^git\s+remote\s+add\s+origin\s+\S+$/i.test(s),
+    extract: (s) => {
+      const m = s.match(/add\s+origin\s+(\S+)/i);
+      return m ? m[1] : remoteUrl;
+    },
+    hint: "Connect a remote:  git remote add origin <url>",
+    teach: {
+      goal: "Connect a remote",
+      why: "Point your repo at a copy hosted elsewhere, like GitHub.",
+      parts: [
+        { t: "remote add", tone: "cmd", why: "register a remote copy of the repo" },
+        { t: "origin", tone: "val", why: "a nickname for it (origin is the usual one)" },
+        { t: "…url", tone: "flag", why: "where the remote lives" },
+      ],
+    },
+    run: doRemoteAdd,
+  },
+  {
+    key: "push",
+    cmd: "git push -u origin main",
+    test: (s) => /^git\s+push(\s+-u\s+origin\s+main)?$/i.test(s),
+    hint: "Send your commits:  git push -u origin main",
+    teach: {
+      goal: "Send it to the remote",
+      why: "Upload your commits so the remote has them too.",
+      parts: [
+        { t: "push", tone: "cmd", why: "upload your commits to the remote" },
+        { t: "-u origin main", tone: "flag", why: "send your main branch to origin" },
+      ],
+    },
+    run: doPush,
+  },
 ];
 const END = {
   teach: {
-    goal: "That's your first commit",
-    why: "Repository started, snapshot saved.",
+    goal: "It's on the remote",
+    why: "Your local repo and the remote now share the same history.",
     parts: [] as Part[],
   },
-  tease: "push is the next stroke. I'm drawing it now ✦",
+  tease: "That's the whole first loop. More git is on the way ✦",
 };
 
 function currentCmd(): string {
@@ -521,6 +574,8 @@ form.addEventListener("submit", async (e) => {
   showStep(stepIndex);
   updateTimeline();
   renderFileTree();
+  renderRemoteTree();
+  updateLayout();
 });
 
 cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
@@ -592,6 +647,64 @@ function makeName(text: string): HTMLElement {
   return s;
 }
 
+// ---- remote tree (right) -------------------------------------------
+let lastRemoteShown = false;
+let lastRemotePushed = false;
+function renderRemoteTree(): void {
+  const shown = stepIndex >= 4;    // git remote add done
+  const pushed = stepIndex >= 5;   // git push done
+  remoteTreeEl.classList.toggle("is-shown", shown);
+  remoteList.replaceChildren();
+  if (!shown) { lastRemoteShown = false; lastRemotePushed = false; return; }
+
+  const url = document.createElement("li");
+  url.className = "remote-url";
+  url.textContent = remoteUrl.replace(/^https?:\/\//, "").replace(/\.git$/, "");
+  remoteList.appendChild(url);
+
+  const root = document.createElement("li");
+  root.className = "d";
+  root.append(makeName(`${PROJECT.root}/`));
+  remoteList.appendChild(root);
+
+  const git = document.createElement("li");
+  git.className = "f d--git";
+  if (!lastRemoteShown) git.classList.add("is-new");
+  const note = document.createElement("span");
+  note.className = "f__note";
+  note.textContent = "the remote repo";
+  git.append(makeName(".git/"), note);
+  remoteList.appendChild(git);
+
+  if (pushed) {
+    for (const f of PROJECT.files) {
+      const li = document.createElement("li");
+      li.className = "f f--committed";
+      if (!lastRemotePushed) li.classList.add("is-new");
+      li.append(makeName(f));
+      const m = document.createElement("span");
+      m.className = "f__mark";
+      m.textContent = MARK.committed;
+      li.appendChild(m);
+      remoteList.appendChild(li);
+    }
+  } else {
+    const empty = document.createElement("li");
+    empty.className = "remote-empty";
+    empty.textContent = "nothing pushed yet";
+    remoteList.appendChild(empty);
+  }
+  lastRemoteShown = shown;
+  lastRemotePushed = pushed;
+}
+
+// once a remote exists the local tree shares the stage; before that it leads
+function updateLayout(): void {
+  const paired = stepIndex >= 4;
+  treeEl.classList.toggle("is-focus", !paired);
+  treeEl.classList.toggle("is-paired", paired);
+}
+
 // ---- timeline (bottom, clickable) ----------------------------------
 const tlItems: HTMLButtonElement[] = [];
 function buildTimeline(): void {
@@ -653,6 +766,8 @@ async function seekTo(target: number): Promise<void> {
   showStep(stepIndex);
   updateTimeline();
   renderFileTree();
+  renderRemoteTree();
+  updateLayout();
   busy = false;
   cmd.focus();
 }
@@ -667,9 +782,10 @@ function boot(): void {
   showStep(0);
   buildTimeline();
   renderFileTree();
-  // No file editor exists yet, so the tree is the subject and sits centre-left.
-  // When the editor lands, drop this class and the tree returns to its corner.
-  treeEl.classList.add("is-focus");
+  renderRemoteTree();
+  // No file editor exists yet, so the local tree leads (is-focus) until a remote
+  // appears. When the editor lands, the compact corner state takes over instead.
+  updateLayout();
   cmd.focus();
 }
 
