@@ -3,37 +3,69 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>howtogit.dev — learn git, visually</title>
-  <meta name="description" content="An interactive, visual guide to git for beginners — from your first commit to handling merge conflicts." />
-  <meta name="color-scheme" content="dark light" />
+  <title>howtogit — learn git on paper</title>
+  <meta name="description" content="An interactive, hand-drawn guide to git for beginners — type real commands and watch the graph get drawn for you." />
+  <meta name="color-scheme" content="light" />
 
-  <!-- Open Graph / share preview -->
-  <meta property="og:title" content="howtogit.dev — learn git, visually" />
-  <meta property="og:description" content="An interactive, visual guide to git for beginners — from your first commit to handling merge conflicts." />
+  <meta property="og:title" content="howtogit — learn git on paper" />
+  <meta property="og:description" content="Type real git commands and watch the graph get drawn for you, by hand." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://howtogit.dev/" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="blobs" aria-hidden="true">
-    <span class="blob b1"></span>
-    <span class="blob b2"></span>
-    <span class="blob b3"></span>
-  </div>
+  <!-- paper grain: real fractal noise, kept faint -->
+  <svg class="grain" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <filter id="paper-grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" />
+      <feColorMatrix type="saturate" values="0" />
+    </filter>
+    <rect width="100%" height="100%" filter="url(#paper-grain)" />
+  </svg>
 
-  <main class="hero">
-    <div class="badge">git, but it finally makes sense</div>
-    <h1><span class="cmd">how</span><span class="cmd">to</span><span class="cmd accent">git</span><span class="dev">.dev</span></h1>
-    <p class="tagline">
-      An interactive, bubbly guide to git for total beginners —
-      from your <strong>first commit</strong> to surviving a <strong>merge conflict</strong>.
-    </p>
-    <p class="soon">Coming soon. Building it in the open. ✨</p>
+  <header class="brand">
+    <span class="brand__word">howtogit</span>
+    <svg class="brand__rule" aria-hidden="true" viewBox="0 0 160 12" preserveAspectRatio="none"></svg>
+  </header>
+
+  <!-- the infinite board where the graph gets drawn -->
+  <main id="board" aria-label="git graph">
+    <svg id="graph" aria-hidden="true">
+      <defs>
+        <!-- the living "boil": animated displacement makes strokes feel hand-drawn -->
+        <filter id="boil" x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="1" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="3" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </defs>
+      <g id="edges" filter="url(#boil)"></g>
+      <g id="nodes" filter="url(#boil)"></g>
+      <g id="ink-nib"></g>
+      <g id="labels"></g>
+    </svg>
   </main>
 
-  <footer>
-    <span>made with too much coffee · <a href="https://github.com/marcusbandit/howtogit">source</a></span>
-  </footer>
+  <!-- the command line: starts centered, settles downward after the first commit -->
+  <section id="stage" class="is-centered" aria-live="polite">
+    <p class="cue" id="cue">Every project begins the same way. <b>Start your repository.</b></p>
+    <form id="cli" autocomplete="off" spellcheck="false">
+      <span class="cli__mark" aria-hidden="true">git</span>
+      <span class="cli__field">
+        <input id="cmd" name="cmd" type="text" inputmode="text"
+               aria-label="git command" placeholder="init" autofocus />
+        <svg class="cli__rule" aria-hidden="true" viewBox="0 0 100 10" preserveAspectRatio="none"></svg>
+      </span>
+      <span class="cli__enter" aria-hidden="true">press&nbsp;↵</span>
+    </form>
+    <p class="ghost" id="ghost" aria-live="assertive"></p>
+  </section>
+
+  <script src="sketch.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
