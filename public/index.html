@@ -33,6 +33,12 @@
     <svg class="brand__rule" aria-hidden="true" viewBox="0 0 160 12" preserveAspectRatio="none"></svg>
   </header>
 
+  <!-- a simplified project on disk; git init adds the .git folder -->
+  <aside id="filetree" class="tree" aria-label="project files">
+    <p class="tree__title">on your computer</p>
+    <ul class="tree__list" id="tree-list"></ul>
+  </aside>
+
   <!-- the infinite board where the graph gets drawn -->
   <main id="board" aria-label="git graph">
     <svg id="graph" aria-hidden="true">
@@ -68,6 +74,9 @@
     </form>
     <p class="nudge" id="nudge" aria-live="assertive"></p>
   </section>
+
+  <!-- a clickable history of the steps; returning users can skip ahead -->
+  <nav id="timeline" class="timeline" aria-label="lesson steps"></nav>
 
   <script type="module" src="app.js"></script>
 </body>

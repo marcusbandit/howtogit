@@ -264,7 +264,147 @@ body {
   80% { transform: translateX(3px); }
 }
 
+/* ---- file tree (left) ---------------------------------------------- */
+/* Compact corner state. This is where the tree lives LATER, once a file
+   editor takes the main spot. Ink on paper, no card. */
+.tree {
+  position: fixed;
+  top: clamp(6rem, 13vh, 8.5rem);
+  left: clamp(1.1rem, 3vw, 2.4rem);
+  z-index: 6;
+  width: clamp(15rem, 20vw, 18rem);
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  color: var(--ink);
+  user-select: none;
+  transition:
+    top 0.6s var(--ease-settle), left 0.6s var(--ease-settle),
+    width 0.6s var(--ease-settle),
+    font-size 0.6s var(--ease-settle), transform 0.6s var(--ease-settle);
+}
+
+/* Focus state: while there's nothing to edit yet, the tree IS the subject,
+   so it sits large and centred down the left side. */
+.tree.is-focus {
+  top: 50%;
+  transform: translateY(-50%);
+  left: clamp(1.5rem, 4.5vw, 5rem);
+  width: clamp(19rem, 28vw, 26rem);
+  font-size: 1.55rem;
+}
+.tree.is-focus .tree__title { font-size: 0.98rem; margin-bottom: 1.1rem; }
+.tree.is-focus .d--git .f__note { font-size: 0.95rem; }
+.tree__title {
+  font-family: var(--ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--ink-soft);
+  margin-bottom: 0.7rem;
+  padding-left: 0.1rem;
+}
+.tree__list { list-style: none; }
+.tree__list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.2rem 0;
+  line-height: 1.35;
+}
+.tree__list .d > .f__name { color: var(--ink); font-weight: 700; }
+.tree__list .f { padding-left: 1.35rem; position: relative; }
+.tree__list .f::before {
+  content: "";
+  position: absolute;
+  left: 0.4rem;
+  top: 0.66em;
+  width: 0.6rem;
+  height: 1.5px;
+  background: var(--ink-soft);
+  opacity: 0.5;
+}
+.f__name { white-space: nowrap; }
+.f__mark { font-weight: 700; font-size: 1em; }
+.f--untracked .f__name { color: var(--ink-soft); }
+.f--untracked .f__mark { color: var(--ink-soft); }
+.f--staged    .f__name { color: var(--pen-green); }
+.f--staged    .f__mark { color: var(--pen-green); }
+.f--committed .f__name { color: var(--ink); }
+.f--committed .f__mark { color: var(--pen-blue); }
+.d--git { opacity: 0.72; }
+.d--git .f__name { color: var(--pen-red); font-style: italic; }
+.d--git .f__note {
+  font-family: var(--ui);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+/* the .git/ line writes itself on, left to right, then slides into place */
+.tree__list li.is-new { animation: git-write 0.7s var(--ease-settle) both; }
+@keyframes git-write {
+  from { clip-path: inset(0 100% 0 0); opacity: 0; transform: translateX(-14px); }
+  55%  { opacity: 1; }
+  to   { clip-path: inset(0 0 0 0); opacity: 1; transform: translateX(0); }
+}
+
+/* ---- timeline (bottom) --------------------------------------------- */
+.timeline {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(1rem, 3.5vh, 2rem);
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.tl-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.3rem 0.2rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+.tl-item:hover { color: var(--ink); transform: translateY(-1px); }
+.tl-item:focus-visible { outline: 2px solid var(--pen-blue); outline-offset: 3px; border-radius: 6px; }
+.tl-dot {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  border: 2px solid var(--ink-soft);
+  background: var(--paper);
+  transition: all 0.25s var(--ease-settle);
+}
+.tl-link {
+  width: clamp(1.6rem, 4vw, 2.6rem);
+  height: 2px;
+  background: var(--ink-soft);
+  opacity: 0.4;
+  margin-bottom: 1.5rem; /* align with the dots row */
+}
+.tl-item.is-done   { color: var(--ink); }
+.tl-item.is-done   .tl-dot { border-color: var(--pen-blue); background: var(--pen-blue); }
+.tl-item.is-current .tl-dot {
+  border-color: var(--pen-red);
+  background: var(--paper);
+  box-shadow: 0 0 0 3px rgba(192, 73, 47, 0.2);
+}
+.tl-item.is-current { color: var(--ink); font-weight: 700; }
+
+@media (max-width: 760px) {
+  .tree { display: none; }
+  .tl-label { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   #stage, .lesson { transition: none; }
-  .shake { animation: none; }
+  .shake, .tree__list li.is-new { animation: none; }
 }

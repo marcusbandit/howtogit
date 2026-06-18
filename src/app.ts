@@ -48,6 +48,9 @@ const goalEl = need<HTMLElement>("goal");
 const whyEl = need<HTMLElement>("why");
 const partsEl = need<HTMLElement>("parts");
 const nudgeEl = need<HTMLElement>("nudge");
+const treeEl = need<HTMLElement>("filetree");
+const treeList = need<HTMLElement>("tree-list");
+const timelineEl = need<HTMLElement>("timeline");
 const brandRule = needSel<SVGSVGElement>(".brand__rule");
 const cliRule = needSel<SVGSVGElement>(".cli__rule");
 
@@ -139,9 +142,12 @@ function startAmbient(): void {
   requestAnimationFrame(loop);
 }
 
+// when true, drawing happens with no animation (used for timeline replay)
+let instant = false;
+
 // ---- small animation helpers ---------------------------------------
 function animateIn(node: SVGElement | HTMLElement, delay = 0): void {
-  if (S.prefersReduced) return;
+  if (instant || S.prefersReduced) return;
   node.style.opacity = "0";
   node.style.transform = "translateY(6px) scale(0.9)";
   node.style.transformOrigin = "center";
@@ -154,7 +160,7 @@ function animateIn(node: SVGElement | HTMLElement, delay = 0): void {
   );
 }
 function fadeOutRemove(node: SVGElement | HTMLElement, dur = 300): void {
-  if (S.prefersReduced) { node.remove(); return; }
+  if (instant || S.prefersReduced) { node.remove(); return; }
   node.style.transition = `opacity ${dur}ms ease`;
   node.style.opacity = "0";
   setTimeout(() => node.remove(), dur + 20);
@@ -178,6 +184,7 @@ async function drawNode(node: CommitNode, seed: number): Promise<void> {
   }) as SVGPathElement;
   gNodes.appendChild(main);
   gNodes.appendChild(second);
+  if (instant) return;            // already rendered in full
   await S.drawOn(main, { duration: 720, nibGroup: gNib, color: node.color });
   S.drawOn(second, { duration: 360 });
 }
@@ -197,6 +204,7 @@ async function drawConnector(from: CommitNode, to: CommitNode, color: string, se
     stroke: color, "stroke-width": 2.4,
   }) as SVGPathElement;
   gEdges.appendChild(p);
+  if (instant) return;            // already rendered in full
   await S.drawOn(p, { duration: 460, nibGroup: gNib, color });
 }
 
@@ -280,12 +288,17 @@ async function doAdd(): Promise<void> {
   gEdges.appendChild(conn);
   gNodes.appendChild(ring);
   const tag = caption("staged", p.x, p.y + NODE_R + 30, 120, true);
-  requestAnimationFrame(() => {
-    conn.style.transition = "opacity .4s ease";
-    ring.style.transition = "opacity .4s ease";
+  if (instant) {
     conn.style.opacity = "0.5";
     ring.style.opacity = "0.55";
-  });
+  } else {
+    requestAnimationFrame(() => {
+      conn.style.transition = "opacity .4s ease";
+      ring.style.transition = "opacity .4s ease";
+      conn.style.opacity = "0.5";
+      ring.style.opacity = "0.55";
+    });
+  }
   model.pending = { els: [conn, ring, tag], pos: p };
 }
 
@@ -314,6 +327,7 @@ type Tone = "cmd" | "flag" | "val";
 interface Part { t: string; tone: Tone; why: string; }
 interface Teach { goal: string; why: string; parts: Part[]; }
 interface Step {
+  key: string;                       // short label for the timeline
   cmd: string;                       // full command, including "git"
   test: (s: string) => boolean;
   hint: string;
@@ -325,25 +339,27 @@ interface Step {
 let stepIndex = 0;
 const steps: Step[] = [
   {
+    key: "init",
     cmd: "git init",
     test: (s) => /^git\s+init$/i.test(s),
     hint: "Type  git init  to begin.",
     teach: {
       goal: "Start your repository",
-      why: "Git starts keeping track of this folder.",
+      why: "Sets up a new, empty repository in the folder where it runs.",
       parts: [
-        { t: "init", tone: "cmd", why: "create the repository" },
+        { t: "init", tone: "cmd", why: "create the empty repo (the .git folder)" },
       ],
     },
     run: doInit,
   },
   {
+    key: "add",
     cmd: "git add .",
     test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
     hint: "Stage everything with  git add .  (or  git add -A )",
     teach: {
       goal: "Pick what to save",
-      why: "Mark which files go in the next snapshot.",
+      why: "Choose which files go in the next snapshot.",
       parts: [
         { t: "add", tone: "cmd", why: "stage your changes" },
         { t: ".  /  -A", tone: "val", why: "the . means everything (so does -A)" },
@@ -352,6 +368,7 @@ const steps: Step[] = [
     run: doAdd,
   },
   {
+    key: "commit",
     cmd: 'git commit -m "first commit"',
     test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
     extract: (s) => {
@@ -361,9 +378,9 @@ const steps: Step[] = [
     hint: 'Save it with  git commit -m "your message"',
     teach: {
       goal: "Save a snapshot",
-      why: "A point in history you can always come back to.",
+      why: "Records the staged files into history.",
       parts: [
-        { t: "commit", tone: "cmd", why: "save what you staged" },
+        { t: "commit", tone: "cmd", why: "save that snapshot to history" },
         { t: "-m", tone: "flag", why: "attach a short message" },
       ],
     },
@@ -502,6 +519,8 @@ form.addEventListener("submit", async (e) => {
   await step.run(arg);
   busy = false;
   showStep(stepIndex);
+  updateTimeline();
+  renderFileTree();
 });
 
 cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
@@ -517,6 +536,127 @@ function keepFocus(): void {
 cmd.addEventListener("blur", () => requestAnimationFrame(keepFocus));
 document.addEventListener("click", keepFocus);
 
+// ---- file tree (left) ----------------------------------------------
+const PROJECT = { root: "my-site", files: ["index.html", "style.css", "app.js"] };
+type FileState = "plain" | "untracked" | "staged" | "committed";
+const MARK: Record<FileState, string> = { plain: "", untracked: "·", staged: "+", committed: "✓" };
+
+// stepIndex maps to disk state: 0 before init, 1 init, 2 add, 3 commit
+function fileStateForStep(i: number): FileState {
+  if (i <= 0) return "plain";
+  if (i === 1) return "untracked";
+  if (i === 2) return "staged";
+  return "committed";
+}
+
+let lastGitPresent = false;
+function renderFileTree(): void {
+  const state = fileStateForStep(stepIndex);
+  const gitPresent = stepIndex >= 1;
+  treeList.replaceChildren();
+
+  const root = document.createElement("li");
+  root.className = "d";
+  root.append(makeName(`${PROJECT.root}/`));
+  treeList.appendChild(root);
+
+  if (gitPresent) {
+    const git = document.createElement("li");
+    git.className = "f d--git";
+    if (!lastGitPresent) git.classList.add("is-new");
+    const note = document.createElement("span");
+    note.className = "f__note";
+    note.textContent = "git lives here";
+    git.append(makeName(".git/"), note);
+    treeList.appendChild(git);
+  }
+
+  for (const f of PROJECT.files) {
+    const li = document.createElement("li");
+    li.className = state === "plain" ? "f" : `f f--${state}`;
+    li.append(makeName(f));
+    if (MARK[state]) {
+      const m = document.createElement("span");
+      m.className = "f__mark";
+      m.textContent = MARK[state];
+      li.appendChild(m);
+    }
+    treeList.appendChild(li);
+  }
+  lastGitPresent = gitPresent;
+}
+function makeName(text: string): HTMLElement {
+  const s = document.createElement("span");
+  s.className = "f__name";
+  s.textContent = text;
+  return s;
+}
+
+// ---- timeline (bottom, clickable) ----------------------------------
+const tlItems: HTMLButtonElement[] = [];
+function buildTimeline(): void {
+  timelineEl.replaceChildren();
+  steps.forEach((st, i) => {
+    if (i > 0) {
+      const link = document.createElement("span");
+      link.className = "tl-link";
+      timelineEl.appendChild(link);
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tl-item";
+    const dot = document.createElement("span");
+    dot.className = "tl-dot";
+    const label = document.createElement("span");
+    label.className = "tl-label";
+    label.textContent = `git ${st.key}`;
+    btn.append(dot, label);
+    btn.title = `Jump to: git ${st.key}`;
+    btn.addEventListener("click", () => { void seekTo(i); });
+    timelineEl.appendChild(btn);
+    tlItems.push(btn);
+  });
+  updateTimeline();
+}
+function updateTimeline(): void {
+  tlItems.forEach((btn, i) => {
+    btn.classList.toggle("is-done", i < stepIndex);
+    btn.classList.toggle("is-current", i === stepIndex);
+  });
+}
+
+// ---- seek: rebuild instantly to a chosen step ----------------------
+function resetBoard(): void {
+  [gEdges, gNodes, gNib, gLabels].forEach((g) => g.replaceChildren());
+  model.nodes = [];
+  model.head = null;
+  model.tagEls = null;
+  model.pending = null;
+}
+async function seekTo(target: number): Promise<void> {
+  if (busy || target === stepIndex) return;
+  busy = true;
+  resetBoard();
+  if (target <= 0) {
+    stage.classList.remove("is-docked");
+    stage.classList.add("is-centered");
+    stage.style.setProperty("--stage-y", "50%");
+  }
+  instant = true;
+  for (let k = 0; k < target; k++) {
+    const st = steps[k];
+    await st.run(st.extract ? st.extract(st.cmd) : undefined);
+  }
+  instant = false;
+  stepIndex = target;
+  cmd.value = "";
+  showStep(stepIndex);
+  updateTimeline();
+  renderFileTree();
+  busy = false;
+  cmd.focus();
+}
+
 // ---- boot -----------------------------------------------------------
 function boot(): void {
   sizeBoard();
@@ -525,6 +665,11 @@ function boot(): void {
   drawRule(cliRule, COLORS.ink, 4);
   startAmbient();
   showStep(0);
+  buildTimeline();
+  renderFileTree();
+  // No file editor exists yet, so the tree is the subject and sits centre-left.
+  // When the editor lands, drop this class and the tree returns to its corner.
+  treeEl.classList.add("is-focus");
   cmd.focus();
 }
 
