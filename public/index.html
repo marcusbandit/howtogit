@@ -50,19 +50,23 @@
     </svg>
   </main>
 
-  <!-- the command line: starts centered, settles downward after the first commit -->
+  <!-- the command line + lesson: starts centered, settles downward after init -->
   <section id="stage" class="is-centered" aria-live="polite">
-    <p class="cue" id="cue">Every project begins the same way. <b>Start your repository.</b></p>
+    <div class="lesson" id="lesson">
+      <p class="lesson__goal" id="goal"></p>
+      <p class="lesson__why" id="why"></p>
+      <div class="lesson__parts" id="parts"></div>
+    </div>
     <form id="cli" autocomplete="off" spellcheck="false">
-      <span class="cli__mark" aria-hidden="true">git</span>
       <span class="cli__field">
-        <input id="cmd" name="cmd" type="text" inputmode="text"
-               aria-label="git command" placeholder="init" autofocus />
+        <span class="cli__ink" id="ink" aria-hidden="true"></span>
+        <input id="cmd" name="cmd" type="text" inputmode="text" autocapitalize="none"
+               autocorrect="off" aria-label="git command" />
         <svg class="cli__rule" aria-hidden="true" viewBox="0 0 100 10" preserveAspectRatio="none"></svg>
       </span>
-      <span class="cli__enter" aria-hidden="true">press&nbsp;↵</span>
+      <span class="cli__enter" aria-hidden="true">tab&nbsp;⇥&nbsp;or&nbsp;↵</span>
     </form>
-    <p class="ghost" id="ghost" aria-live="assertive"></p>
+    <p class="nudge" id="nudge" aria-live="assertive"></p>
   </section>
 
   <script type="module" src="app.js"></script>

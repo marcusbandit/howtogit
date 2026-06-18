@@ -1,8 +1,10 @@
 /* app.ts — the tutorial controller.
  *
- * A small step machine drives a guided git lesson. Each step knows the command
- * it wants, the plain-language reason behind it, and how to draw its result on
- * the board. The graph model stays tiny so new commands slot in cleanly.
+ * A small step machine drives a guided git lesson. Each step carries the full
+ * command it wants, a plain-language explanation of what it does and why each
+ * part matters, and a routine that draws its result on the board. The command
+ * line highlights `git` as you type it and shows a ghost of the rest, which you
+ * can complete with Tab. The graph model stays tiny so new commands slot in.
  *
  * Built so far: init, add, commit.
  */
@@ -14,6 +16,9 @@ const COLORS = {
     feature: "#c0492f",
     green: "#3f7a4e",
 };
+// the board is drawn ~20% larger than 1:1 by shrinking the viewBox under the
+// full-size <svg>. One knob zooms every node, label and stroke together.
+const ZOOM = 1.2;
 // ---- DOM ------------------------------------------------------------
 function need(id) {
     const e = document.getElementById(id);
@@ -35,15 +40,21 @@ const gLabels = need("labels");
 const stage = need("stage");
 const form = need("cli");
 const cmd = need("cmd");
-const cue = need("cue");
-const ghost = need("ghost");
+const ink = need("ink");
+const goalEl = need("goal");
+const whyEl = need("why");
+const partsEl = need("parts");
+const nudgeEl = need("nudge");
 const brandRule = needSel(".brand__rule");
 const cliRule = needSel(".cli__rule");
 const model = { nodes: [], head: null, tagEls: null, pending: null };
-const GAP = 150; // horizontal distance between commits
-const NODE_R = 28; // base node radius
+const GAP = 150; // horizontal distance between commits (viewBox units)
+const NODE_R = 28; // base node radius (viewBox units)
+// viewBox dimensions: the drawing space, smaller than the screen by ZOOM
+let viewW = window.innerWidth / ZOOM;
+let viewH = window.innerHeight / ZOOM;
 function boardCenter() {
-    return { x: window.innerWidth / 2, y: window.innerHeight * 0.42 };
+    return { x: viewW / 2, y: viewH * 0.42 };
 }
 // column i sits to the right of the first node, which lives at board centre
 function nodePos(col) {
@@ -56,9 +67,11 @@ function headNode() {
 // ---- board sizing ---------------------------------------------------
 function sizeBoard() {
     const w = window.innerWidth, h = window.innerHeight;
+    viewW = w / ZOOM;
+    viewH = h / ZOOM;
     graph.setAttribute("width", String(w));
     graph.setAttribute("height", String(h));
-    graph.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    graph.setAttribute("viewBox", `0 0 ${viewW} ${viewH}`);
 }
 // ---- the two underlines (brand + command line) ----------------------
 function drawRule(svg, color, seed) {
@@ -255,56 +268,133 @@ async function doCommit(message = "first commit") {
 let stepIndex = 0;
 const steps = [
     {
-        cmd: "init",
-        test: (s) => /^init$/i.test(s),
-        cue: "Every project begins the same way. <b>Start your repository.</b>",
-        hint: "Type  init  and press enter to begin.",
+        cmd: "git init",
+        test: (s) => /^git\s+init$/i.test(s),
+        hint: "Type  git init  to begin.",
+        teach: {
+            goal: "Start your repository",
+            why: "Git begins watching this folder so it can remember every version of your work from here on.",
+            parts: [
+                { t: "init", tone: "cmd", why: "create a new, empty repository right here" },
+            ],
+        },
         run: doInit,
     },
     {
-        cmd: "add .",
-        test: (s) => /^add(\s+\.|\s+-a|\s+--all)?$/i.test(s),
-        cue: "Choose what to save. <b>git add</b> stages your changes for the next snapshot.",
-        hint: "Stage everything with:  add .",
+        cmd: "git add .",
+        test: (s) => /^git\s+add(\s+\.|\s+-a|\s+--all)?$/i.test(s),
+        hint: "Stage your files with  git add .",
+        teach: {
+            goal: "Pick what to save",
+            why: "Before saving, you choose which files go into the next snapshot. This is called staging.",
+            parts: [
+                { t: "add", tone: "cmd", why: "stage files, marking them for the next save" },
+                { t: ".", tone: "val", why: "“everything in this folder”. You could name one file instead, like  index.html" },
+            ],
+        },
         run: doAdd,
     },
     {
-        cmd: 'commit -m "first commit"',
-        test: (s) => /^commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
+        cmd: 'git commit -m "first commit"',
+        test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
         extract: (s) => {
             const m = s.match(/-m\s+(["'])(.+?)\1/);
             return m ? m[2] : "first commit";
         },
-        cue: "Save the snapshot. <b>git commit</b> records it with a short message.",
-        hint: 'Add a message:  commit -m "first commit"',
+        hint: 'Save it with a message:  git commit -m "first commit"',
+        teach: {
+            goal: "Save a snapshot",
+            why: "A commit is a saved point in your history that you can always return to. Give it a short message so future-you knows what changed.",
+            parts: [
+                { t: "commit", tone: "cmd", why: "save the staged files as a snapshot" },
+                { t: "-m", tone: "flag", why: "short for “message”, the note that comes next" },
+                { t: '"first commit"', tone: "val", why: "your description, in quotes. Write anything you like" },
+            ],
+        },
         run: doCommit,
     },
 ];
 const END = {
-    cue: "That's a commit: a snapshot you can always return to. <b>More is on the way.</b>",
+    teach: {
+        goal: "That's your first commit",
+        why: "You started a repository and saved your first snapshot. More git is on the way.",
+        parts: [],
+    },
     tease: "push is the next stroke. I'm drawing it now ✦",
 };
+function currentCmd() {
+    return stepIndex < steps.length ? steps[stepIndex].cmd : "";
+}
+function renderTeach(teach) {
+    goalEl.textContent = teach.goal;
+    whyEl.textContent = teach.why;
+    partsEl.replaceChildren();
+    for (const p of teach.parts) {
+        const row = document.createElement("div");
+        row.className = "part";
+        const tok = document.createElement("span");
+        tok.className = `tok tok--${p.tone}`;
+        tok.textContent = p.t;
+        const why = document.createElement("span");
+        why.className = "why";
+        why.textContent = p.why;
+        row.append(tok, why);
+        partsEl.appendChild(row);
+    }
+}
 function showStep(i) {
-    if (i < steps.length) {
-        setCue(steps[i].cue);
-        cmd.placeholder = steps[i].cmd;
+    const teach = i < steps.length ? steps[i].teach : END.teach;
+    const lesson = goalEl.parentElement;
+    if (lesson && !S.prefersReduced) {
+        lesson.style.opacity = "0";
+        setTimeout(() => { renderTeach(teach); lesson.style.opacity = ""; }, 200);
     }
     else {
-        setCue(END.cue);
-        cmd.placeholder = "";
+        renderTeach(teach);
     }
+    updateInk();
+}
+// ---- command line: live highlight + ghost suggestion ----------------
+function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+let suggestActive = false;
+function updateInk() {
+    const typed = cmd.value;
+    const cur = currentCmd();
+    const m = typed.match(/^(\s*)(\S*)([\s\S]*)$/);
+    const lead = m ? m[1] : "";
+    const word = m ? m[2] : "";
+    const rest = m ? m[3] : "";
+    // colour the first word blue while it is becoming "git"
+    const isGit = word.length > 0 && "git".startsWith(word.toLowerCase());
+    let html = esc(lead);
+    html += `<span class="${isGit ? "hl-git" : "hl-rest"}">${esc(word)}</span>`;
+    html += `<span class="hl-rest">${esc(rest)}</span>`;
+    suggestActive =
+        cur.length > 0 &&
+            typed.length < cur.length &&
+            cur.toLowerCase().startsWith(typed.toLowerCase());
+    if (suggestActive)
+        html += `<span class="hl-ghost">${esc(cur.slice(typed.length))}</span>`;
+    ink.innerHTML = html;
+}
+function acceptSuggestion() {
+    const cur = currentCmd();
+    if (!cur || cmd.value.length >= cur.length)
+        return;
+    cmd.value = cur;
+    const end = cmd.value.length;
+    cmd.setSelectionRange(end, end);
+    updateInk();
+}
+function caretAtEnd() {
+    return cmd.selectionStart === cmd.value.length && cmd.selectionEnd === cmd.value.length;
 }
 // ---- command line behaviour ----------------------------------------
-function setCue(html) {
-    cue.style.opacity = "0";
-    setTimeout(() => {
-        cue.innerHTML = html;
-        cue.style.opacity = "";
-    }, 220);
-}
-function showGhost(text) { ghost.textContent = text; ghost.classList.add("show"); }
-function clearGhost() { ghost.classList.remove("show"); }
-function nudge() {
+function showNudge(text) { nudgeEl.textContent = text; nudgeEl.classList.add("show"); }
+function clearNudge() { nudgeEl.classList.remove("show"); }
+function shake() {
     form.classList.remove("shake");
     void form.offsetWidth;
     form.classList.add("shake");
@@ -315,7 +405,7 @@ function dockStage() {
     stage.style.setProperty("--stage-y", `${Math.round(window.innerHeight * 0.67)}px`);
 }
 function normalize(raw) {
-    return raw.trim().replace(/\s+/g, " ").replace(/^git\s+/i, "");
+    return raw.trim().replace(/\s+/g, " ");
 }
 let busy = false;
 form.addEventListener("submit", async (e) => {
@@ -326,25 +416,43 @@ form.addEventListener("submit", async (e) => {
     if (!input)
         return;
     if (stepIndex >= steps.length) {
-        showGhost(END.tease);
+        showNudge(END.tease);
         return;
     }
     const step = steps[stepIndex];
     if (!step.test(input)) {
-        showGhost(step.hint);
-        nudge();
+        showNudge(/^git\b/i.test(input) ? step.hint : "Every git command starts with  git");
+        shake();
         return;
     }
-    clearGhost();
-    cmd.value = "";
+    clearNudge();
     const arg = step.extract ? step.extract(input) : undefined;
+    cmd.value = "";
+    updateInk();
     stepIndex++;
     busy = true;
     await step.run(arg);
     busy = false;
     showStep(stepIndex);
 });
-cmd.addEventListener("input", clearGhost);
+cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
+cmd.addEventListener("keydown", (e) => {
+    if (e.key === "Tab" && suggestActive) {
+        e.preventDefault();
+        acceptSuggestion();
+    }
+    else if (e.key === "ArrowRight" && suggestActive && caretAtEnd()) {
+        e.preventDefault();
+        acceptSuggestion();
+    }
+});
+// keep the only input focused: typing should always land, no clicking required
+function keepFocus() {
+    if (!document.hidden)
+        cmd.focus();
+}
+cmd.addEventListener("blur", () => requestAnimationFrame(keepFocus));
+document.addEventListener("click", keepFocus);
 // ---- boot -----------------------------------------------------------
 function boot() {
     sizeBoard();

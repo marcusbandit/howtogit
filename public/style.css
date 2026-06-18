@@ -6,7 +6,7 @@
   --ink-soft: #7a7060;
 
   /* pen colours — one per branch */
-  --pen-blue:  #2e5c9e;  /* main   */
+  --pen-blue:  #2e5c9e;  /* main */
   --pen-red:   #c0492f;  /* feature */
   --pen-green: #3f7a4e;  /* extra branches */
   --pencil:    #8e8473;
@@ -18,6 +18,9 @@
   --ui:   "Hanken Grotesk", system-ui, -apple-system, sans-serif;
 
   --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* one knob for the command-line type size (drives the overlay alignment) */
+  --cli-size: clamp(1.55rem, 3.6vw, 2.2rem);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -27,11 +30,10 @@ html, body { height: 100%; }
 body {
   min-height: 100dvh;
   background-color: var(--paper);
-  /* faint draughting dot-grid → "infinite board" + a centre-focused vignette */
   background-image:
     radial-gradient(120vmax 90vmax at 50% 42%, transparent 38%, var(--paper-lo) 100%),
-    radial-gradient(var(--grid) 1.1px, transparent 1.4px);
-  background-size: 100% 100%, 26px 26px;
+    radial-gradient(var(--grid) 1.2px, transparent 1.6px);
+  background-size: 100% 100%, 30px 30px;
   background-position: center, center;
   color: var(--ink);
   font-family: var(--ui);
@@ -62,7 +64,7 @@ body {
 }
 .brand__word {
   font-family: var(--hand);
-  font-size: clamp(1.9rem, 4vw, 2.6rem);
+  font-size: clamp(2.1rem, 4.4vw, 3rem);
   font-weight: 700;
   line-height: 0.8;
   color: var(--ink);
@@ -70,7 +72,7 @@ body {
 }
 .brand__rule {
   display: block;
-  width: clamp(7rem, 13vw, 9.5rem);
+  width: clamp(7.5rem, 14vw, 10.5rem);
   height: 0.7rem;
   margin-top: 0.1rem;
   overflow: visible;
@@ -103,7 +105,7 @@ body {
   fill: var(--ink-soft);
 }
 
-/* ---- command line -------------------------------------------------- */
+/* ---- stage (lesson + command line) --------------------------------- */
 #stage {
   position: fixed;
   left: 0;
@@ -114,57 +116,110 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.85rem;
+  gap: 1.1rem;
   padding: 0 1.2rem;
   transition: top 0.95s var(--ease-settle);
   pointer-events: none;
 }
 #stage > * { pointer-events: auto; }
 
-.cue {
-  font-family: var(--ui);
-  font-size: clamp(0.98rem, 2.2vw, 1.18rem);
-  font-weight: 400;
-  color: var(--ink-soft);
-  text-align: center;
-  letter-spacing: 0.01em;
-  max-width: 32rem;
-  transition: opacity 0.5s ease, transform 0.5s var(--ease-settle);
-}
-.cue b { color: var(--ink); font-weight: 600; }
-.is-docked .cue { font-size: 0.92rem; opacity: 0.85; }
-
-#cli {
+/* ---- the lesson (what + why + the parts of the command) ------------ */
+.lesson {
   display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
-  background: transparent;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 38rem;
+  text-align: center;
+  transition: opacity 0.3s ease;
 }
-.cli__mark {
+.lesson__goal {
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: clamp(1.8rem, 4.8vw, 2.7rem);
+  line-height: 1;
+  color: var(--ink);
+}
+.lesson__why {
+  font-size: clamp(1rem, 2.4vw, 1.2rem);
+  line-height: 1.45;
+  color: var(--ink-soft);
+  max-width: 34rem;
+}
+.lesson__parts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+.part {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  font-size: clamp(0.95rem, 2.2vw, 1.12rem);
+}
+.part .tok {
   font-family: var(--mono);
   font-weight: 700;
-  font-size: clamp(1.4rem, 3.4vw, 2rem);
-  color: var(--pen-blue);
-  letter-spacing: -0.02em;
+  font-size: 0.92em;
+  padding: 0.08rem 0.42rem;
+  border-radius: 0.35rem;
+  white-space: nowrap;
+}
+.part .tok--cmd  { color: var(--pen-blue);  background: rgba(46, 92, 158, 0.10); }
+.part .tok--flag { color: var(--pen-red);   background: rgba(192, 73, 47, 0.10); }
+.part .tok--val  { color: var(--pen-green); background: rgba(63, 122, 78, 0.12); }
+.part .why { color: var(--ink-soft); text-align: left; }
+
+/* ---- command line with highlight + ghost overlay ------------------- */
+#cli {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
 }
 .cli__field { position: relative; display: inline-block; }
-#cmd {
+
+/* the input and the overlay must share identical text metrics */
+.cli__ink, #cmd {
   font-family: var(--mono);
+  font-size: var(--cli-size);
   font-weight: 400;
-  font-size: clamp(1.4rem, 3.4vw, 2rem);
-  color: var(--ink);
-  background: transparent;
+  line-height: 1.2;
+  letter-spacing: 0;
+  padding: 0 0 0.18rem 0;
+  white-space: pre;
+}
+#cmd {
+  position: relative;
+  z-index: 1;
+  width: min(82vw, 30ch);
   border: none;
+  background: transparent;
   outline: none;
-  padding: 0 0.1rem 0.15rem;
-  width: min(58vw, 19ch);
+  color: transparent;            /* real text is painted by the overlay */
   caret-color: var(--pen-red);
 }
-#cmd::placeholder { color: var(--ink-soft); opacity: 0.5; }
+#cmd::selection { background: rgba(46, 92, 158, 0.18); }
+.cli__ink {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+}
+.hl-git   { color: var(--pen-blue); font-weight: 700; }
+.hl-rest  { color: var(--ink); }
+.hl-ghost { color: var(--ink-soft); opacity: 0.42; }
+
 .cli__rule {
   position: absolute;
   left: 0;
-  bottom: -0.25rem;
+  bottom: -0.28rem;
   width: 100%;
   height: 0.6rem;
   overflow: visible;
@@ -174,24 +229,25 @@ body {
   font-family: var(--mono);
   font-size: 0.8rem;
   color: var(--ink-soft);
-  opacity: 0.55;
+  opacity: 0.5;
   white-space: nowrap;
   transition: opacity 0.4s ease;
   user-select: none;
 }
 .is-docked .cli__enter { opacity: 0; }
 
-.ghost {
+/* error / guidance line */
+.nudge {
   font-family: var(--hand);
-  font-size: 1.25rem;
+  font-size: 1.35rem;
   font-weight: 600;
   color: var(--pen-red);
-  min-height: 1.5rem;
+  min-height: 1.6rem;
   opacity: 0;
   transition: opacity 0.25s ease;
   text-align: center;
 }
-.ghost.show { opacity: 0.92; }
+.nudge.show { opacity: 0.92; }
 
 /* a gentle "nope" nudge when the command isn't right yet */
 .shake { animation: shake 0.4s ease; }
@@ -204,6 +260,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #stage { transition: none; }
+  #stage, .lesson { transition: none; }
   .shake { animation: none; }
 }
