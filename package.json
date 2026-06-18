@@ -1,0 +1,14 @@
+{
+  "name": "howtogit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive, visual git tutorial for beginners — howtogit.dev",
+  "scripts": {
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
