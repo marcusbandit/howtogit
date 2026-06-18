@@ -16,3 +16,6 @@ dist/
 
 # brainstorming visual companion
 .superpowers/
+
+# typescript build artifacts (compiled .js is committed; maps are dev-only)
+public/*.js.map
