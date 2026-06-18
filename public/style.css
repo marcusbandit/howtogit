@@ -136,48 +136,46 @@ body {
 .lesson__goal {
   font-family: var(--hand);
   font-weight: 700;
-  font-size: clamp(1.8rem, 4.8vw, 2.7rem);
+  font-size: clamp(1.7rem, 4.2vw, 2.3rem);
   line-height: 1;
   color: var(--ink);
 }
 .lesson__why {
-  font-size: clamp(1rem, 2.4vw, 1.2rem);
-  line-height: 1.45;
+  font-size: clamp(0.98rem, 2.2vw, 1.12rem);
+  line-height: 1.4;
   color: var(--ink-soft);
-  max-width: 34rem;
+  max-width: 30rem;
 }
+/* token in the left column, meaning in the right, rows aligned */
 .lesson__parts {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-top: 0.4rem;
-}
-.part {
-  display: flex;
-  gap: 0.6rem;
-  align-items: baseline;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 0.7rem;
+  row-gap: 0.32rem;
   justify-content: center;
-  flex-wrap: wrap;
-  font-size: clamp(0.95rem, 2.2vw, 1.12rem);
+  align-items: baseline;
+  margin-top: 0.45rem;
+  font-size: clamp(0.92rem, 2vw, 1.05rem);
 }
+.part { display: contents; }
 .part .tok {
+  justify-self: end;
   font-family: var(--mono);
   font-weight: 700;
   font-size: 0.92em;
-  padding: 0.08rem 0.42rem;
+  padding: 0.05rem 0.4rem;
   border-radius: 0.35rem;
   white-space: nowrap;
 }
 .part .tok--cmd  { color: var(--pen-blue);  background: rgba(46, 92, 158, 0.10); }
 .part .tok--flag { color: var(--pen-red);   background: rgba(192, 73, 47, 0.10); }
 .part .tok--val  { color: var(--pen-green); background: rgba(63, 122, 78, 0.12); }
-.part .why { color: var(--ink-soft); text-align: left; }
+.part .why { justify-self: start; text-align: left; color: var(--ink-soft); }
 
 /* ---- command line with highlight + ghost overlay ------------------- */
 #cli {
   display: flex;
-  align-items: center;
-  gap: 0.7rem;
+  justify-content: center;
 }
 .cli__field { position: relative; display: inline-block; }
 
@@ -194,7 +192,8 @@ body {
 #cmd {
   position: relative;
   z-index: 1;
-  width: min(82vw, 30ch);
+  width: 9ch;                    /* set per step in JS to fit the command */
+  max-width: 92vw;
   border: none;
   background: transparent;
   outline: none;
@@ -224,17 +223,23 @@ body {
   height: 0.6rem;
   overflow: visible;
 }
-.cli__enter {
-  align-self: center;
+/* contextual hint, absolutely placed so it never shifts the centred input */
+.cli__tab {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 0.55rem;
   font-family: var(--mono);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--ink-soft);
-  opacity: 0.5;
+  opacity: 0;
   white-space: nowrap;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
   user-select: none;
 }
-.is-docked .cli__enter { opacity: 0; }
+.cli__tab.show { opacity: 0.5; }
 
 /* error / guidance line */
 .nudge {

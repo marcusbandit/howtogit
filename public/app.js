@@ -41,6 +41,7 @@ const stage = need("stage");
 const form = need("cli");
 const cmd = need("cmd");
 const ink = need("ink");
+const tabhint = need("tabhint");
 const goalEl = need("goal");
 const whyEl = need("why");
 const partsEl = need("parts");
@@ -86,14 +87,23 @@ function drawRule(svg, color, seed) {
 // ---- ambient life: boil + a slow whole-sheet drift ------------------
 function startAmbient() {
     const turb = graph.querySelector("#boil feTurbulence");
-    S.startBoil(turb, { fps: 6, seeds: [1, 9, 17] });
-    if (S.prefersReduced)
+    const disp = graph.querySelector("#boil feDisplacementMap");
+    if (turb)
+        turb.setAttribute("seed", "4"); // one fixed noise field, no snapping
+    if (S.prefersReduced) {
+        if (disp)
+            disp.setAttribute("scale", "0");
         return;
+    }
     const loop = (now) => {
         const t = now / 1000;
-        const x = Math.sin(t * 0.16) * 6 + Math.sin(t * 0.07) * 3;
-        const y = Math.cos(t * 0.13) * 4 + Math.sin(t * 0.05) * 2;
+        // the whole sheet floats, smoothly and continuously
+        const x = Math.sin(t * 0.16) * 7 + Math.sin(t * 0.07) * 3;
+        const y = Math.cos(t * 0.13) * 5 + Math.sin(t * 0.05) * 2;
         graph.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+        // the ink warp breathes by degrees instead of clicking between frames
+        if (disp)
+            disp.setAttribute("scale", (1.8 + Math.sin(t * 0.85) * 0.8).toFixed(2));
         requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
@@ -273,23 +283,23 @@ const steps = [
         hint: "Type  git init  to begin.",
         teach: {
             goal: "Start your repository",
-            why: "Git begins watching this folder so it can remember every version of your work from here on.",
+            why: "Git starts keeping track of this folder.",
             parts: [
-                { t: "init", tone: "cmd", why: "create a new, empty repository right here" },
+                { t: "init", tone: "cmd", why: "create the repository" },
             ],
         },
         run: doInit,
     },
     {
         cmd: "git add .",
-        test: (s) => /^git\s+add(\s+\.|\s+-a|\s+--all)?$/i.test(s),
-        hint: "Stage your files with  git add .",
+        test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
+        hint: "Stage everything with  git add .  (or  git add -A )",
         teach: {
             goal: "Pick what to save",
-            why: "Before saving, you choose which files go into the next snapshot. This is called staging.",
+            why: "Mark which files go in the next snapshot.",
             parts: [
-                { t: "add", tone: "cmd", why: "stage files, marking them for the next save" },
-                { t: ".", tone: "val", why: "“everything in this folder”. You could name one file instead, like  index.html" },
+                { t: "add", tone: "cmd", why: "stage your changes" },
+                { t: ".  /  -A", tone: "val", why: "the . means everything (so does -A)" },
             ],
         },
         run: doAdd,
@@ -301,14 +311,13 @@ const steps = [
             const m = s.match(/-m\s+(["'])(.+?)\1/);
             return m ? m[2] : "first commit";
         },
-        hint: 'Save it with a message:  git commit -m "first commit"',
+        hint: 'Save it with  git commit -m "your message"',
         teach: {
             goal: "Save a snapshot",
-            why: "A commit is a saved point in your history that you can always return to. Give it a short message so future-you knows what changed.",
+            why: "A point in history you can always come back to.",
             parts: [
-                { t: "commit", tone: "cmd", why: "save the staged files as a snapshot" },
-                { t: "-m", tone: "flag", why: "short for “message”, the note that comes next" },
-                { t: '"first commit"', tone: "val", why: "your description, in quotes. Write anything you like" },
+                { t: "commit", tone: "cmd", why: "save what you staged" },
+                { t: "-m", tone: "flag", why: "attach a short message" },
             ],
         },
         run: doCommit,
@@ -317,7 +326,7 @@ const steps = [
 const END = {
     teach: {
         goal: "That's your first commit",
-        why: "You started a repository and saved your first snapshot. More git is on the way.",
+        why: "Repository started, snapshot saved.",
         parts: [],
     },
     tease: "push is the next stroke. I'm drawing it now ✦",
@@ -378,6 +387,11 @@ function updateInk() {
     if (suggestActive)
         html += `<span class="hl-ghost">${esc(cur.slice(typed.length))}</span>`;
     ink.innerHTML = html;
+    // size the field to the command so the whole line stays centred, never cut
+    const chars = Math.max(cur.length, typed.length, 6) + 1;
+    cmd.style.width = `${chars}ch`;
+    // only nudge about Tab once there's something to complete and they've started
+    tabhint.classList.toggle("show", suggestActive && typed.length > 0);
 }
 function acceptSuggestion() {
     const cur = currentCmd();
