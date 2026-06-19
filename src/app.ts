@@ -325,7 +325,8 @@ async function doCommit(message = "first commit"): Promise<void> {
   caption(message, node.x, node.y + node.r + 32, 320);
 }
 
-// the address of the remote, captured from `git remote add`
+// the remote's nickname and address, captured from `git remote add`
+let remoteName = "origin";
 let remoteUrl = "https://github.com/you/site.git";
 
 // connecting a remote changes no graph; the remote panel slides in afterwards
@@ -345,10 +346,19 @@ async function doPush(): Promise<void> {
 type Tone = "cmd" | "flag" | "val";
 interface Part { t: string; tone: Tone; why: string; }
 interface Teach { goal: string; why: string; parts: Part[]; }
+
+// a command is a template of tokens: fixed words (lit) and free slots the user
+// fills in (a nickname, a url, a message). This drives the adaptive ghost,
+// per-word Tab completion, and per-slot validation.
+type Slot = { kind: "slot"; example: string | (() => string); ghost: string; tone: Tone; rest?: boolean };
+type Token = { kind: "lit"; text: string; tone: Tone } | Slot;
+
+const lit = (text: string, tone: Tone = "cmd"): Token => ({ kind: "lit", text, tone });
+const slotExample = (t: Slot): string => (typeof t.example === "function" ? t.example() : t.example);
+
 interface Step {
   key: string;                       // short label for the timeline
-  cmd: string;                       // full command, including "git"
-  roles: Tone[];                     // colour role per whitespace token
+  template: Token[];                 // the command, token by token
   test: (s: string) => boolean;
   hint: string;
   teach: Teach;
@@ -356,15 +366,19 @@ interface Step {
   extract?: (s: string) => string;
 }
 
-// the remote's nickname, captured from `git remote add <name> <url>`
-let remoteName = "origin";
+// what a fully-typed command looks like (for replay + width sizing)
+function canonical(step: Step): string {
+  return step.template.map((t) => (t.kind === "lit" ? t.text : slotExample(t))).join(" ");
+}
+
+const isUrl = (s: string): boolean =>
+  /^https?:\/\/[^\s/]+\.[^\s/]+\/\S+$/i.test(s) || /^git@[^\s:]+:\S+$/i.test(s);
 
 let stepIndex = 0;
 const steps: Step[] = [
   {
     key: "init",
-    cmd: "git init",
-    roles: ["cmd", "cmd"],
+    template: [lit("git"), lit("init")],
     test: (s) => /^git\s+init$/i.test(s),
     hint: "Type  git init  to begin.",
     teach: {
@@ -378,8 +392,7 @@ const steps: Step[] = [
   },
   {
     key: "add",
-    cmd: "git add .",
-    roles: ["cmd", "cmd", "val"],
+    template: [lit("git"), lit("add"), { kind: "slot", example: ".", ghost: ".", tone: "val" }],
     test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
     hint: "Stage everything with  git add .  (or  git add -A )",
     teach: {
@@ -394,8 +407,10 @@ const steps: Step[] = [
   },
   {
     key: "commit",
-    cmd: 'git commit -m "first commit"',
-    roles: ["cmd", "cmd", "flag", "val"],
+    template: [
+      lit("git"), lit("commit"), lit("-m", "flag"),
+      { kind: "slot", example: '"first commit"', ghost: '"a short message"', tone: "val", rest: true },
+    ],
     test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
     extract: (s) => {
       const m = s.match(/-m\s+(["'])(.+?)\1/);
@@ -414,26 +429,35 @@ const steps: Step[] = [
   },
   {
     key: "remote",
-    cmd: "git remote add origin https://github.com/you/site.git",
-    roles: ["cmd", "cmd", "cmd", "val", "flag"],
-    test: (s) => /^git\s+remote\s+add\s+\S+\s+\S+$/i.test(s),
+    template: [
+      lit("git"), lit("remote"), lit("add"),
+      { kind: "slot", example: "origin", ghost: "origin", tone: "val" },
+      { kind: "slot", example: "https://github.com/you/site.git", ghost: "<url>", tone: "flag" },
+    ],
+    test: (s) => {
+      const m = s.match(/^git\s+remote\s+add\s+(\S+)\s+(\S+)$/i);
+      return !!m && isUrl(m[2]);
+    },
     extract: (s) => s,
-    hint: "Connect a remote:  git remote add origin <url>",
+    hint: "The last part must be a url, e.g.  https://github.com/you/site.git",
     teach: {
       goal: "Connect a remote",
-      why: "Link your repo to a copy that lives somewhere else, like GitHub, so it's backed up and others can get it.",
+      why: "Optional, but it backs up your work and makes collaborating possible. Git works fine with no remote at all.",
       parts: [
         { t: "remote add", tone: "cmd", why: "save a link to a copy of your repo kept elsewhere" },
         { t: "origin", tone: "val", why: "a short nickname for that copy's address, so you never retype the url" },
-        { t: "…url", tone: "flag", why: "the address where the remote copy lives, usually in the cloud (here, on GitHub)" },
+        { t: "<url>", tone: "flag", why: "the address where the remote copy lives, usually in the cloud (here, on GitHub)" },
       ],
     },
     run: doRemoteAdd,
   },
   {
     key: "push",
-    cmd: "git push -u origin main",
-    roles: ["cmd", "cmd", "flag", "val", "val"],
+    template: [
+      lit("git"), lit("push"), lit("-u", "flag"),
+      { kind: "slot", example: () => remoteName, ghost: "origin", tone: "val" },
+      lit("main", "val"),
+    ],
     test: (s) => /^git\s+push(\s+-u\s+\S+\s+main)?$/i.test(s),
     hint: "Send your commits:  git push -u origin main",
     teach: {
@@ -458,12 +482,8 @@ const END = {
   tease: "That's the whole first loop. More git is on the way ✦",
 };
 
-function currentCmd(): string {
-  if (stepIndex >= steps.length) return "";
-  const step = steps[stepIndex];
-  // the push suggestion uses whatever nickname they set on the remote
-  if (step.key === "push") return `git push -u ${remoteName} main`;
-  return step.cmd;
+function currentTemplate(): Token[] | null {
+  return stepIndex < steps.length ? steps[stepIndex].template : null;
 }
 
 function renderTeach(teach: Teach): void {
@@ -502,8 +522,18 @@ function esc(s: string): string {
 }
 let suggestActive = false;
 
-// colour each typed token to match its part chip, by the current step's roles
-function colorize(typed: string, roles: Tone[]): string {
+// split typed text into the in-progress token index and the partial word there
+function parseTyped(typed: string): { toks: string[]; idx: number; inProg: string } {
+  const endsWithSpace = /\s$/.test(typed);
+  const trimmed = typed.replace(/\s+$/, "");
+  const toks = trimmed === "" ? [] : trimmed.split(/\s+/);
+  const idx = endsWithSpace ? toks.length : Math.max(0, toks.length - 1);
+  const inProg = endsWithSpace ? "" : (toks[toks.length - 1] ?? "");
+  return { toks, idx, inProg };
+}
+
+// colour each typed token to match its part chip, by template token tone
+function colorize(typed: string, template: Token[]): string {
   let html = "";
   let ti = 0;
   for (const part of typed.split(/(\s+)/)) {
@@ -511,35 +541,60 @@ function colorize(typed: string, roles: Tone[]): string {
     if (/^\s+$/.test(part)) { html += esc(part); continue; }
     let cls: string;
     if (ti === 0) cls = "git".startsWith(part.toLowerCase()) ? "hl-cmd" : "hl-rest";
-    else cls = `hl-${roles[Math.min(ti, roles.length - 1)] ?? "rest"}`;
+    else cls = `hl-${(template[Math.min(ti, template.length - 1)]?.tone) ?? "rest"}`;
     html += `<span class="${cls}">${esc(part)}</span>`;
     ti++;
   }
   return html;
 }
 
+// the adaptive ghost: keep what the user typed in free slots, suggest the rest
+function suggestionGhost(typed: string, template: Token[]): string {
+  const { idx, inProg } = parseTyped(typed);
+  if (idx >= template.length) return "";
+  const cur = template[idx];
+  let ghost = "";
+  if (cur.kind === "lit") {
+    if (!cur.text.toLowerCase().startsWith(inProg.toLowerCase())) return "";
+    ghost += cur.text.slice(inProg.length);
+  } else if (inProg === "") {
+    ghost += cur.ghost;                 // empty slot: hint with its placeholder
+  }
+  if (cur.kind === "slot" && cur.rest) return ghost;
+  for (let j = idx + 1; j < template.length; j++) {
+    const t = template[j];
+    ghost += " " + (t.kind === "lit" ? t.text : t.ghost);
+  }
+  return ghost;
+}
+
 function updateInk(): void {
   const typed = cmd.value;
-  const cur = currentCmd();
-  const roles: Tone[] = stepIndex < steps.length ? steps[stepIndex].roles : ["cmd"];
+  const template = currentTemplate();
+  const ghost = template ? suggestionGhost(typed, template) : "";
+  suggestActive = ghost.length > 0;
 
-  suggestActive =
-    cur.length > 0 &&
-    typed.length < cur.length &&
-    cur.toLowerCase().startsWith(typed.toLowerCase());
-
-  let html = colorize(typed, roles);
-  if (suggestActive) html += `<span class="hl-ghost">${esc(cur.slice(typed.length))}</span>`;
+  let html = template ? colorize(typed, template) : esc(typed);
+  if (suggestActive) html += `<span class="hl-ghost">${esc(ghost)}</span>`;
   ink.innerHTML = html;
 
-  // size the field to the command so the whole line stays centred, never cut
-  const chars = Math.max(cur.length, typed.length, 6) + 1;
-  cmd.style.width = `${chars}ch`;
+  // size the field to the whole line so it stays centred and never gets cut
+  const full = typed.length + ghost.length;
+  cmd.style.width = `${Math.max(full, 6) + 1}ch`;
   syncCliRule();
   ink.style.transform = `translateX(${-cmd.scrollLeft}px)`;
 
-  // only nudge about Tab once there's something to complete and they've started
-  tabhint.classList.toggle("show", suggestActive && typed.length > 0);
+  tabhint.classList.toggle("show", suggestActive && typed.trim().length > 0);
+
+  // live tip: gently flag a non-origin remote nickname as it's typed
+  if (template && steps[stepIndex]?.key === "remote") {
+    const name = parseTyped(typed).toks[3];
+    if (name && !"origin".startsWith(name.toLowerCase())) {
+      showInfo('heads up: most tools expect this to be "origin"');
+    } else {
+      clearNudge();
+    }
+  }
 }
 
 // redraw the underline as a fresh hand-drawn line at the field's real width,
@@ -555,12 +610,29 @@ function syncCliRule(): void {
   }));
 }
 
-function acceptSuggestion(): void {
-  const cur = currentCmd();
-  if (!cur || cmd.value.length >= cur.length) return;
-  cmd.value = cur;
-  const end = cmd.value.length;
-  cmd.setSelectionRange(end, end);
+// Tab completes only the next word: finish the current fixed word, or drop in
+// the next token's value (a slot's example, or the next fixed word)
+function acceptNextWord(): void {
+  const template = currentTemplate();
+  if (!template) return;
+  const { toks, idx, inProg } = parseTyped(cmd.value);
+  if (idx >= template.length) return;
+  const cur = template[idx];
+
+  let newVal: string;
+  if (cur.kind === "lit" && cur.text.toLowerCase().startsWith(inProg.toLowerCase()) && inProg.length < cur.text.length) {
+    const base = toks.slice(0, idx).join(" ");
+    newVal = (base ? base + " " : "") + cur.text;
+  } else {
+    const fillIdx = inProg === "" ? idx : idx + 1;
+    if (fillIdx >= template.length) return;
+    const t = template[fillIdx];
+    const fill = t.kind === "lit" ? t.text : slotExample(t);
+    const base = toks.join(" ");
+    newVal = (base ? base + " " : "") + fill;
+  }
+  cmd.value = newVal;
+  cmd.setSelectionRange(newVal.length, newVal.length);
   updateInk();
 }
 function caretAtEnd(): boolean {
@@ -620,16 +692,12 @@ form.addEventListener("submit", async (e) => {
   renderFileTree();
   renderRemoteTree();
   updateLayout();
-  // origin is the convention; gently flag any other nickname
-  if (step.key === "remote" && remoteName.toLowerCase() !== "origin") {
-    showInfo('Tip: most tools expect the remote to be named "origin".');
-  }
 });
 
 cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
 cmd.addEventListener("keydown", (e) => {
-  if (e.key === "Tab" && suggestActive) { e.preventDefault(); acceptSuggestion(); }
-  else if (e.key === "ArrowRight" && suggestActive && caretAtEnd()) { e.preventDefault(); acceptSuggestion(); }
+  if (e.key === "Tab" && suggestActive) { e.preventDefault(); acceptNextWord(); }
+  else if (e.key === "ArrowRight" && suggestActive && caretAtEnd()) { e.preventDefault(); acceptNextWord(); }
 });
 // keep the coloured overlay aligned when a long command scrolls the input
 cmd.addEventListener("scroll", () => {
@@ -810,7 +878,7 @@ async function seekTo(target: number): Promise<void> {
   instant = true;
   for (let k = 0; k < target; k++) {
     const st = steps[k];
-    await st.run(st.extract ? st.extract(st.cmd) : undefined);
+    await st.run(st.extract ? st.extract(canonical(st)) : undefined);
   }
   instant = false;
   stepIndex = target;
