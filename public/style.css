@@ -450,11 +450,14 @@ body {
 
 /* the desktop, once we move to the laptop: grayed and dropped low-left, beside
    the small mini-graph standing in for its full graph. */
+/* stowed low-left, grayed. Anchored with top% + translateY(-50%) (NOT bottom),
+   so it slides down from the focus slot (top:50%) instead of jumping when top
+   would otherwise go to auto. */
 #filetree.is-stowed {
-  top: auto;
-  bottom: clamp(7rem, 16vh, 11rem);
+  top: 76%;
+  bottom: auto;
   left: clamp(1.1rem, 3vw, 2.4rem);
-  transform: none;
+  transform: translateY(-50%);
   width: clamp(13rem, 17vw, 16rem);
   font-size: 1.0rem;
   filter: grayscale(1);
@@ -465,11 +468,11 @@ body {
 /* the laptop recedes once we pull back to the desktop: grayed + dropped low-left,
    the mirror of the stowed desktop. */
 #laptoptree.is-stowed-lap {
-  top: auto;
-  bottom: clamp(7rem, 16vh, 11rem);
+  top: 76%;
+  bottom: auto;
   left: clamp(1.1rem, 3vw, 2.4rem);
   right: auto;
-  transform: none;
+  transform: translateY(-50%);
   width: clamp(13rem, 17vw, 16rem);
   font-size: 1.0rem;
   filter: grayscale(1);
@@ -986,6 +989,7 @@ body {
   /* no room for three trees on a phone: hide the stowed desktop + its mini-graph
      and give the laptop the left slot */
   #filetree.is-stowed { display: none !important; }
+  #laptoptree.is-stowed-lap { display: none !important; }
   #mini-desktop { display: none; }
   #laptoptree {
     left: 0.8rem !important;

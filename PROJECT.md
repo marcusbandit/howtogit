@@ -46,22 +46,36 @@ total beginner is never lost.
   while there's nothing to edit) and a compact corner state reserved for when a
   file editor exists.
 
-## Next up (the "collaboration loop" arc)
+## The collaboration loop arc ("The Basics 2") **[DONE]**
 
-Build toward two machines sharing a repo through a remote. Rough order:
+Two machines sharing a repo through a remote. Shipped as a second timeline
+section ("The Basics 2") that opens once the first loop finishes; the first
+section compacts into a single labelled square.
 
-1. `git merge` — bring the feature branch back into main. **[DONE]** Added as
-   two guided steps: `git checkout main`, then `git merge feature`, drawing the
-   rejoin diamond.
-2. A second machine appears (e.g. a laptop) — a fresh, empty computer beside
-   the desktop.
-3. `git clone` on the laptop — copies the remote down into the laptop.
-4. Edit a fake file on the laptop (needs the **file editor** — when it lands,
-   it takes the main spot and the file tree drops to its compact corner).
-5. `git push` from the laptop → the remote updates.
-6. `git pull` on the desktop → the desktop catches up to the remote.
+1. `git merge` — bring the feature branch back into main. **[DONE]**
+2. A second machine (the laptop) appears. **[DONE]** Finishing the first loop
+   auto-plays a move-to-laptop transition: a soft ink-tinted blob glides from
+   the desktop to the laptop, the desktop grays + stows low-left with a small
+   grayed mini-graph standing in for its full graph, and the board hands off to
+   the laptop. The laptop's home `~/` (Documents, Pictures, Downloads) appears.
+3. `git clone` on the laptop. **[DONE]** Mirrors the remote history down onto
+   the laptop board and drops `my-site/` into `~/`, then auto-types `cd my-site/`.
+4. Edit a file on the laptop. **[DONE]** The editor pops out of the laptop's
+   `index.html` row and types an edit (the same sequence the desktop used), then
+   `git add .` + `git commit -m`.
+5. `git status` + `git push` from the laptop. **[DONE]** status reports the
+   laptop is one commit ahead; push grows the remote (the new commit rises out of
+   the laptop tip) and moves `origin/main` onto the laptop.
+6. `git pull` on the desktop. **[DONE]** Moves back to the desktop (the hidden
+   desktop graph reappears, the laptop recedes to a grayed corner) and pulls the
+   laptop's commit down so the desktop matches the remote.
 
-This is the target experience, not a committed spec yet. Refine before building.
+Architecture: a `Machine` record per computer (own model + id counter + SVG
+layers + refs + pan), an `active` pointer rebound by `useMachine()`, and a
+first-class remote hub (`remoteHistory`) that push appends to and pull reads
+from. `CommitNode.parentId` keeps each machine's graph redrawable. Everything is
+seek-safe (each run switches machine + draws final geometry under the `instant`
+flag; `resetBoard` clears both machines + the hub).
 
 ## Backlog / future ideas (captured, not yet specced)
 
@@ -155,7 +169,8 @@ of colour. Plan for it as its own effort.
 
 ## Later (common commands to cover)
 
-- `git status`
+- `git status` **[DONE]** — a no-op informational step on the laptop (reports the
+  working tree is clean but one commit ahead of the remote).
 - `git switch` (modern alternative to checkout)
 - `git stash`
 - `git tag`

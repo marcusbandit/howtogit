@@ -676,8 +676,11 @@ let originPill: SVGGElement | null = null;
 interface RemoteCommit { shape: Shape; color: string; seed: number; }
 let remoteHistory: RemoteCommit[] = [];
 function snapshotTrunk(m: Model): RemoteCommit[] {
+  // seed by hub POSITION (not the per-machine node id) so re-snapshotting the
+  // same logical trunk from a different machine keeps each commit's wobble stable
+  // (the desktop and laptop number their nodes differently).
   return m.nodes.filter((n) => n.lane === 0).sort((a, b) => a.col - b.col)
-    .map((n) => ({ shape: n.shape, color: n.color, seed: n.id }));
+    .map((n, i) => ({ shape: n.shape, color: n.color, seed: i }));
 }
 
 async function doPush(): Promise<void> {
@@ -772,6 +775,12 @@ async function doClone(): Promise<void> {
   }
   drawRefs();
   laptopHasProject = true;                        // my-site/ now exists on the laptop
+  // the clone is in sync with the remote, so origin/main sits on the cloned tip
+  // (and the single pill leaves the now-hidden desktop layer)
+  if (originPill && prev) {
+    active.labels.appendChild(originPill);
+    placePill(originPill, { x: prev.x, y: prev.y + prev.r + 66 }, false);
+  }
   if (prev) caption("cloned from the remote", prev.x, prev.y + NODE_R + 32, 360);
 }
 
@@ -1511,6 +1520,7 @@ form.addEventListener("submit", async (e) => {
 
   clearNudge();
   closeFileViewer();                  // a new command changes the board: dismiss any open file
+  cancelAutoEdit();                   // and cancel an in-flight auto-edit animation
   const arg = step.extract ? step.extract(input) : undefined;
   cmd.value = "";
   stepIndex++;
@@ -2005,6 +2015,18 @@ function closeFileViewer(): void {
   editorEl.style.opacity = "0";
 }
 
+// cancel an in-flight AUTO edit (playEditSequence sets viewerFile=null, so
+// closeFileViewer no-ops on it). A new command bumps editSeqGen so the sequence
+// bails at its next checkpoint, and folds the popup away.
+function cancelAutoEdit(): void {
+  if (viewerFile != null) return;   // a held-open click view is closeFileViewer's job
+  editSeqGen++;
+  editorEl.style.transition = "none";
+  editorEl.style.opacity = "0";
+  editorEl.style.pointerEvents = "none";
+  editorSave.classList.remove("show");
+}
+
 async function playEditSequence(side: FileSide = "local"): Promise<void> {
   if (instant || S.prefersReduced) return;     // timeline seeks just show the result
   const gen = ++editSeqGen;
@@ -2160,6 +2182,7 @@ function laptopFileState(file: string): FileState {
 function renderLaptopTree(): void {
   const shown = laptopVisible();
   laptopTreeEl.classList.toggle("is-shown", shown);
+  laptopTreeEl.setAttribute("aria-hidden", shown ? "false" : "true");
   laptopList.replaceChildren();
   if (!shown) { lastLaptopShown = false; lastLaptopProject = false; return; }
 
@@ -2383,24 +2406,31 @@ async function playMoveToLaptop(): Promise<void> {
   applyMoveToLaptop();   // switches to the laptop and snaps the desktop graph hidden
   renderLaptopTree(); renderMiniDesktop(false); updateLayout(); centerOnHead();
   if (instant || S.prefersReduced) return;
-  // soften the hand-off: bring the desktop graph back and fade it out as we leave
-  for (const g of deskLayers) { g.style.transition = "none"; g.style.opacity = "1"; }
-  void deskLayers[0].getBoundingClientRect();
-  requestAnimationFrame(() => { for (const g of deskLayers) { g.style.transition = "opacity .75s ease"; g.style.opacity = "0"; } });
+  // hold the line for the whole transition: a seek (which checks busy) can't fire
+  // mid-move and orphan the rAFs, and the user can't type over the hand-off.
   const gen = ++blobGen; const alive = () => gen === blobGen;
-  const blob = makeBlob();
-  positionBlobOver(blob, deskRect);                  // form over the desktop
-  blob.style.opacity = "0"; void blob.getBoundingClientRect();
-  requestAnimationFrame(() => { blob.style.transition = "opacity .5s ease"; blob.style.opacity = "1"; });
-  await sleep(700); if (!alive()) { blob.remove(); return; }
-  blob.style.transition = "transform 1.1s cubic-bezier(.4,0,.2,1)";
-  positionBlobOver(blob, laptopTreeEl.getBoundingClientRect());   // glide to the (settled) laptop
-  renderMiniDesktop(true);                            // mini-graph fades in as the blob travels
-  await sleep(1150); if (!alive()) { blob.remove(); return; }
-  await sleep(220);
-  blob.style.transition = "opacity .45s ease"; blob.style.opacity = "0";   // dissolve, having landed
-  await sleep(460); if (!alive()) { blob.remove(); return; }
-  blob.remove();
+  busy = true;
+  try {
+    // soften the hand-off: bring the desktop graph back and fade it out as we leave
+    for (const g of deskLayers) { g.style.transition = "none"; g.style.opacity = "1"; }
+    void deskLayers[0].getBoundingClientRect();
+    requestAnimationFrame(() => { if (!alive()) return; for (const g of deskLayers) { g.style.transition = "opacity .75s ease"; g.style.opacity = "0"; } });
+    const blob = makeBlob();
+    positionBlobOver(blob, deskRect);                  // form over the desktop
+    blob.style.opacity = "0"; void blob.getBoundingClientRect();
+    requestAnimationFrame(() => { if (!alive()) return; blob.style.transition = "opacity .5s ease"; blob.style.opacity = "1"; });
+    await sleep(700); if (!alive()) { blob.remove(); return; }
+    blob.style.transition = "transform 1.1s cubic-bezier(.4,0,.2,1)";
+    positionBlobOver(blob, laptopTreeEl.getBoundingClientRect());   // glide to the (settled) laptop
+    renderMiniDesktop(true);                            // mini-graph fades in as the blob travels
+    await sleep(1150); if (!alive()) { blob.remove(); return; }
+    await sleep(220);
+    blob.style.transition = "opacity .45s ease"; blob.style.opacity = "0";   // dissolve, having landed
+    await sleep(460); if (!alive()) { blob.remove(); return; }
+    blob.remove();
+  } finally {
+    if (alive()) busy = false;   // only the current move releases the lock
+  }
 }
 
 // the move back to the desktop (for git pull): the desktop graph was only hidden,
@@ -2417,27 +2447,33 @@ async function playMoveToDesktop(): Promise<void> {
   applyMoveToDesktop();
   renderLaptopTree(); renderMiniDesktop(false); updateLayout(); centerOnHead();
   if (instant || S.prefersReduced) return;
-  // crossfade: the desktop graph fades in as the laptop graph fades out
-  for (const g of deskLayers) { g.style.transition = "none"; g.style.opacity = "0"; }
-  for (const g of lapLayers) { g.style.transition = "none"; g.style.opacity = "1"; }
-  void deskLayers[0].getBoundingClientRect();
-  requestAnimationFrame(() => {
-    for (const g of deskLayers) { g.style.transition = "opacity .75s ease"; g.style.opacity = "1"; }
-    for (const g of lapLayers) { g.style.transition = "opacity .75s ease"; g.style.opacity = "0"; }
-  });
   const gen = ++blobGen; const alive = () => gen === blobGen;
-  const blob = makeBlob();
-  positionBlobOver(blob, lapRect);                   // form over the laptop
-  blob.style.opacity = "0"; void blob.getBoundingClientRect();
-  requestAnimationFrame(() => { blob.style.transition = "opacity .5s ease"; blob.style.opacity = "1"; });
-  await sleep(700); if (!alive()) { blob.remove(); return; }
-  blob.style.transition = "transform 1.1s cubic-bezier(.4,0,.2,1)";
-  positionBlobOver(blob, treeEl.getBoundingClientRect());   // glide back to the desktop
-  await sleep(1150); if (!alive()) { blob.remove(); return; }
-  await sleep(220);
-  blob.style.transition = "opacity .45s ease"; blob.style.opacity = "0";
-  await sleep(460); if (!alive()) { blob.remove(); return; }
-  blob.remove();
+  busy = true;
+  try {
+    // crossfade: the desktop graph fades in as the laptop graph fades out
+    for (const g of deskLayers) { g.style.transition = "none"; g.style.opacity = "0"; }
+    for (const g of lapLayers) { g.style.transition = "none"; g.style.opacity = "1"; }
+    void deskLayers[0].getBoundingClientRect();
+    requestAnimationFrame(() => {
+      if (!alive()) return;
+      for (const g of deskLayers) { g.style.transition = "opacity .75s ease"; g.style.opacity = "1"; }
+      for (const g of lapLayers) { g.style.transition = "opacity .75s ease"; g.style.opacity = "0"; }
+    });
+    const blob = makeBlob();
+    positionBlobOver(blob, lapRect);                   // form over the laptop
+    blob.style.opacity = "0"; void blob.getBoundingClientRect();
+    requestAnimationFrame(() => { if (!alive()) return; blob.style.transition = "opacity .5s ease"; blob.style.opacity = "1"; });
+    await sleep(700); if (!alive()) { blob.remove(); return; }
+    blob.style.transition = "transform 1.1s cubic-bezier(.4,0,.2,1)";
+    positionBlobOver(blob, treeEl.getBoundingClientRect());   // glide back to the desktop
+    await sleep(1150); if (!alive()) { blob.remove(); return; }
+    await sleep(220);
+    blob.style.transition = "opacity .45s ease"; blob.style.opacity = "0";
+    await sleep(460); if (!alive()) { blob.remove(); return; }
+    blob.remove();
+  } finally {
+    if (alive()) busy = false;
+  }
 }
 
 // the desktop tree leads while we work on it; once we move to the laptop it grays
@@ -2744,13 +2780,6 @@ function boot(): void {
   needSel<HTMLElement>("#laptoptree .tree__title").prepend(laptopIcon());
   wireFileViewer();   // click any file in either tree to open it
   if (!isPhone) cmd.focus();
-  // dev/test hook: read-only snapshot of the step machine + active model, used by
-  // the headless verification harness. Harmless; stripped before release.
-  (window as unknown as { __dbg: () => unknown }).__dbg = () => ({
-    stepIndex, busy, headBranch: model.headBranch, rh: remoteHistory.length,
-    activeIsDesktop: active === desktop, lap: laptop.model.nodes.length,
-    nodes: model.nodes.map((n) => ({ id: n.id, lane: n.lane, col: n.col, branch: n.branch })),
-  });
 }
 
 window.addEventListener("resize", () => {
