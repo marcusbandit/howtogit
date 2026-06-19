@@ -801,6 +801,14 @@ async function playAutoCd(): Promise<void> {
   if (alive()) void playEditSequence("laptop");
 }
 
+// git status is informational: it changes nothing, just reports. Placed after
+// the laptop commit, it reads "clean, but ahead of the remote" to nudge a push.
+async function doStatus(): Promise<void> {
+  const h = headNode();
+  if (!h) return;
+  caption("working tree clean. you are 1 commit ahead of the remote, so push to share it.", h.x, h.y + h.r + 100, 320, true);
+}
+
 // when the whole sequence is finished, the board shouldn't read as blank: a
 // hand-written closing line sits under HEAD so it's clearly the end, not a gap.
 function showEndState(): void {
@@ -1123,6 +1131,20 @@ const steps: Step[] = [
       ],
     },
     run: doCommit,
+  },
+  {
+    key: "status",
+    atoms: [A("git", "cmd", { sep: "" }), A("status", "cmd")],
+    test: (s) => /^git\s+status$/i.test(s),
+    hint: "See where things stand:  git status",
+    teach: {
+      goal: "Check the working tree",
+      why: "git status reports what is changed, staged, or clean right now. It changes nothing. Here it shows your laptop is one commit ahead of the remote.",
+      parts: [
+        { t: "status", tone: "cmd", why: "show the current state of your files and branch" },
+      ],
+    },
+    run: doStatus,
   },
   {
     key: "push3",
@@ -2451,7 +2473,7 @@ const TIMELINE_SECTIONS: TLSection[] = [
   { name: "The basics 2", tasks: [
     { label: "Clone the repo", keys: ["clone"] },
     { label: "Edit on the laptop", keys: ["add3", "commit3"] },
-    { label: "Push from the laptop", keys: ["push3"] },
+    { label: "Push from the laptop", keys: ["status", "push3"] },
     { label: "Pull on the desktop", keys: ["pull"] },
   ] },
 ];
