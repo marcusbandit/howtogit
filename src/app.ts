@@ -425,6 +425,8 @@ function centerOnHead(): void {
     targetX = boardCenter().x;
   }
   const panX = viewW / 2 - targetX;
+  boardPanX = panX;   // the remote layer isn't panned, so it needs this to map a
+                      // local node's on-screen x into its own coordinate space
   for (const g of boardGroups) {
     g.style.transition = instant || S.prefersReduced
       ? "none"
@@ -432,6 +434,7 @@ function centerOnHead(): void {
     g.style.transform = `translateX(${panX}px)`;
   }
 }
+let boardPanX = 0;
 
 // ---- step actions ---------------------------------------------------
 async function doInit(): Promise<void> {
@@ -1609,11 +1612,12 @@ function renderRemoteGraph(allowAnim = true): void {
     gRemoteInner.appendChild(g);
 
     if (!animate) { g.style.transform = `translate(${finalX}px, ${restY}px)`; return; }
-    // start state: new commits sit down on the local lane (ready to rise);
-    // existing ones sit in their old, less-centred slot (ready to glide over)
+    // start state: a new commit starts exactly on its local-graph node (which is
+    // panned, so add boardPanX), then travels to its centred remote slot;
+    // existing ones sit in their old, less-centred slot ready to glide over
     g.style.transition = "none";
     g.style.transform = isNew
-      ? `translate(${finalX}px, ${restY + rise}px)`
+      ? `translate(${node.x + boardPanX}px, ${node.y}px)`
       : `translate(${xAt(i, oldCount)}px, ${restY}px)`;
     g.style.opacity = isNew ? "0" : "1";
     parts.push({ g, conn: isNew ? conn : null, finalX, isNew });
