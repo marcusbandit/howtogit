@@ -113,7 +113,7 @@ let viewW = window.innerWidth / ZOOM;
 let viewH = window.innerHeight / ZOOM;
 
 function boardCenter(): Pt {
-  return { x: viewW / 2, y: viewH * 0.46 };   // nudged down to give the top room
+  return { x: viewW / 2, y: viewH * 0.5 };   // lowered so the local graph clears the remote
 }
 // column i sits to the right of the first node; lane shifts it onto a branch row
 function nodePos(col: number, lane = 0): Pt {
@@ -1094,6 +1094,7 @@ form.addEventListener("submit", async (e) => {
   }
 
   clearNudge();
+  closeFileViewer();                  // a new command changes the board: dismiss any open file
   const arg = step.extract ? step.extract(input) : undefined;
   cmd.value = "";
   stepIndex++;
@@ -1189,7 +1190,8 @@ function renderFileTree(): void {
   for (const f of PROJECT.files) {
     const st = fileState(f);
     const li = document.createElement("li");
-    li.className = st === "plain" ? "f" : `f f--${st}`;
+    li.className = st === "plain" ? "f is-openable" : `f f--${st} is-openable`;
+    li.dataset.file = f;                          // click to open it in the editor
     if (f === EDIT_FILE && st === "modified" && !wasEditing) li.classList.add("is-edited");
     li.append(makeName(f));
     if (MARK[st]) {
@@ -1238,15 +1240,63 @@ const EDIT_LINES = [
 const EDIT_AT = 4;                              // insert just before </body>
 const EDIT_NEW = "    <p>now with a feature!</p>";
 
+// what each file holds when you open it. index.html is handled specially (it
+// gains the feature line once edited); the others are static stand-ins.
+const FILE_TEXT: Record<string, string[]> = {
+  "index.html": EDIT_LINES,
+  "style.css": [
+    "body {",
+    "  font-family: sans-serif;",
+    "  margin: 0;",
+    "}",
+    "h1 {",
+    "  color: #2e5c9e;",
+    "}",
+  ],
+  "app.js": [
+    "const btn = document.querySelector(\"button\");",
+    "",
+    "btn.addEventListener(\"click\", () => {",
+    "  alert(\"hello from my site\");",
+    "});",
+  ],
+};
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-// render the file as `lines`, optionally with a blinking caret parked at the
-// end of `activeLine` (the line being typed). -1 means no active line.
-function renderEditorLines(lines: string[], activeLine: number): void {
+// the contents to show for a file, plus which line indices read as a local
+// change (green, like a diff insertion). index.html gains the feature line; on
+// the LOCAL side that line is a pending change while modified/staged (before
+// commit2). The remote only gains the line at all on the final push, and never
+// shows it as a pending change.
+function fileLines(file: string, side: "local" | "remote"): { lines: string[]; changed: number[] } {
+  if (file === EDIT_FILE) {
+    const hasEdit = side === "local"
+      ? stepIndex >= stepIdx("add2")
+      : stepIndex > stepIdx("push2");
+    if (hasEdit) {
+      const lines = EDIT_LINES.slice();
+      lines.splice(EDIT_AT, 0, EDIT_NEW);
+      const pending = side === "local"
+        && stepIndex >= stepIdx("add2") && stepIndex <= stepIdx("commit2");
+      return { lines, changed: pending ? [EDIT_AT] : [] };
+    }
+  }
+  return { lines: FILE_TEXT[file] ?? ["(empty)"], changed: [] };
+}
+
+interface LineOpts { changed?: number[]; caret?: number; }
+// render the file as `lines`. `changed` line indices are coloured as local
+// changes; `caret` parks a blinking caret on the line being typed (-1 = none).
+function renderEditorLines(lines: string[], opts: LineOpts = {}): void {
+  const changed = new Set(opts.changed ?? []);
+  const caret = opts.caret ?? -1;
   editorCode.replaceChildren();
   lines.forEach((line, i) => {
     const row = document.createElement("div");
-    row.className = i === activeLine ? "editor__line is-active" : "editor__line";
+    row.className = "editor__line";
+    if (changed.has(i)) row.classList.add("is-changed");
+    if (i === caret) row.classList.add("is-active");
     const num = document.createElement("span");
     num.className = "editor__num";
     num.textContent = String(i + 1);
@@ -1254,43 +1304,38 @@ function renderEditorLines(lines: string[], activeLine: number): void {
     txt.className = "editor__txt";
     txt.textContent = line;
     row.append(num, txt);
-    if (i === activeLine) {
-      const caret = document.createElement("span");
-      caret.className = "editor__caret";
-      row.appendChild(caret);
+    if (i === caret) {
+      const c = document.createElement("span");
+      c.className = "editor__caret";
+      row.appendChild(c);
     }
     editorCode.appendChild(row);
   });
 }
 
-// the editor grows out of (and folds back into) the index.html line in the
-// file tree, so the popup clearly belongs to that file. We FLIP it: measure the
-// tree line, then transform the centred editor down onto it as its closed state.
-const GROW_MS = 620;   // tree line -> full size in the centre
-const SHRINK_MS = 560; // full size -> back into the tree line
+// the editor grows out of (and folds back into) the file's row in a tree, so
+// the popup clearly belongs to that file. We FLIP it: measure the row, then
+// transform the centred editor down onto it as its closed state.
+const GROW_MS = 620;   // tree row -> full size in the centre
+const SHRINK_MS = 560; // full size -> back into the tree row
 
 // the centre the editor sits at when open (left:50% / top:40% in the stylesheet)
 function editorAnchor(): Pt {
   return { x: window.innerWidth * 0.5, y: window.innerHeight * 0.4 };
 }
-// the on-screen box of the index.html row in the file tree, if it's there
-function editLineRect(): DOMRect | null {
-  for (const name of treeList.querySelectorAll<HTMLElement>(".f__name")) {
-    if (name.textContent === EDIT_FILE) {
-      const li = name.closest("li");
-      return (li ?? name).getBoundingClientRect();
-    }
-  }
-  return null;
+// the on-screen box of a file's row in a tree, if it's there
+function fileRowRect(file: string, side: "local" | "remote"): DOMRect | null {
+  const listEl = side === "remote" ? remoteList : treeList;
+  const li = listEl.querySelector<HTMLElement>(`li[data-file="${file}"]`);
+  return li ? li.getBoundingClientRect() : null;
 }
-// the transform that shrinks the centred editor down onto the tree line, so
-// growing from / folding into it reads as the popup coming out of that file
-// kept structurally identical to OPEN_TRANSFORM (same function list) so the
-// browser interpolates them component-wise rather than via a matrix fallback
-function tuckedTransform(): string {
-  const r = editLineRect();
+// the transform that shrinks the centred editor down onto a tree row, so
+// growing from / folding into it reads as the popup coming out of that file.
+// Kept structurally identical to OPEN_TRANSFORM (same function list) so the
+// browser interpolates them component-wise rather than via a matrix fallback.
+function tuckedTransformFor(r: DOMRect | null): string {
   const a = editorAnchor();
-  if (!r) return "translate(-50%, -50%) translate(0px, 0px) scale(0.55)";  // tree gone: shrink in place
+  if (!r) return "translate(-50%, -50%) translate(0px, 0px) scale(0.55)";  // row gone: shrink in place
   const lx = r.left + r.width / 2, ly = r.top + r.height / 2;
   const natH = editorEl.offsetHeight || 240;           // unscaled height (ignores transform)
   const s = Math.max(0.05, Math.min(0.22, r.height / natH));
@@ -1298,34 +1343,89 @@ function tuckedTransform(): string {
 }
 const OPEN_TRANSFORM = "translate(-50%, -50%) translate(0px, 0px) scale(1)";
 
-// a generation token: seeking (or any new run) bumps it so an in-flight
+// a generation token: seeking, a new view, or a new run bumps it so an in-flight
 // sequence bails at its next checkpoint instead of fighting the new state.
 let editSeqGen = 0;
+// which file (if any) is currently held open by a click-to-view
+let viewerFile: string | null = null;
+let viewerSide: "local" | "remote" = "local";
+
 function closeEditor(): void {
   editSeqGen++;
+  viewerFile = null;
   editorEl.style.transition = "none";
   editorEl.style.opacity = "0";
+  editorEl.style.pointerEvents = "none";
   editorSave.classList.remove("show");
+}
+
+// ---- click any file to open it (view only, no editing yet) ----------
+function openFileViewer(file: string, side: "local" | "remote", row: HTMLElement): void {
+  const gen = ++editSeqGen;                      // cancel the auto-edit or a prior view
+  viewerFile = file;
+  viewerSide = side;
+  const { lines, changed } = fileLines(file, side);
+  editorName.textContent = file;
+  editorUnsaved.style.opacity = "0";             // viewing, nothing unsaved
+  editorSave.classList.remove("show");
+  renderEditorLines(lines, { changed });
+
+  if (S.prefersReduced) {
+    editorEl.style.transition = "none";
+    editorEl.style.transform = OPEN_TRANSFORM;
+    editorEl.style.opacity = "1";
+    editorEl.style.pointerEvents = "auto";
+    return;
+  }
+  editorEl.style.transition = "none";
+  editorEl.style.transform = tuckedTransformFor(row.getBoundingClientRect());
+  editorEl.style.opacity = "0";
+  editorEl.getBoundingClientRect();              // commit the tucked start state
+  requestAnimationFrame(() => {
+    if (gen !== editSeqGen) return;
+    editorEl.style.transition =
+      `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
+    editorEl.style.transform = OPEN_TRANSFORM;
+    editorEl.style.opacity = "1";
+    editorEl.style.pointerEvents = "auto";
+  });
+}
+
+// fold the open viewer back into its file row
+function closeFileViewer(): void {
+  if (viewerFile == null) return;
+  const rect = fileRowRect(viewerFile, viewerSide);
+  viewerFile = null;
+  editSeqGen++;
+  editorEl.style.pointerEvents = "none";
+  if (S.prefersReduced) { editorEl.style.opacity = "0"; return; }
+  editorEl.style.transition =
+    `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
+  editorEl.style.transform = tuckedTransformFor(rect);
+  editorEl.style.opacity = "0";
 }
 
 async function playEditSequence(): Promise<void> {
   if (instant || S.prefersReduced) return;     // timeline seeks just show the result
   const gen = ++editSeqGen;
+  viewerFile = null;                            // this is the auto-edit, not a click view
   const alive = () => gen === editSeqGen;
 
-  // prime: render the file, park the editor tucked into the tree line, invisible
+  // prime: render the file, park the editor tucked into the index.html row
   const lines = EDIT_LINES.slice();
   editorName.textContent = EDIT_FILE;
   editorUnsaved.style.opacity = "0";
   editorSave.classList.remove("show");
-  renderEditorLines(lines, -1);
+  editorEl.style.pointerEvents = "none";        // the auto-edit isn't interactive
+  renderEditorLines(lines);
   editorEl.style.transition = "none";
-  editorEl.style.transform = tuckedTransform();
+  editorEl.style.transform = tuckedTransformFor(fileRowRect(EDIT_FILE, "local"));
   editorEl.style.opacity = "0";
   editorEl.getBoundingClientRect();             // commit the tucked start state
 
   // 1) grow: the popup rises out of the index.html line to full size, centred
   requestAnimationFrame(() => {
+    if (gen !== editSeqGen) return;
     editorEl.style.transition =
       `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
     editorEl.style.transform = OPEN_TRANSFORM;
@@ -1338,13 +1438,14 @@ async function playEditSequence(): Promise<void> {
   editorUnsaved.style.opacity = "1";            // the file is now dirty
   for (let n = 1; n <= EDIT_NEW.length; n++) {
     lines[EDIT_AT] = EDIT_NEW.slice(0, n);
-    renderEditorLines(lines, EDIT_AT);
+    renderEditorLines(lines, { changed: [EDIT_AT], caret: EDIT_AT });
     await sleep(44); if (!alive()) return;
   }
   await sleep(650); if (!alive()) return;       // sit on the finished edit a moment
 
-  // 3) save: the unsaved dot clears and a "saved" note flashes, then it lingers
-  renderEditorLines(lines, -1);
+  // 3) save: the unsaved dot clears and a "saved" note flashes, then it lingers.
+  // the new line stays green: a saved-but-uncommitted local change.
+  renderEditorLines(lines, { changed: [EDIT_AT] });
   editorUnsaved.style.opacity = "0";
   editorSave.classList.add("show");
   await sleep(1600); if (!alive()) return;      // longer hold so the save registers
@@ -1352,10 +1453,40 @@ async function playEditSequence(): Promise<void> {
   // 4) fold back into the tree line, then leave index.html marked modified
   editorEl.style.transition =
     `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
-  editorEl.style.transform = tuckedTransform();
+  editorEl.style.transform = tuckedTransformFor(fileRowRect(EDIT_FILE, "local"));
   editorEl.style.opacity = "0";
   await sleep(SHRINK_MS + 60); if (!alive()) return;
   editorSave.classList.remove("show");
+}
+
+// clicking a file row opens it; clicking the open file again, its bar, outside,
+// or Escape folds it away. Delegated so re-rendered rows keep working.
+function wireFileViewer(): void {
+  const onList = (listEl: HTMLElement, side: "local" | "remote") => {
+    listEl.addEventListener("click", (e) => {
+      const li = (e.target as HTMLElement).closest("li[data-file]") as HTMLElement | null;
+      const file = li?.dataset.file;
+      if (!file || !li) return;
+      if (viewerFile === file && viewerSide === side) closeFileViewer();
+      else openFileViewer(file, side, li);
+    });
+  };
+  onList(treeList, "local");
+  onList(remoteList, "remote");
+
+  editorEl.addEventListener("click", (e) => {
+    if (viewerFile == null) return;             // the auto-edit ignores clicks
+    if ((e.target as HTMLElement).closest(".editor__bar")) closeFileViewer();
+  });
+  document.addEventListener("click", (e) => {
+    if (viewerFile == null) return;
+    const t = e.target as HTMLElement;
+    if (editorEl.contains(t) || treeEl.contains(t) || remoteTreeEl.contains(t)) return;
+    closeFileViewer();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && viewerFile != null) closeFileViewer();
+  });
 }
 
 // ---- remote tree (right) -------------------------------------------
@@ -1390,7 +1521,8 @@ function renderRemoteTree(): void {
   if (pushed) {
     for (const f of PROJECT.files) {
       const li = document.createElement("li");
-      li.className = "f f--committed";
+      li.className = "f f--committed is-openable";
+      li.dataset.file = f;                        // remote files open too
       if (!lastRemotePushed) li.classList.add("is-new");
       li.append(makeName(f));
       const m = document.createElement("span");
@@ -1417,7 +1549,7 @@ function renderRemoteTree(): void {
 // pushed (origin/main), so it lags behind the local graph until you push again.
 const REMOTE_NODE_R = NODE_R * 0.36;   // small solid remote nodes
 const REMOTE_GAP = GAP * 0.82;         // compact spacing between them
-const REMOTE_RISE = 220;               // how far above the main lane it rests
+const REMOTE_TOP_FRAC = 0.13;          // rests this far down from the top (its own anchor)
 const shownRemoteIds = new Set<number>();   // commits already drawn on the mini-graph
 
 // the commits that live on the remote: the main-lane trunk up to origin/main's
@@ -1435,12 +1567,15 @@ function renderRemoteGraph(allowAnim = true): void {
   if (!trunk.length) { gRemote.style.opacity = "0"; shownRemoteIds.clear(); return; }
   gRemote.style.opacity = "1";
 
-  // centred on the screen, small solid nodes, parked REMOTE_RISE above the main
-  // lane. Each commit is its OWN group holding the node plus its incoming
+  // centred on the screen, small solid nodes, parked near the top of the view.
+  // Each commit is its OWN group holding the node plus its incoming
   // connector (a fixed line one REMOTE_GAP to the left). Because spacing is
   // constant, that connector stays glued to its node as groups slide or glide.
   const cx = boardCenter().x;
-  const restY = boardCenter().y - REMOTE_RISE;
+  // the remote graph has its OWN anchor near the top, independent of the local
+  // graph, so lowering the local graph genuinely opens a gap between them.
+  const restY = viewH * REMOTE_TOP_FRAC;
+  const rise = boardCenter().y - restY;   // distance a node travels up from the local lane
   const count = trunk.length;
   const oldCount = shownRemoteIds.size;
   const xAt = (i: number, c: number) => cx + (i - (c - 1) / 2) * REMOTE_GAP;
@@ -1478,7 +1613,7 @@ function renderRemoteGraph(allowAnim = true): void {
     // existing ones sit in their old, less-centred slot (ready to glide over)
     g.style.transition = "none";
     g.style.transform = isNew
-      ? `translate(${finalX}px, ${restY + REMOTE_RISE}px)`
+      ? `translate(${finalX}px, ${restY + rise}px)`
       : `translate(${xAt(i, oldCount)}px, ${restY}px)`;
     g.style.opacity = isNew ? "0" : "1";
     parts.push({ g, conn: isNew ? conn : null, finalX, isNew });
@@ -1489,7 +1624,7 @@ function renderRemoteGraph(allowAnim = true): void {
     return;
   }
 
-  if (firstShow) { label.style.transition = "none"; label.style.transform = `translateY(${REMOTE_RISE}px)`; label.style.opacity = "0"; }
+  if (firstShow) { label.style.transition = "none"; label.style.transform = `translateY(${rise}px)`; label.style.opacity = "0"; }
   // hide each new connector so it can draw in only after its node has landed
   for (const p of parts) {
     if (p.conn) { const L = p.conn.getTotalLength(); p.conn.style.strokeDasharray = String(L); p.conn.style.strokeDashoffset = String(L); }
@@ -1707,6 +1842,7 @@ function boot(): void {
   // No file editor exists yet, so the local tree leads (is-focus) until a remote
   // appears. When the editor lands, the compact corner state takes over instead.
   updateLayout();
+  wireFileViewer();   // click any file in either tree to open it
   if (!isPhone) cmd.focus();
 }
 
