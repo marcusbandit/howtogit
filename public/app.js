@@ -274,12 +274,20 @@ function drawRefs() {
         if (!tip || !a)
             continue;
         // a freshly created branch diverges onto its lane right away: a dashed stub
-        // shoots from the commit up to where its commits will grow, with the label
+        // shoots from the commit up to a ghost node outline where its first commit
+        // will land, with the label floating above that
         if (isProjected(b)) {
             refTicks.appendChild(S.el("path", {
                 d: connectorPath(tip, { x: a.x, y: a.y, r: NODE_R }, 21),
                 class: "edge-stroke", stroke: b.color, "stroke-width": 2,
-                "stroke-dasharray": "1 8", opacity: 0.55,
+                "stroke-dasharray": "1 8", opacity: 0.5,
+            }));
+            const ghost = b.shape === "square"
+                ? S.squarePath(a.x, a.y, NODE_R * 1.7, 23)
+                : S.circlePath(a.x, a.y, NODE_R, 23);
+            refTicks.appendChild(S.el("path", {
+                d: ghost, class: "node-stroke", stroke: b.color, "stroke-width": 2,
+                "stroke-dasharray": "1 8", opacity: 0.5,
             }));
         }
         refTicks.appendChild(S.el("path", {
@@ -347,23 +355,23 @@ async function doAdd() {
         return;
     const { parent, pos, branch } = next;
     const els = [];
-    // on a projected branch the dashed stub already draws the line, so skip ours
+    // on a projected branch the dashed stub + ghost node already show the spot;
+    // on the trunk we draw a dashed connector and ring preview here
     if (!isProjected(branch)) {
         const conn = S.el("path", {
             d: connectorPath(parent, { x: pos.x, y: pos.y, r: NODE_R }, 9),
             class: "edge-stroke", stroke: branch.color, "stroke-width": 2,
             "stroke-dasharray": "1 9", opacity: 0,
         });
+        const shape = branch.shape === "square" ? S.squarePath(pos.x, pos.y, NODE_R * 1.7, 9) : S.circlePath(pos.x, pos.y, NODE_R, 9);
+        const ring = S.el("path", {
+            d: shape, class: "node-stroke",
+            stroke: branch.color, "stroke-width": 2, "stroke-dasharray": "1 8", opacity: 0,
+        });
         gEdges.appendChild(conn);
-        els.push(conn);
+        gNodes.appendChild(ring);
+        els.push(conn, ring);
     }
-    const shape = branch.shape === "square" ? S.squarePath(pos.x, pos.y, NODE_R * 1.7, 9) : S.circlePath(pos.x, pos.y, NODE_R, 9);
-    const ring = S.el("path", {
-        d: shape, class: "node-stroke",
-        stroke: branch.color, "stroke-width": 2, "stroke-dasharray": "1 8", opacity: 0,
-    });
-    gNodes.appendChild(ring);
-    els.push(ring);
     const tag = caption("staged", pos.x, pos.y + NODE_R + 30, 120, true);
     els.push(tag);
     if (instant) {

@@ -79,6 +79,25 @@ body {
   overflow: visible;
 }
 
+/* ---- work-in-progress badge (top right) ---------------------------- */
+.wip {
+  position: fixed;
+  top: clamp(1.1rem, 3vw, 2rem);
+  right: clamp(1.1rem, 3vw, 2.2rem);
+  z-index: 6;
+  font-family: var(--hand);
+  font-size: clamp(1.1rem, 2.4vw, 1.5rem);
+  font-weight: 700;
+  color: var(--pen-red);
+  border: 2px solid var(--pen-red);
+  border-radius: 8px;
+  padding: 0.15rem 0.7rem 0.25rem;
+  transform: rotate(3deg);
+  opacity: 0.8;
+  user-select: none;
+  pointer-events: none;
+}
+
 /* ---- board / graph ------------------------------------------------- */
 #board {
   position: fixed;
