@@ -64,6 +64,7 @@ type Pt = { x: number; y: number };
 interface CommitNode {
   id: number;
   col: number;
+  lane: number;     // 0 = main; negative lanes sit above
   x: number;
   y: number;
   r: number;
@@ -71,20 +72,30 @@ interface CommitNode {
   color: string;
   shape: Shape;
 }
+interface Branch {
+  color: string;
+  shape: Shape;
+  lane: number;
+  tip: number | null;  // node id this branch points at
+}
 interface Pending {
   els: SVGElement[];
   pos: Pt;
 }
 interface Model {
   nodes: CommitNode[];
-  head: number | null;
+  head: number | null;            // node id at the tip of the current branch
+  headBranch: string;             // the branch HEAD is on
+  branches: Record<string, Branch>;
   tagEls: SVGGElement | null;
   pending: Pending | null;
 }
 
-const model: Model = { nodes: [], head: null, tagEls: null, pending: null };
-const GAP = 150;   // horizontal distance between commits (viewBox units)
-const NODE_R = 28; // base node radius (viewBox units)
+const model: Model = { nodes: [], head: null, headBranch: "main", branches: {}, tagEls: null, pending: null };
+const GAP = 150;     // horizontal distance between commits (viewBox units)
+const LANE_GAP = 118; // vertical distance between branch lanes
+const NODE_R = 28;   // base node radius (viewBox units)
+const BRANCH_PALETTE = ["#c0492f", "#3f7a4e", "#6b5ca5"]; // feature, then more
 
 // viewBox dimensions: the drawing space, smaller than the screen by ZOOM
 let viewW = window.innerWidth / ZOOM;
@@ -93,13 +104,16 @@ let viewH = window.innerHeight / ZOOM;
 function boardCenter(): Pt {
   return { x: viewW / 2, y: viewH * 0.42 };
 }
-// column i sits to the right of the first node, which lives at board centre
-function nodePos(col: number): Pt {
+// column i sits to the right of the first node; lane shifts it onto a branch row
+function nodePos(col: number, lane = 0): Pt {
   const c = boardCenter();
-  return { x: c.x + col * GAP, y: c.y };
+  return { x: c.x + col * GAP, y: c.y + lane * LANE_GAP };
 }
 function headNode(): CommitNode | undefined {
   return model.nodes.find((n) => n.id === model.head);
+}
+function nodeById(id: number | null): CommitNode | undefined {
+  return id == null ? undefined : model.nodes.find((n) => n.id === id);
 }
 
 // ---- board sizing ---------------------------------------------------
@@ -228,24 +242,85 @@ function pill(parent: SVGElement, text: string, cx: number, midY: number, color:
   animateIn(g, delay);
 }
 
-// HEAD over the branch name, joined to the node by a tick. Replaces any
-// tags already on the board, so the labels "travel" to the newest commit.
-function placeTags(node: CommitNode, branchName: string, color: string): void {
-  if (model.tagEls) fadeOutRemove(model.tagEls, 220);
+// a pill centred on its own origin, so it can be translated into place
+function makePill(text: string, color: string, seed: number): SVGGElement {
   const g = S.el("g") as SVGGElement;
-  gLabels.appendChild(g);
-  g.appendChild(makeTick(node));
-  pill(g, branchName, node.x, node.y - node.r - 42, color, 2, 120);
-  pill(g, "HEAD", node.x, node.y - node.r - 84, COLORS.ink, 3, 240);
-  model.tagEls = g;
+  const w = text.length * 12 + 22;
+  g.appendChild(S.el("path", {
+    d: S.rectPath(0, 0, w, 30, seed), class: "tag-box",
+    stroke: color, "stroke-width": 1.8, fill: "#efe7d2",
+  }));
+  const t = S.el("text", { x: 0, y: 7, "text-anchor": "middle", class: "tag", fill: color });
+  t.textContent = text;
+  g.appendChild(t);
+  return g;
 }
-function makeTick(node: CommitNode): SVGElement {
-  const tick = S.el("path", {
-    d: S.linePath(node.x, node.y - node.r - 2, node.x, node.y - node.r - 22, 5, 0.6),
-    class: "edge-stroke", stroke: COLORS.inkSoft, "stroke-width": 1.4,
-  });
-  animateIn(tick, 40);
-  return tick;
+
+// Refs (branch names + HEAD) are persistent pills that MOVE to follow commits,
+// rather than fading out and redrawing. Recompute every ref's target and glide
+// each pill there; create new ones, drop gone ones.
+const refPills = new Map<string, SVGGElement>();
+let refTicks: SVGGElement | null = null;
+
+function refPosition(node: CommitNode, level: number): Pt {
+  return { x: node.x, y: node.y - node.r - 36 - level * 36 };
+}
+function placePill(g: SVGGElement, p: Pt, animateNew: boolean): void {
+  if (animateNew && !S.prefersReduced) {
+    g.style.opacity = "0";
+    g.style.transform = `translate(${p.x}px, ${p.y + 8}px) scale(0.9)`;
+    requestAnimationFrame(() => {
+      g.style.transform = `translate(${p.x}px, ${p.y}px) scale(1)`;
+      g.style.opacity = "1";
+    });
+  } else {
+    g.style.transform = `translate(${p.x}px, ${p.y}px) scale(1)`;
+    g.style.opacity = "1";
+  }
+}
+
+function drawRefs(): void {
+  // group branch names by the node they point at, so they stack
+  const atNode = new Map<number, string[]>();
+  for (const [name, b] of Object.entries(model.branches)) {
+    if (b.tip == null) continue;
+    (atNode.get(b.tip) ?? atNode.set(b.tip, []).get(b.tip))!.push(name);
+  }
+
+  // ticks: cheap, just redraw them each time
+  if (refTicks) refTicks.remove();
+  refTicks = S.el("g") as SVGGElement;
+  gLabels.appendChild(refTicks);
+
+  const wanted = new Set<string>();
+  for (const [nodeId, names] of atNode) {
+    const node = nodeById(nodeId);
+    if (!node) continue;
+    refTicks.appendChild(S.el("path", {
+      d: S.linePath(node.x, node.y - node.r - 2, node.x, node.y - node.r - 22, 5, 0.6),
+      class: "edge-stroke", stroke: COLORS.inkSoft, "stroke-width": 1.4,
+    }));
+    let level = 0;
+    for (const name of names) {
+      wanted.add(name);
+      let g = refPills.get(name);
+      const isNew = !g;
+      if (!g) { g = makePill(name, model.branches[name].color, 2); g.classList.add("ref-pill"); gLabels.appendChild(g); refPills.set(name, g); }
+      placePill(g, refPosition(node, level), isNew);
+      level++;
+    }
+    if (model.head === nodeId) {
+      wanted.add("HEAD");
+      let g = refPills.get("HEAD");
+      const isNew = !g;
+      if (!g) { g = makePill("HEAD", COLORS.ink, 3); g.classList.add("ref-pill"); gLabels.appendChild(g); refPills.set("HEAD", g); }
+      placePill(g, refPosition(node, level), isNew);
+    }
+  }
+  // drop refs that no longer exist
+  for (const [name, g] of refPills) {
+    if (!wanted.has(name)) { fadeOutRemove(g, 200); refPills.delete(name); }
+  }
 }
 
 function caption(text: string, cx: number, y: number, delay: number, faint = false): SVGTextElement {
@@ -261,36 +336,48 @@ function caption(text: string, cx: number, y: number, delay: number, faint = fal
 
 // ---- step actions ---------------------------------------------------
 async function doInit(): Promise<void> {
-  const p = nodePos(0);
+  const p = nodePos(0, 0);
   const node: CommitNode = {
-    id: 0, col: 0, x: p.x, y: p.y, r: NODE_R,
+    id: 0, col: 0, lane: 0, x: p.x, y: p.y, r: NODE_R,
     branch: "main", color: COLORS.main, shape: "circle",
   };
   model.nodes.push(node);
   model.head = 0;
+  model.headBranch = "main";
+  model.branches = { main: { color: COLORS.main, shape: "circle", lane: 0, tip: 0 } };
   dockStage();
   await drawNode(node, 3);
-  placeTags(node, "main", COLORS.main);
+  drawRefs();
   caption("git init", node.x, node.y + node.r + 32, 360);
+}
+
+// where the current branch's next commit would land
+function nextCommitPos(): { parent: CommitNode; pos: Pt; branch: Branch } | null {
+  const branch = model.branches[model.headBranch];
+  if (!branch) return null;
+  const parent = nodeById(branch.tip) ?? headNode();
+  if (!parent) return null;
+  return { parent, branch, pos: nodePos(parent.col + 1, branch.lane) };
 }
 
 // staging: a faint, dashed preview of the commit that's about to exist
 async function doAdd(): Promise<void> {
-  const from = headNode();
-  if (!from) return;
-  const p = nodePos(model.nodes.length);
+  const next = nextCommitPos();
+  if (!next) return;
+  const { parent, pos, branch } = next;
   const conn = S.el("path", {
-    d: connectorPath(from, { x: p.x, y: p.y, r: NODE_R }, 9),
-    class: "edge-stroke", stroke: COLORS.main, "stroke-width": 2,
+    d: connectorPath(parent, { x: pos.x, y: pos.y, r: NODE_R }, 9),
+    class: "edge-stroke", stroke: branch.color, "stroke-width": 2,
     "stroke-dasharray": "1 9", opacity: 0,
   });
+  const shape = branch.shape === "square" ? S.squarePath(pos.x, pos.y, NODE_R * 1.7, 9) : S.circlePath(pos.x, pos.y, NODE_R, 9);
   const ring = S.el("path", {
-    d: S.circlePath(p.x, p.y, NODE_R, 9), class: "node-stroke",
-    stroke: COLORS.main, "stroke-width": 2, "stroke-dasharray": "1 8", opacity: 0,
+    d: shape, class: "node-stroke",
+    stroke: branch.color, "stroke-width": 2, "stroke-dasharray": "1 8", opacity: 0,
   });
   gEdges.appendChild(conn);
   gNodes.appendChild(ring);
-  const tag = caption("staged", p.x, p.y + NODE_R + 30, 120, true);
+  const tag = caption("staged", pos.x, pos.y + NODE_R + 30, 120, true);
   if (instant) {
     conn.style.opacity = "0.5";
     ring.style.opacity = "0.55";
@@ -302,27 +389,53 @@ async function doAdd(): Promise<void> {
       ring.style.opacity = "0.55";
     });
   }
-  model.pending = { els: [conn, ring, tag], pos: p };
+  model.pending = { els: [conn, ring, tag], pos };
 }
 
 async function doCommit(message = "first commit"): Promise<void> {
-  const from = headNode();
-  if (!from) return;
-  const p = model.pending ? model.pending.pos : nodePos(model.nodes.length);
+  const next = nextCommitPos();
+  if (!next) return;
+  const { parent, branch } = next;
+  const pos = model.pending ? model.pending.pos : next.pos;
   if (model.pending) {
     model.pending.els.forEach((e) => fadeOutRemove(e, 240));
     model.pending = null;
   }
   const node: CommitNode = {
-    id: model.nodes.length, col: model.nodes.length, x: p.x, y: p.y,
-    r: NODE_R, branch: "main", color: COLORS.main, shape: "circle",
+    id: model.nodes.length, col: parent.col + 1, lane: branch.lane, x: pos.x, y: pos.y,
+    r: NODE_R, branch: model.headBranch, color: branch.color, shape: branch.shape,
   };
-  await drawConnector(from, node, COLORS.main, node.id * 7 + 4);
+  await drawConnector(parent, node, branch.color, node.id * 7 + 4);
   await drawNode(node, node.id * 13 + 6);
   model.nodes.push(node);
   model.head = node.id;
-  placeTags(node, "main", COLORS.main);
+  branch.tip = node.id;
+  drawRefs();
   caption(message, node.x, node.y + node.r + 32, 320);
+}
+
+// create a branch at the current commit: a new coloured ref, no new node yet
+async function doBranch(arg?: string): Promise<void> {
+  const name = (arg ?? "feature").trim() || "feature";
+  if (model.branches[name]) return;
+  const idx = Object.keys(model.branches).length - 1; // existing non-main count
+  model.branches[name] = {
+    color: BRANCH_PALETTE[idx % BRANCH_PALETTE.length],
+    shape: "square",
+    lane: -(idx + 1),
+    tip: model.head,
+  };
+  drawRefs();
+}
+
+// switch HEAD onto a branch; new commits will land on its lane
+async function doCheckout(arg?: string): Promise<void> {
+  const name = (arg ?? "").trim();
+  const b = model.branches[name];
+  if (!b) return;
+  model.headBranch = name;
+  model.head = b.tip;
+  drawRefs();
 }
 
 // the remote's nickname and address, captured from `git remote add`
@@ -335,11 +448,11 @@ async function doRemoteAdd(arg?: string): Promise<void> {
   if (m) { remoteName = m[1]; remoteUrl = m[2]; }
 }
 
-// push: stamp origin/main onto the pushed commit; the remote panel then fills
+// push: stamp origin/main onto main's tip commit; the remote panel then fills
 async function doPush(): Promise<void> {
-  const head = headNode();
-  if (!head) return;
-  pill(gLabels, "origin/main", head.x, head.y + head.r + 66, COLORS.remote, 7, 120);
+  const mainTip = nodeById(model.branches.main?.tip ?? null) ?? headNode();
+  if (!mainTip) return;
+  pill(gLabels, "origin/main", mainTip.x, mainTip.y + mainTip.r + 66, COLORS.remote, 7, 120);
 }
 
 // ---- step machine ---------------------------------------------------
@@ -376,13 +489,6 @@ interface Step {
 function canonical(step: Step): string {
   return step.atoms.map((a, i) => atomSep(step.atoms, i) + atomText(a)).join("");
 }
-// one colour per whitespace-separated word (joined atoms share their first tone)
-function tokenTones(atoms: Atom[]): Tone[] {
-  const tones: Tone[] = [];
-  atoms.forEach((a, i) => { if (i === 0 || atomSep(atoms, i) === " ") tones.push(a.tone); });
-  return tones;
-}
-
 const isUrl = (s: string): boolean =>
   /^https?:\/\/[^\s/]+\.[^\s/]+\/\S+$/i.test(s) || /^git@[^\s:]+:\S+$/i.test(s);
 
@@ -434,6 +540,60 @@ const steps: Step[] = [
       why: "Records the staged files into history.",
       parts: [
         { t: "commit", tone: "cmd", why: "save that snapshot to history" },
+        { t: "-m", tone: "flag", why: "attach a short message" },
+      ],
+    },
+    run: doCommit,
+  },
+  {
+    key: "branch",
+    atoms: [A("git", "cmd", { sep: "" }), A("branch", "cmd"), A("feature", "val", { free: true })],
+    test: (s) => /^git\s+branch\s+\S+$/i.test(s),
+    extract: (s) => s.split(/\s+/)[2] ?? "feature",
+    hint: "Name a branch:  git branch feature",
+    teach: {
+      goal: "Start a branch",
+      why: "A branch is a separate line of work, so you can try things without touching main.",
+      parts: [
+        { t: "branch", tone: "cmd", why: "make a new branch at the current commit" },
+        { t: "feature", tone: "val", why: "its name, yours to choose (here: feature)" },
+      ],
+    },
+    run: doBranch,
+  },
+  {
+    key: "checkout",
+    atoms: [A("git", "cmd", { sep: "" }), A("checkout", "cmd"), A("feature", "val", { free: true })],
+    test: (s) => /^git\s+checkout\s+\S+$/i.test(s),
+    extract: (s) => s.split(/\s+/)[2] ?? "feature",
+    hint: "Switch to it:  git checkout feature",
+    teach: {
+      goal: "Switch to the branch",
+      why: "Move onto the branch so your next commits land there, not on main.",
+      parts: [
+        { t: "checkout", tone: "cmd", why: "move HEAD onto another branch" },
+        { t: "feature", tone: "val", why: "the branch to switch to" },
+      ],
+    },
+    run: doCheckout,
+  },
+  {
+    key: "commit2",
+    atoms: [
+      A("git", "cmd", { sep: "" }), A("commit", "cmd"), A("-m", "flag"),
+      A('"add feature"', "val", { rest: true }),
+    ],
+    test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
+    extract: (s) => {
+      const m = s.match(/-m\s+(["'])(.+?)\1/);
+      return m ? m[2] : "add feature";
+    },
+    hint: 'Commit on the branch:  git commit -m "add feature"',
+    teach: {
+      goal: "Commit on the branch",
+      why: "This snapshot lands on feature and branches away from main.",
+      parts: [
+        { t: "commit", tone: "cmd", why: "save a snapshot on the current branch" },
         { t: "-m", tone: "flag", why: "attach a short message" },
       ],
     },
@@ -534,22 +694,6 @@ function esc(s: string): string {
 }
 let suggestActive = false;
 
-// colour each whitespace word to match its part chip
-function colorize(typed: string, tones: Tone[]): string {
-  let html = "";
-  let ti = 0;
-  for (const part of typed.split(/(\s+)/)) {
-    if (part === "") continue;
-    if (/^\s+$/.test(part)) { html += esc(part); continue; }
-    let cls: string;
-    if (ti === 0) cls = "git".startsWith(part.toLowerCase()) ? "hl-cmd" : "hl-rest";
-    else cls = `hl-${tones[Math.min(ti, tones.length - 1)] ?? "rest"}`;
-    html += `<span class="${cls}">${esc(part)}</span>`;
-    ti++;
-  }
-  return html;
-}
-
 // the suggestion for atoms[start..], fully unfilled, with their separators
 function suggestFrom(atoms: Atom[], start: number, includeFirstSep: boolean): string {
   let g = "";
@@ -560,56 +704,75 @@ function suggestFrom(atoms: Atom[], start: number, includeFirstSep: boolean): st
   return g;
 }
 
-// walk the typed text against the atoms. `ghost` is everything still to type;
-// `chunk` is just the next atom (what one Tab fills). Free atoms soft-suggest
-// their text while it still matches, then yield to the following atoms.
-function match(typed: string, atoms: Atom[]): { ghost: string; chunk: string } {
-  let pos = 0;
+// walk typed against the atoms and return: the coloured html of what's typed
+// (with wrong chars in a fixed word marked as errors), the ghost still to type,
+// and the chunk one Tab would add. A typo in a fixed word does NOT erase the
+// ghost: the rest of the command keeps previewing.
+function analyze(typed: string, atoms: Atom[]): { html: string; ghost: string; chunk: string; invalid: boolean } {
+  let pos = 0, html = "", ghost = "", chunk = "", invalid = false, chunkSet = false;
+  const setChunk = (s: string) => { if (!chunkSet) { chunk = s; chunkSet = true; } };
+  const span = (tone: Tone, s: string) => `<span class="hl-${tone}">${esc(s)}</span>`;
+
   for (let a = 0; a < atoms.length; a++) {
     const sep = atomSep(atoms, a);
     if (sep) {
-      if (typed.startsWith(sep, pos)) pos += sep.length;
-      else if (pos >= typed.length) return { ghost: suggestFrom(atoms, a, true), chunk: sep + atomText(atoms[a]) };
-      else return { ghost: "", chunk: "" };
+      if (typed.startsWith(sep, pos)) { html += esc(sep); pos += sep.length; }
+      else if (pos >= typed.length) { ghost = suggestFrom(atoms, a, true); setChunk(sep + atomText(atoms[a])); return { html, ghost, chunk, invalid }; }
+      else { html += `<span class="hl-invalid hl-err">${esc(typed.slice(pos))}</span>`; return { html, ghost, chunk, invalid: true }; }
     }
     const text = atomText(atoms[a]);
     const rem = typed.slice(pos);
     if (atoms[a].rest) {
-      return rem.length === 0 ? { ghost: text, chunk: text } : { ghost: "", chunk: "" };
+      if (rem.length === 0) { ghost = text; setChunk(text); }
+      else html += span(atoms[a].tone, rem);
+      return { html, ghost, chunk, invalid };
     }
-    if (rem.length === 0) return { ghost: suggestFrom(atoms, a, false), chunk: text };
+    if (rem.length === 0) { ghost = suggestFrom(atoms, a, false); setChunk(text); return { html, ghost, chunk, invalid }; }
     if (atoms[a].free) {
       const next = atoms[a + 1];
       const stop = next ? (atomSep(atoms, a + 1) || atomText(next)[0] || " ") : " ";
       const stopIdx = rem.indexOf(stop);
       if (stopIdx === -1) {
+        html += span(atoms[a].tone, rem);
         pos = typed.length;
-        if (text.toLowerCase().startsWith(rem.toLowerCase())) {
-          return { ghost: text.slice(rem.length) + suggestFrom(atoms, a + 1, true), chunk: text.slice(rem.length) };
-        }
-        return {
-          ghost: suggestFrom(atoms, a + 1, true),
-          chunk: next ? atomSep(atoms, a + 1) + atomText(next) : "",
-        };
+        if (text.toLowerCase().startsWith(rem.toLowerCase())) { ghost = text.slice(rem.length) + suggestFrom(atoms, a + 1, true); setChunk(text.slice(rem.length)); }
+        else { ghost = suggestFrom(atoms, a + 1, true); setChunk(next ? atomSep(atoms, a + 1) + atomText(next) : ""); }
+        return { html, ghost, chunk, invalid };
       }
+      html += span(atoms[a].tone, rem.slice(0, stopIdx));
       pos += stopIdx;
       continue;
     }
-    if (text.startsWith(rem)) return { ghost: text.slice(rem.length) + suggestFrom(atoms, a + 1, true), chunk: text.slice(rem.length) };
-    if (rem.startsWith(text)) { pos += text.length; continue; }
-    return { ghost: "", chunk: "" };
+    if (rem.startsWith(text)) { html += span(atoms[a].tone, text); pos += text.length; continue; }
+    if (text.startsWith(rem)) {
+      html += span(atoms[a].tone, rem);
+      pos = typed.length;
+      ghost = text.slice(rem.length) + suggestFrom(atoms, a + 1, true);
+      setChunk(text.slice(rem.length));
+      return { html, ghost, chunk, invalid };
+    }
+    // diverged inside a fixed word: keep the good prefix, error the bad chars,
+    // underline the word, and keep ghosting whatever comes after it
+    const spaceIdx = rem.indexOf(" ");
+    const word = spaceIdx === -1 ? rem : rem.slice(0, spaceIdx);
+    let cp = 0;
+    while (cp < word.length && cp < text.length && word[cp].toLowerCase() === text[cp].toLowerCase()) cp++;
+    html += `<span class="hl-invalid">${cp ? span(atoms[a].tone, word.slice(0, cp)) : ""}<span class="hl-err">${esc(word.slice(cp))}</span></span>`;
+    pos += word.length;
+    invalid = true;
+    continue;
   }
-  return { ghost: "", chunk: "" };
+  return { html, ghost, chunk, invalid };
 }
 
 function updateInk(): void {
   const typed = cmd.value;
   const atoms = currentAtoms();
-  const ghost = atoms ? match(typed, atoms).ghost : "";
+  const a = atoms ? analyze(typed, atoms) : { html: esc(typed), ghost: "", chunk: "", invalid: false };
+  const ghost = a.ghost;
   suggestActive = ghost.length > 0;
 
-  const tones: Tone[] = atoms ? tokenTones(atoms) : ["cmd"];
-  let html = colorize(typed, tones);
+  let html = a.html;
   if (suggestActive) html += `<span class="hl-ghost">${esc(ghost)}</span>`;
   ink.innerHTML = html;
 
@@ -649,7 +812,7 @@ function syncCliRule(): void {
 function acceptNextWord(): void {
   const atoms = currentAtoms();
   if (!atoms) return;
-  const { chunk } = match(cmd.value, atoms);
+  const { chunk } = analyze(cmd.value, atoms);
   if (!chunk) return;
   const newVal = cmd.value + chunk;
   cmd.value = newVal;
@@ -703,13 +866,13 @@ form.addEventListener("submit", async (e) => {
   clearNudge();
   const arg = step.extract ? step.extract(input) : undefined;
   cmd.value = "";
-  updateInk();
   stepIndex++;
+  // advance the lesson + ghost immediately, before the drawing animates
+  showStep(stepIndex);
+  updateTimeline();
   busy = true;
   await step.run(arg);
   busy = false;
-  showStep(stepIndex);
-  updateTimeline();
   renderFileTree();
   renderRemoteTree();
   updateLayout();
@@ -737,18 +900,22 @@ const PROJECT = { root: "my-site", files: ["index.html", "style.css", "app.js"] 
 type FileState = "plain" | "untracked" | "staged" | "committed";
 const MARK: Record<FileState, string> = { plain: "", untracked: "·", staged: "+", committed: "✓" };
 
-// stepIndex maps to disk state: 0 before init, 1 init, 2 add, 3 commit
+// step index of a step by key (so inserting steps doesn't break thresholds)
+function stepIdx(key: string): number {
+  return steps.findIndex((s) => s.key === key);
+}
+// stepIndex is the next step to do; map it to what's on disk
 function fileStateForStep(i: number): FileState {
-  if (i <= 0) return "plain";
-  if (i === 1) return "untracked";
-  if (i === 2) return "staged";
+  if (i <= stepIdx("init")) return "plain";
+  if (i <= stepIdx("add")) return "untracked";
+  if (i <= stepIdx("commit")) return "staged";
   return "committed";
 }
 
 let lastGitPresent = false;
 function renderFileTree(): void {
   const state = fileStateForStep(stepIndex);
-  const gitPresent = stepIndex >= 1;
+  const gitPresent = stepIndex > stepIdx("init");
   treeList.replaceChildren();
 
   const root = document.createElement("li");
@@ -792,8 +959,8 @@ function makeName(text: string): HTMLElement {
 let lastRemoteShown = false;
 let lastRemotePushed = false;
 function renderRemoteTree(): void {
-  const shown = stepIndex >= 4;    // git remote add done
-  const pushed = stepIndex >= 5;   // git push done
+  const shown = stepIndex > stepIdx("remote");  // git remote add done
+  const pushed = stepIndex > stepIdx("push");   // git push done
   remoteTreeEl.classList.toggle("is-shown", shown);
   remoteList.replaceChildren();
   if (!shown) { lastRemoteShown = false; lastRemotePushed = false; return; }
@@ -841,7 +1008,7 @@ function renderRemoteTree(): void {
 
 // once a remote exists the local tree shares the stage; before that it leads
 function updateLayout(): void {
-  const paired = stepIndex >= 4;
+  const paired = stepIndex > stepIdx("remote");
   treeEl.classList.toggle("is-focus", !paired);
   treeEl.classList.toggle("is-paired", paired);
 }
@@ -863,7 +1030,7 @@ function buildTimeline(): void {
     dot.className = "tl-dot";
     const label = document.createElement("span");
     label.className = "tl-label";
-    label.textContent = `git ${st.key}`;
+    label.textContent = `git ${st.key.replace(/\d+$/, "")}`;
     btn.append(dot, label);
     btn.title = `Jump to: git ${st.key}`;
     btn.addEventListener("click", () => { void seekTo(i); });
@@ -884,8 +1051,12 @@ function resetBoard(): void {
   [gEdges, gNodes, gNib, gLabels].forEach((g) => g.replaceChildren());
   model.nodes = [];
   model.head = null;
+  model.headBranch = "main";
+  model.branches = {};
   model.tagEls = null;
   model.pending = null;
+  refPills.clear();
+  refTicks = null;
 }
 async function seekTo(target: number): Promise<void> {
   if (busy || target === stepIndex) return;

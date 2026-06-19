@@ -98,6 +98,8 @@ body {
   font-size: 21px;
 }
 .tag-box { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+/* ref pills (HEAD / branch names) glide to follow commits instead of fading */
+.ref-pill { transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease; }
 .commit-msg {
   font-family: var(--hand);
   font-weight: 500;
@@ -217,6 +219,9 @@ body {
 .hl-val   { color: var(--pen-green); }
 .hl-rest  { color: var(--ink); }
 .hl-ghost { color: var(--ink-soft); opacity: 0.42; }
+/* a wrong character in a fixed word: harsh error red, the word underlined */
+.hl-err     { color: #e5231a; font-weight: 700; }
+.hl-invalid { text-decoration: underline wavy #e5231a; text-decoration-skip-ink: none; }
 
 .cli__rule {
   position: absolute;
