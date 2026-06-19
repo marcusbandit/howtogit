@@ -646,8 +646,77 @@ async function doPush() {
 // laptop view + the clone drawing land in a later step; for now this advances
 // the lesson so the timeline section can be built and wired.
 async function doClone() {
-    // TODO(basics-2): switch the board to the laptop, draw the cloned history,
-    // then auto-run `cd my-site/`.
+    if (active !== laptop)
+        applyMoveToLaptop(); // ensure the laptop is active (also on a bare seek)
+    const m = laptop.model;
+    const mainBranch = { color: COLORS.main, shape: "circle", lane: 0, tip: null };
+    m.branches = { main: mainBranch };
+    m.headBranch = "main";
+    laptop.nextId = 0;
+    // mirror the remote's history down onto the laptop, drawn left to right
+    let prev = null;
+    for (let i = 0; i < remoteHistory.length; i++) {
+        const rc = remoteHistory[i];
+        const pos = nodePos(i, 0); // active = laptop, so centred on the board
+        const node = {
+            id: laptop.nextId++, parentId: prev ? prev.id : null, col: i, lane: 0,
+            x: pos.x, y: pos.y, r: NODE_R, branch: "main", color: rc.color, shape: rc.shape,
+        };
+        if (prev)
+            await drawConnector(prev, node, COLORS.main, node.id * 7 + 4);
+        await drawNode(node, node.id * 13 + 6);
+        m.nodes.push(node);
+        m.head = node.id;
+        mainBranch.tip = node.id;
+        prev = node;
+    }
+    drawRefs();
+    laptopHasProject = true; // my-site/ now exists on the laptop
+    if (prev)
+        caption("cloned from the remote", prev.x, prev.y + NODE_R + 32, 360);
+}
+// after the clone we auto-type `cd my-site/` and run it for the user (entering
+// the project). It is scripted, not a Step: it changes no graph, just blocks the
+// user and types into the command line, modelled on playEditSequence.
+let autoCdGen = 0;
+let autoTyping = false;
+async function playAutoCd() {
+    if (instant || S.prefersReduced)
+        return; // a seek just shows the entered project
+    const gen = ++autoCdGen;
+    const alive = () => gen === autoCdGen;
+    busy = true; // block the user while it types itself
+    autoTyping = true; // render the auto text neutrally (see updateInk)
+    cmd.value = "";
+    updateInk();
+    await sleep(520);
+    if (!alive()) {
+        busy = false;
+        autoTyping = false;
+        return;
+    }
+    const text = "cd my-site/";
+    for (let n = 1; n <= text.length; n++) {
+        cmd.value = text.slice(0, n);
+        updateInk();
+        await sleep(62);
+        if (!alive()) {
+            busy = false;
+            autoTyping = false;
+            return;
+        }
+    }
+    await sleep(480);
+    if (!alive()) {
+        busy = false;
+        autoTyping = false;
+        return;
+    }
+    cmd.value = "";
+    autoTyping = false;
+    updateInk(); // entered the project
+    busy = false;
+    showStep(stepIndex); // refresh the lesson for the next real step
 }
 // when the whole sequence is finished, the board shouldn't read as blank: a
 // hand-written closing line sits under HEAD so it's clearly the end, not a gap.
@@ -1140,6 +1209,15 @@ function analyze(typed, atoms) {
 }
 function updateInk() {
     const typed = cmd.value;
+    // a scripted auto-type (cd my-site/) renders plainly: don't colour it against
+    // the next step's atoms (which would flag it as a wrong command)
+    if (autoTyping) {
+        ink.innerHTML = `<span class="hl-cmd">${esc(typed)}</span>`;
+        cmd.style.width = `${Math.max(typed.length, 6) + 1}ch`;
+        syncCliRule();
+        ink.style.transform = `translateX(${-cmd.scrollLeft}px)`;
+        return;
+    }
     const atoms = currentAtoms();
     const a = atoms ? analyze(typed, atoms) : { html: esc(typed), ghost: "", chunk: "", invalid: false };
     const ghost = a.ghost;
@@ -1283,6 +1361,9 @@ form.addEventListener("submit", async (e) => {
     // finishing push2 lands us in "The basics 2": move over to the laptop
     if (stepIndex === stepIdx("clone"))
         void playMoveToLaptop();
+    // right after the clone, auto-type `cd my-site/` to enter the project
+    if (steps[stepIndex - 1]?.key === "clone")
+        void playAutoCd();
 });
 cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
 cmd.addEventListener("keydown", (e) => {
@@ -1555,14 +1636,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // shows it as a pending change.
 function fileLines(file, side) {
     if (file === EDIT_FILE) {
-        const hasEdit = side === "local"
-            ? stepIndex >= stepIdx("add2")
-            : stepIndex > stepIdx("push2");
+        const a3 = stepIdx("add3"), c3 = stepIdx("commit3");
+        let hasEdit = false;
+        if (side === "local")
+            hasEdit = stepIndex >= stepIdx("add2");
+        else if (side === "remote")
+            hasEdit = stepIndex > stepIdx("push2");
+        else
+            hasEdit = a3 >= 0 && stepIndex >= a3; // laptop: its own edit (M3)
         if (hasEdit) {
             const lines = EDIT_LINES.slice();
             lines.splice(EDIT_AT, 0, EDIT_NEW);
-            const pending = side === "local"
-                && stepIndex >= stepIdx("add2") && stepIndex <= stepIdx("commit2");
+            const pending = (side === "local" && stepIndex >= stepIdx("add2") && stepIndex <= stepIdx("commit2"))
+                || (side === "laptop" && a3 >= 0 && stepIndex >= a3 && (c3 < 0 || stepIndex <= c3));
             return { lines, changed: pending ? [EDIT_AT] : [] };
         }
     }
@@ -1668,7 +1754,7 @@ function editorAnchor() {
 }
 // the on-screen box of a file's row in a tree, if it's there
 function fileRowRect(file, side) {
-    const listEl = side === "remote" ? remoteList : treeList;
+    const listEl = side === "remote" ? remoteList : side === "laptop" ? laptopList : treeList;
     const li = listEl.querySelector(`li[data-file="${file}"]`);
     return li ? li.getBoundingClientRect() : null;
 }
@@ -1827,6 +1913,7 @@ function wireFileViewer() {
     };
     onList(treeList, "local");
     onList(remoteList, "remote");
+    onList(laptopList, "laptop");
     editorEl.addEventListener("click", (e) => {
         if (viewerFile == null)
             return; // the auto-edit ignores clicks
@@ -1837,7 +1924,7 @@ function wireFileViewer() {
         if (viewerFile == null)
             return;
         const t = e.target;
-        if (editorEl.contains(t) || treeEl.contains(t) || remoteTreeEl.contains(t))
+        if (editorEl.contains(t) || treeEl.contains(t) || remoteTreeEl.contains(t) || laptopTreeEl.contains(t))
             return;
         closeFileViewer();
     });
@@ -2395,6 +2482,8 @@ function resetBoard() {
     gMiniDesk.style.opacity = "0";
     blobGen++; // cancel any in-flight move-to-laptop blob
     document.querySelectorAll(".switch-blob").forEach((b) => b.remove());
+    autoCdGen++; // cancel an in-flight auto-cd
+    autoTyping = false;
 }
 async function seekTo(target) {
     if (busy || target === stepIndex)
