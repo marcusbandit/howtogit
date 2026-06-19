@@ -375,24 +375,10 @@ function caption(text, cx, y, delay, faint = false) {
 // centred. Pills keep their own per-element transforms; this is the parent.
 const boardGroups = [gEdges, gNodes, gNib, gLabels];
 function centerOnHead() {
-    const xs = model.nodes.map((n) => n.x);
-    let targetX;
-    const margin = NODE_R * 2.4;
-    if (xs.length) {
-        const minX = Math.min(...xs), maxX = Math.max(...xs);
-        if ((maxX - minX) + margin * 2 <= viewW) {
-            // the whole graph fits on screen: centre the graph itself, don't pan
-            // HEAD to the middle (which would shove the early commits off-screen)
-            targetX = (minX + maxX) / 2;
-        }
-        else {
-            const h = headNode();
-            targetX = h ? h.x : boardCenter().x; // outgrew the screen: follow HEAD
-        }
-    }
-    else {
-        targetX = boardCenter().x;
-    }
+    // HEAD is always pinned to the horizontal centre — the graph may run off
+    // either edge, but wherever HEAD landed stays dead-centre on screen.
+    const h = headNode();
+    const targetX = h ? h.x : boardCenter().x;
     const panX = viewW / 2 - targetX;
     for (const g of boardGroups) {
         g.style.transition = instant || S.prefersReduced
