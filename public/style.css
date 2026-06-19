@@ -450,48 +450,77 @@ body {
   transform: translateX(-50%);
   z-index: 6;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0;
+  --tl-row: 0.95rem;   /* common dot centre-line height for every stop + link */
 }
-.tl-item {
+.tl-group { display: flex; align-items: flex-start; gap: 0; flex: 0 0 auto; }
+.tl-item, .tl-substep {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.4rem;
+  flex: 0 0 auto;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.3rem 0.2rem;
+  padding: 0;
   font-family: var(--mono);
   font-size: 0.8rem;
   color: var(--ink-soft);
   transition: color 0.2s ease, transform 0.2s ease;
 }
-.tl-item:hover { color: var(--ink); transform: translateY(-1px); }
-.tl-item:focus-visible { outline: 2px solid var(--pen-blue); outline-offset: 3px; border-radius: 6px; }
+.tl-substep { font-size: 0.66rem; }
+.tl-label { white-space: nowrap; }
+.tl-item:hover, .tl-substep:hover { color: var(--ink); transform: translateY(-1px); }
+.tl-item:focus-visible,
+.tl-substep:focus-visible { outline: 2px solid var(--pen-blue); outline-offset: 3px; border-radius: 6px; }
 .tl-dot {
   width: 0.85rem;
   height: 0.85rem;
+  margin: calc((var(--tl-row) - 0.85rem) / 2) 0;  /* centre on the row line */
   border-radius: 50%;
   border: 2px solid var(--ink-soft);
   background: var(--paper);
   transition: all 0.25s var(--ease-settle);
+}
+.tl-dot--sub {
+  width: 0.56rem;
+  height: 0.56rem;
+  margin: calc((var(--tl-row) - 0.56rem) / 2) 0;  /* same centre-line, smaller */
 }
 .tl-link {
   width: clamp(1.6rem, 4vw, 2.6rem);
   height: 2px;
   background: var(--ink-soft);
   opacity: 0.4;
-  margin-bottom: 1.5rem; /* align with the dots row */
+  margin-top: calc(var(--tl-row) / 2 - 1px);   /* sit on the dot centre-line */
+  flex: 0 0 auto;
 }
-.tl-item.is-done   { color: var(--ink); }
-.tl-item.is-done   .tl-dot { border-color: var(--pen-blue); background: var(--pen-blue); }
-.tl-item.is-current .tl-dot {
+.tl-link--sub { width: clamp(0.9rem, 2vw, 1.5rem); opacity: 0.3; }
+.tl-item.is-done, .tl-substep.is-done { color: var(--ink); }
+.tl-item.is-done .tl-dot,
+.tl-substep.is-done .tl-dot { border-color: var(--pen-blue); background: var(--pen-blue); }
+.tl-item.is-current .tl-dot,
+.tl-substep.is-current .tl-dot {
   border-color: var(--pen-red);
   background: var(--paper);
   box-shadow: 0 0 0 3px rgba(192, 73, 47, 0.2);
 }
-.tl-item.is-current { color: var(--ink); font-weight: 700; }
+.tl-item.is-current, .tl-substep.is-current { color: var(--ink); font-weight: 700; }
+
+/* sub-row: collapsed to nothing until its task is the current one, then it
+   expands inline to reveal that task's individual commands */
+.tl-sub {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-width 0.45s var(--ease-settle), opacity 0.3s ease;
+}
+.tl-group.is-expanded .tl-sub { max-width: 80vw; opacity: 1; }
 
 /* the closing "complete" star: hollow grey until the loop is finished, then it
    fills with a warm glow the instant the last command lands */
@@ -502,7 +531,7 @@ body {
   /* match the dot row height so it lines up; the glyph itself overflows the box
      a little so the star reads as big as (or bigger than) the circles */
   width: 0.85rem;
-  height: 0.85rem;
+  height: var(--tl-row);
   font-size: 1.55rem;
   line-height: 0;
   color: var(--ink-soft);

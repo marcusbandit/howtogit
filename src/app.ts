@@ -1345,43 +1345,75 @@ const TIMELINE_TASKS: { label: string; keys: string[] }[] = [
   { label: "Branch HEAD", keys: ["branch", "checkout", "add2", "commit2"] },
   { label: "Merge to HEAD", keys: ["checkout-main", "merge", "push2"] },
 ];
-interface TLTask { label: string; first: number; last: number; }
-const tlItems: HTMLButtonElement[] = [];
-let tlTasks: TLTask[] = [];
+// a command label for a sub-step, e.g. "checkout-main" -> "git checkout"
+function cmdLabel(key: string): string {
+  return `git ${key.replace(/[-\d].*$/, "")}`;
+}
+interface TLStop {
+  group: HTMLElement;
+  taskBtn: HTMLButtonElement;
+  first: number;
+  last: number;
+  subs: { btn: HTMLButtonElement; si: number }[];
+}
+const tlStops: TLStop[] = [];
 let tlComplete: HTMLButtonElement | null = null;
+
 function buildTimeline(): void {
   timelineEl.replaceChildren();
-  tlItems.length = 0;
-  tlTasks = TIMELINE_TASKS.map((t) => {
-    const idx = t.keys.map(stepIdx).filter((i) => i >= 0);
-    return { label: t.label, first: Math.min(...idx), last: Math.max(...idx) };
-  });
+  tlStops.length = 0;
 
-  const link = () => {
+  const linkInto = (parent: HTMLElement, sub = false) => {
     const l = document.createElement("span");
-    l.className = "tl-link";
-    timelineEl.appendChild(l);
+    l.className = sub ? "tl-link tl-link--sub" : "tl-link";
+    parent.appendChild(l);
   };
-  tlTasks.forEach((t, i) => {
-    if (i > 0) link();
+  const makeStop = (cls: string, dotCls: string, text: string, onClick: () => void): HTMLButtonElement => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "tl-item";
+    btn.className = cls;
     const dot = document.createElement("span");
-    dot.className = "tl-dot";
+    dot.className = dotCls;
     const label = document.createElement("span");
     label.className = "tl-label";
-    label.textContent = t.label;
+    label.textContent = text;
     btn.append(dot, label);
-    btn.title = `Jump to: ${t.label} done`;
-    btn.addEventListener("click", () => { void seekTo(t.last + 1); });
-    timelineEl.appendChild(btn);
-    tlItems.push(btn);
+    btn.addEventListener("click", onClick);
+    return btn;
+  };
+
+  TIMELINE_TASKS.forEach((t, i) => {
+    const idx = t.keys.map(stepIdx).filter((s) => s >= 0).sort((a, b) => a - b);
+    const first = idx[0], last = idx[idx.length - 1];
+    if (i > 0) linkInto(timelineEl);
+
+    // the whole task: its milestone stop plus a sub-row that expands when current
+    const group = document.createElement("div");
+    group.className = "tl-group";
+    // clicking a stop goes TO that point (it becomes the current step), it does
+    // not run the task. The milestone lands you at the start of its task.
+    const taskBtn = makeStop("tl-item", "tl-dot", t.label, () => { void seekTo(first); });
+    taskBtn.title = `Go to: ${t.label}`;
+    group.appendChild(taskBtn);
+
+    const sub = document.createElement("div");
+    sub.className = "tl-sub";
+    const subs: { btn: HTMLButtonElement; si: number }[] = [];
+    idx.forEach((si) => {
+      linkInto(sub, true);   // connector from the milestone / previous sub-step
+      const sBtn = makeStop("tl-substep", "tl-dot tl-dot--sub", cmdLabel(steps[si].key), () => { void seekTo(si); });
+      sBtn.title = `Go to: ${cmdLabel(steps[si].key)}`;
+      sub.appendChild(sBtn);
+      subs.push({ btn: sBtn, si });
+    });
+    group.appendChild(sub);
+    timelineEl.appendChild(group);
+    tlStops.push({ group, taskBtn, first, last, subs });
   });
 
   // a final star stands for the finished loop: click it to jump straight to the
   // completed end state. It lights up the moment the last command is done.
-  link();
+  linkInto(timelineEl);
   const done = document.createElement("button");
   done.type = "button";
   done.className = "tl-item tl-item--complete";
@@ -1400,11 +1432,17 @@ function buildTimeline(): void {
   updateTimeline();
 }
 function updateTimeline(): void {
-  tlItems.forEach((btn, i) => {
-    const t = tlTasks[i];
-    btn.classList.toggle("is-done", stepIndex > t.last);
-    btn.classList.toggle("is-current", stepIndex >= t.first && stepIndex <= t.last);
-  });
+  for (const s of tlStops) {
+    const current = stepIndex >= s.first && stepIndex <= s.last;
+    s.taskBtn.classList.toggle("is-done", stepIndex > s.last);
+    s.taskBtn.classList.toggle("is-current", current);
+    // only the task you're working through expands into its sub-commands
+    s.group.classList.toggle("is-expanded", current);
+    for (const { btn, si } of s.subs) {
+      btn.classList.toggle("is-done", stepIndex > si);
+      btn.classList.toggle("is-current", stepIndex === si);
+    }
+  }
   // the star fills as soon as every command is done
   const finished = stepIndex >= steps.length;
   tlComplete?.classList.toggle("is-done", finished);
