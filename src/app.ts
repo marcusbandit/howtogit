@@ -113,7 +113,7 @@ let viewW = window.innerWidth / ZOOM;
 let viewH = window.innerHeight / ZOOM;
 
 function boardCenter(): Pt {
-  return { x: viewW / 2, y: viewH * 0.42 };
+  return { x: viewW / 2, y: viewH * 0.46 };   // nudged down to give the top room
 }
 // column i sits to the right of the first node; lane shifts it onto a branch row
 function nodePos(col: number, lane = 0): Pt {
@@ -354,14 +354,14 @@ function drawRefs(): void {
       refTicks.appendChild(S.el("path", {
         d: connectorPath(tip, { x: a.x, y: a.y, r: NODE_R }, 21),
         class: "edge-stroke", stroke: b.color, "stroke-width": 2,
-        "stroke-dasharray": "1 8", opacity: 0.5,
+        "stroke-dasharray": "7 6", opacity: 0.5,
       }));
       const ghost = b.shape === "square"
         ? S.squarePath(a.x, a.y, NODE_R * 1.7, 23)
         : S.circlePath(a.x, a.y, NODE_R, 23);
       refTicks.appendChild(S.el("path", {
         d: ghost, class: "node-stroke", stroke: b.color, "stroke-width": 2,
-        "stroke-dasharray": "1 8", opacity: 0.5,
+        "stroke-dasharray": "7 6", opacity: 0.5,
       }));
     }
     refTicks.appendChild(S.el("path", {
@@ -400,7 +400,9 @@ function caption(text: string, cx: number, y: number, delay: number, faint = fal
 // The graph grows rightward; rather than let it crawl off-screen, every step
 // pans the whole board (all four layers move as one) so wherever HEAD landed is
 // centred. Pills keep their own per-element transforms; this is the parent.
-const boardGroups: SVGGElement[] = [gRemote, gEdges, gNodes, gNib, gLabels];
+// The remote mini-graph (gRemote) is deliberately NOT panned: it stays centred
+// on the screen's horizontal regardless of where the local graph has scrolled.
+const boardGroups: SVGGElement[] = [gEdges, gNodes, gNib, gLabels];
 // the graph lives in a central box this fraction of the view wide. While the
 // whole graph fits inside it we centre the graph on its own midpoint; only once
 // it outgrows the box do we pin HEAD to the centre and let the older commits
@@ -1070,7 +1072,7 @@ function shake(): void {
 function dockStage(): void {
   stage.classList.remove("is-centered");
   stage.classList.add("is-docked");
-  stage.style.setProperty("--stage-y", `${Math.round(window.innerHeight * 0.67)}px`);
+  stage.style.setProperty("--stage-y", `${Math.round(window.innerHeight * 0.71)}px`);
 }
 function normalize(raw: string): string {
   return raw.trim().replace(/\s+/g, " ");
@@ -1107,6 +1109,8 @@ form.addEventListener("submit", async (e) => {
   renderRemoteTree();
   renderRemoteGraph();
   updateLayout();
+  // landing on the feature branch means "you edited index.html": play it out
+  if (stepIndex === stepIdx("add2")) void playEditSequence();
 });
 
 cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
@@ -1212,6 +1216,148 @@ function makeName(text: string): HTMLElement {
   return s;
 }
 
+// ---- the make-believe file editor ----------------------------------
+// When you land on the feature branch the story is "you edited index.html".
+// Rather than just flip a flag in the tree, we play it out: an editor window
+// opens over the board, a new line types itself into the file, then it saves
+// and tucks away. Nothing here is a real editor; it's a visual beat.
+const editorEl = need<HTMLElement>("editor");
+const editorCode = need<HTMLElement>("editor-code");
+const editorName = need<HTMLElement>("editor-name");
+const editorUnsaved = need<HTMLElement>("editor-unsaved");
+const editorSave = need<HTMLElement>("editor-save");
+
+const EDIT_LINES = [
+  "<!DOCTYPE html>",
+  "<html>",
+  "  <body>",
+  "    <h1>my site</h1>",
+  "  </body>",
+  "</html>",
+];
+const EDIT_AT = 4;                              // insert just before </body>
+const EDIT_NEW = "    <p>now with a feature!</p>";
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+// render the file as `lines`, optionally with a blinking caret parked at the
+// end of `activeLine` (the line being typed). -1 means no active line.
+function renderEditorLines(lines: string[], activeLine: number): void {
+  editorCode.replaceChildren();
+  lines.forEach((line, i) => {
+    const row = document.createElement("div");
+    row.className = i === activeLine ? "editor__line is-active" : "editor__line";
+    const num = document.createElement("span");
+    num.className = "editor__num";
+    num.textContent = String(i + 1);
+    const txt = document.createElement("span");
+    txt.className = "editor__txt";
+    txt.textContent = line;
+    row.append(num, txt);
+    if (i === activeLine) {
+      const caret = document.createElement("span");
+      caret.className = "editor__caret";
+      row.appendChild(caret);
+    }
+    editorCode.appendChild(row);
+  });
+}
+
+// the editor grows out of (and folds back into) the index.html line in the
+// file tree, so the popup clearly belongs to that file. We FLIP it: measure the
+// tree line, then transform the centred editor down onto it as its closed state.
+const GROW_MS = 620;   // tree line -> full size in the centre
+const SHRINK_MS = 560; // full size -> back into the tree line
+
+// the centre the editor sits at when open (left:50% / top:40% in the stylesheet)
+function editorAnchor(): Pt {
+  return { x: window.innerWidth * 0.5, y: window.innerHeight * 0.4 };
+}
+// the on-screen box of the index.html row in the file tree, if it's there
+function editLineRect(): DOMRect | null {
+  for (const name of treeList.querySelectorAll<HTMLElement>(".f__name")) {
+    if (name.textContent === EDIT_FILE) {
+      const li = name.closest("li");
+      return (li ?? name).getBoundingClientRect();
+    }
+  }
+  return null;
+}
+// the transform that shrinks the centred editor down onto the tree line, so
+// growing from / folding into it reads as the popup coming out of that file
+// kept structurally identical to OPEN_TRANSFORM (same function list) so the
+// browser interpolates them component-wise rather than via a matrix fallback
+function tuckedTransform(): string {
+  const r = editLineRect();
+  const a = editorAnchor();
+  if (!r) return "translate(-50%, -50%) translate(0px, 0px) scale(0.55)";  // tree gone: shrink in place
+  const lx = r.left + r.width / 2, ly = r.top + r.height / 2;
+  const natH = editorEl.offsetHeight || 240;           // unscaled height (ignores transform)
+  const s = Math.max(0.05, Math.min(0.22, r.height / natH));
+  return `translate(-50%, -50%) translate(${(lx - a.x).toFixed(1)}px, ${(ly - a.y).toFixed(1)}px) scale(${s.toFixed(3)})`;
+}
+const OPEN_TRANSFORM = "translate(-50%, -50%) translate(0px, 0px) scale(1)";
+
+// a generation token: seeking (or any new run) bumps it so an in-flight
+// sequence bails at its next checkpoint instead of fighting the new state.
+let editSeqGen = 0;
+function closeEditor(): void {
+  editSeqGen++;
+  editorEl.style.transition = "none";
+  editorEl.style.opacity = "0";
+  editorSave.classList.remove("show");
+}
+
+async function playEditSequence(): Promise<void> {
+  if (instant || S.prefersReduced) return;     // timeline seeks just show the result
+  const gen = ++editSeqGen;
+  const alive = () => gen === editSeqGen;
+
+  // prime: render the file, park the editor tucked into the tree line, invisible
+  const lines = EDIT_LINES.slice();
+  editorName.textContent = EDIT_FILE;
+  editorUnsaved.style.opacity = "0";
+  editorSave.classList.remove("show");
+  renderEditorLines(lines, -1);
+  editorEl.style.transition = "none";
+  editorEl.style.transform = tuckedTransform();
+  editorEl.style.opacity = "0";
+  editorEl.getBoundingClientRect();             // commit the tucked start state
+
+  // 1) grow: the popup rises out of the index.html line to full size, centred
+  requestAnimationFrame(() => {
+    editorEl.style.transition =
+      `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
+    editorEl.style.transform = OPEN_TRANSFORM;
+    editorEl.style.opacity = "1";
+  });
+  await sleep(GROW_MS + 320); if (!alive()) return;   // grow, then a beat to take it in
+
+  // 2) edit: open a fresh line and type the new markup into it, char by char
+  lines.splice(EDIT_AT, 0, "");
+  editorUnsaved.style.opacity = "1";            // the file is now dirty
+  for (let n = 1; n <= EDIT_NEW.length; n++) {
+    lines[EDIT_AT] = EDIT_NEW.slice(0, n);
+    renderEditorLines(lines, EDIT_AT);
+    await sleep(44); if (!alive()) return;
+  }
+  await sleep(650); if (!alive()) return;       // sit on the finished edit a moment
+
+  // 3) save: the unsaved dot clears and a "saved" note flashes, then it lingers
+  renderEditorLines(lines, -1);
+  editorUnsaved.style.opacity = "0";
+  editorSave.classList.add("show");
+  await sleep(1600); if (!alive()) return;      // longer hold so the save registers
+
+  // 4) fold back into the tree line, then leave index.html marked modified
+  editorEl.style.transition =
+    `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
+  editorEl.style.transform = tuckedTransform();
+  editorEl.style.opacity = "0";
+  await sleep(SHRINK_MS + 60); if (!alive()) return;
+  editorSave.classList.remove("show");
+}
+
 // ---- remote tree (right) -------------------------------------------
 let lastRemoteShown = false;
 let lastRemotePushed = false;
@@ -1264,15 +1410,15 @@ function renderRemoteTree(): void {
 }
 
 // ---- remote mini-graph (the remote's own tree, drawn above the local one) ---
-// The remote is the shared source of truth. On the FIRST push we copy the local
-// trunk, lay it exactly over the real graph, then float it up and shrink it into
-// a simplified mini-graph: same colours and shapes, no labels, half-size. It
-// only ever shows what's actually been pushed (origin/main), so it lags behind
-// the local graph until you push again. Later, when other machines arrive, this
-// is the tree that changes first and flows back down.
-const REMOTE_GRAPH_SCALE = 0.42;
-const REMOTE_GRAPH_DY = 215;   // viewBox units the copy floats upward
-let remoteGraphShown = false;
+// The remote is the shared source of truth. On the FIRST push a small copy of
+// the trunk slides straight up out of the local graph and parks near the top,
+// labelled so it reads as the remote. Unlike the local graph it never pans: it
+// stays centred on the screen's horizontal. It only shows what's actually been
+// pushed (origin/main), so it lags behind the local graph until you push again.
+const REMOTE_NODE_R = NODE_R * 0.36;   // small solid remote nodes
+const REMOTE_GAP = GAP * 0.82;         // compact spacing between them
+const REMOTE_RISE = 220;               // how far above the main lane it rests
+const shownRemoteIds = new Set<number>();   // commits already drawn on the mini-graph
 
 // the commits that live on the remote: the main-lane trunk up to origin/main's
 // tip (everything reachable from what you pushed).
@@ -1286,46 +1432,89 @@ function remoteTrunk(): CommitNode[] {
 function renderRemoteGraph(allowAnim = true): void {
   const trunk = remoteTrunk();
   gRemoteInner.replaceChildren();
-  if (!trunk.length) { gRemote.style.opacity = "0"; remoteGraphShown = false; return; }
+  if (!trunk.length) { gRemote.style.opacity = "0"; shownRemoteIds.clear(); return; }
   gRemote.style.opacity = "1";
 
-  // draw the copy at FULL local coordinates so it overlays the real trunk; the
-  // inner-group transform is what floats it up and shrinks it. The nodes are
-  // solid filled blobs (not outlined rings) so the minified tree reads as small
-  // simple shapes rather than thin line-drawings once it shrinks.
-  for (let i = 1; i < trunk.length; i++) {
-    const a = trunk[i - 1], b = trunk[i];
-    gRemoteInner.appendChild(S.el("path", {
-      d: connectorPath({ x: a.x, y: a.y, r: NODE_R * 0.8 }, { x: b.x, y: b.y, r: NODE_R * 0.8 }, b.id * 5 + 2),
-      class: "edge-stroke", stroke: COLORS.main, "stroke-width": 2.2,
+  // centred on the screen, small solid nodes, parked REMOTE_RISE above the main
+  // lane. Each commit is its OWN group holding the node plus its incoming
+  // connector (a fixed line one REMOTE_GAP to the left). Because spacing is
+  // constant, that connector stays glued to its node as groups slide or glide.
+  const cx = boardCenter().x;
+  const restY = boardCenter().y - REMOTE_RISE;
+  const count = trunk.length;
+  const oldCount = shownRemoteIds.size;
+  const xAt = (i: number, c: number) => cx + (i - (c - 1) / 2) * REMOTE_GAP;
+  const animate = allowAnim && !instant && !S.prefersReduced;
+  const firstShow = oldCount === 0;
+
+  // caption so it's clearly the remote, not a second local graph
+  const label = S.el("text", {
+    x: cx, y: restY - 52, "text-anchor": "middle", class: "remote-graph-label",
+  }) as SVGTextElement;
+  label.textContent = "the remote";
+  gRemoteInner.appendChild(label);
+
+  const parts: { g: SVGGElement; conn: SVGPathElement | null; finalX: number; isNew: boolean }[] = [];
+  trunk.forEach((node, i) => {
+    const finalX = xAt(i, count);
+    const isNew = !shownRemoteIds.has(node.id);
+    const g = S.el("g") as SVGGElement;
+    let conn: SVGPathElement | null = null;
+    if (i > 0) {
+      conn = S.el("path", {
+        d: connectorPath({ x: -REMOTE_GAP, y: 0, r: REMOTE_NODE_R }, { x: 0, y: 0, r: REMOTE_NODE_R }, node.id * 5 + 2),
+        class: "edge-stroke", stroke: COLORS.main, "stroke-width": 2,
+      }) as SVGPathElement;
+      g.appendChild(conn);
+    }
+    g.appendChild(S.el("path", {
+      d: shapePath(node.shape, 0, 0, REMOTE_NODE_R, node.id * 7 + 1),
+      fill: node.color, stroke: node.color, "stroke-width": 2, "stroke-linejoin": "round",
     }));
-  }
-  for (const n of trunk) {
-    gRemoteInner.appendChild(S.el("path", {
-      d: shapePath(n.shape, n.x, n.y, NODE_R * 0.8, n.id * 7 + 1),
-      fill: n.color, stroke: n.color, "stroke-width": 2, "stroke-linejoin": "round",
-    }));
+    gRemoteInner.appendChild(g);
+
+    if (!animate) { g.style.transform = `translate(${finalX}px, ${restY}px)`; return; }
+    // start state: new commits sit down on the local lane (ready to rise);
+    // existing ones sit in their old, less-centred slot (ready to glide over)
+    g.style.transition = "none";
+    g.style.transform = isNew
+      ? `translate(${finalX}px, ${restY + REMOTE_RISE}px)`
+      : `translate(${xAt(i, oldCount)}px, ${restY}px)`;
+    g.style.opacity = isNew ? "0" : "1";
+    parts.push({ g, conn: isNew ? conn : null, finalX, isNew });
+  });
+
+  if (!animate) {
+    shownRemoteIds.clear(); trunk.forEach((nn) => shownRemoteIds.add(nn.id));
+    return;
   }
 
-  // shrink + raise about the board centre. Maps a trunk point (x, cy) to
-  // (cx + s*(x - cx), cy - DY): same horizontal spread, scaled, lifted up.
-  const cx = boardCenter().x, cy = boardCenter().y;
-  const minify = `translate(${cx}px, ${cy - REMOTE_GRAPH_DY}px) scale(${REMOTE_GRAPH_SCALE}) translate(${-cx}px, ${-cy}px)`;
-  const animate = allowAnim && !remoteGraphShown && !instant && !S.prefersReduced;
-  if (animate) {
-    // start as a copy sitting on the local graph, then float up and simplify
-    gRemoteInner.style.transition = "none";
-    gRemoteInner.style.transform = "none";
-    gRemoteInner.getBoundingClientRect();   // commit the start state
-    requestAnimationFrame(() => {
-      gRemoteInner.style.transition = "transform .9s cubic-bezier(.16,1,.3,1)";
-      gRemoteInner.style.transform = minify;
-    });
-  } else {
-    gRemoteInner.style.transition = "none";
-    gRemoteInner.style.transform = minify;
+  if (firstShow) { label.style.transition = "none"; label.style.transform = `translateY(${REMOTE_RISE}px)`; label.style.opacity = "0"; }
+  // hide each new connector so it can draw in only after its node has landed
+  for (const p of parts) {
+    if (p.conn) { const L = p.conn.getTotalLength(); p.conn.style.strokeDasharray = String(L); p.conn.style.strokeDashoffset = String(L); }
   }
-  remoteGraphShown = true;
+  gRemoteInner.getBoundingClientRect();   // commit the start states
+
+  requestAnimationFrame(() => {
+    if (firstShow) {
+      label.style.transition = "transform 1.15s cubic-bezier(.4,0,.2,1), opacity .7s ease";
+      label.style.transform = "translateY(0)"; label.style.opacity = "1";
+    }
+    for (const p of parts) {
+      p.g.style.transition = p.isNew
+        ? "transform 1.15s cubic-bezier(.4,0,.2,1), opacity .5s ease"   // rise from the local lane
+        : "transform .8s cubic-bezier(.4,0,.2,1)";                       // glide to re-centre
+      p.g.style.transform = `translate(${p.finalX}px, ${restY}px)`;
+      p.g.style.opacity = "1";
+      if (p.conn) {   // draw the new connector in after the node arrives
+        p.conn.style.transition = "stroke-dashoffset .55s ease 1s";
+        p.conn.style.strokeDashoffset = "0";
+      }
+    }
+  });
+
+  shownRemoteIds.clear(); trunk.forEach((nn) => shownRemoteIds.add(nn.id));
 }
 
 // once a remote exists the local tree shares the stage; before that it leads
@@ -1471,12 +1660,13 @@ function resetBoard(): void {
   refTicks = null;
   originMain = null;
   originPill = null;
-  remoteGraphShown = false;
+  shownRemoteIds.clear();
   gRemote.style.opacity = "0";
 }
 async function seekTo(target: number): Promise<void> {
   if (busy || target === stepIndex) return;
   busy = true;
+  closeEditor();        // a seek cancels any in-flight edit and hides the editor
   resetBoard();
   if (target <= 0) {
     stage.classList.remove("is-docked");

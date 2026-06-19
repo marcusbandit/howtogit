@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=mobile2" />
+  <link rel="stylesheet" href="style.css?v=editor" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -68,6 +68,17 @@
     </svg>
   </main>
 
+  <!-- a make-believe code editor: on the feature branch it opens, types an edit
+       into index.html, then saves. Purely a visual beat, nothing functional. -->
+  <div id="editor" class="editor" aria-hidden="true">
+    <div class="editor__bar">
+      <span class="editor__dots"><i></i><i></i><i></i></span>
+      <span class="editor__name"><span id="editor-name">index.html</span><b class="editor__unsaved" id="editor-unsaved">●</b></span>
+      <span class="editor__save" id="editor-save">saved ✓</span>
+    </div>
+    <div class="editor__code" id="editor-code"></div>
+  </div>
+
   <!-- the command line + lesson: starts centered, settles downward after init -->
   <section id="stage" class="is-centered" aria-live="polite">
     <div class="lesson" id="lesson">
@@ -90,6 +101,6 @@
   <!-- a clickable history of the steps; returning users can skip ahead -->
   <nav id="timeline" class="timeline" aria-label="lesson steps"></nav>
 
-  <script type="module" src="app.js?v=mobile2"></script>
+  <script type="module" src="app.js?v=editor"></script>
 </body>
 </html>
