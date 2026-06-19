@@ -499,21 +499,23 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* match the dot row height so it lines up; the glyph itself overflows the box
+     a little so the star reads as big as (or bigger than) the circles */
   width: 0.85rem;
   height: 0.85rem;
-  font-size: 1.15rem;
-  line-height: 1;
+  font-size: 1.55rem;
+  line-height: 0;
   color: var(--ink-soft);
-  opacity: 0.55;
+  opacity: 0.6;
   transition: color 0.3s var(--ease-settle), opacity 0.3s ease,
               transform 0.3s var(--ease-settle), text-shadow 0.3s ease;
 }
-.tl-item--complete:hover .tl-star { opacity: 0.8; }
+.tl-item--complete:hover .tl-star { opacity: 0.85; }
 .tl-item--complete.is-done .tl-star {
   color: #c79a3a;
   opacity: 1;
-  transform: scale(1.18);
-  text-shadow: 0 0 9px rgba(199, 154, 58, 0.5);
+  transform: scale(1.15);
+  text-shadow: 0 0 10px rgba(199, 154, 58, 0.55);
 }
 
 /* ---- phone / portrait --------------------------------------------- */

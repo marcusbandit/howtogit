@@ -1336,17 +1336,34 @@ function updateLayout(): void {
 }
 
 // ---- timeline (bottom, clickable) ----------------------------------
+// The timeline reads as milestones, not single commands: each stop groups the
+// commands that make up one task. A stop is done once all its commands are, and
+// clicking it jumps to the moment that task is finished.
+const TIMELINE_TASKS: { label: string; keys: string[] }[] = [
+  { label: "Initialize repo", keys: ["init", "add", "commit"] },
+  { label: "Add a remote", keys: ["remote", "push"] },
+  { label: "Branch HEAD", keys: ["branch", "checkout", "add2", "commit2"] },
+  { label: "Merge to HEAD", keys: ["checkout-main", "merge", "push2"] },
+];
+interface TLTask { label: string; first: number; last: number; }
 const tlItems: HTMLButtonElement[] = [];
+let tlTasks: TLTask[] = [];
 let tlComplete: HTMLButtonElement | null = null;
 function buildTimeline(): void {
   timelineEl.replaceChildren();
   tlItems.length = 0;
-  steps.forEach((st, i) => {
-    if (i > 0) {
-      const link = document.createElement("span");
-      link.className = "tl-link";
-      timelineEl.appendChild(link);
-    }
+  tlTasks = TIMELINE_TASKS.map((t) => {
+    const idx = t.keys.map(stepIdx).filter((i) => i >= 0);
+    return { label: t.label, first: Math.min(...idx), last: Math.max(...idx) };
+  });
+
+  const link = () => {
+    const l = document.createElement("span");
+    l.className = "tl-link";
+    timelineEl.appendChild(l);
+  };
+  tlTasks.forEach((t, i) => {
+    if (i > 0) link();
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "tl-item";
@@ -1354,19 +1371,17 @@ function buildTimeline(): void {
     dot.className = "tl-dot";
     const label = document.createElement("span");
     label.className = "tl-label";
-    label.textContent = `git ${st.key.replace(/[-\d].*$/, "")}`;
+    label.textContent = t.label;
     btn.append(dot, label);
-    btn.title = `Jump to: git ${st.key}`;
-    btn.addEventListener("click", () => { void seekTo(i); });
+    btn.title = `Jump to: ${t.label} done`;
+    btn.addEventListener("click", () => { void seekTo(t.last + 1); });
     timelineEl.appendChild(btn);
     tlItems.push(btn);
   });
 
   // a final star stands for the finished loop: click it to jump straight to the
   // completed end state. It lights up the moment the last command is done.
-  const link = document.createElement("span");
-  link.className = "tl-link";
-  timelineEl.appendChild(link);
+  link();
   const done = document.createElement("button");
   done.type = "button";
   done.className = "tl-item tl-item--complete";
@@ -1385,12 +1400,13 @@ function buildTimeline(): void {
   updateTimeline();
 }
 function updateTimeline(): void {
-  const finished = stepIndex >= steps.length;
   tlItems.forEach((btn, i) => {
-    btn.classList.toggle("is-done", i < stepIndex);
-    btn.classList.toggle("is-current", i === stepIndex);
+    const t = tlTasks[i];
+    btn.classList.toggle("is-done", stepIndex > t.last);
+    btn.classList.toggle("is-current", stepIndex >= t.first && stepIndex <= t.last);
   });
   // the star fills as soon as every command is done
+  const finished = stepIndex >= steps.length;
   tlComplete?.classList.toggle("is-done", finished);
   tlComplete?.classList.toggle("is-current", finished);
 }
