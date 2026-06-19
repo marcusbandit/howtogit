@@ -486,8 +486,68 @@ body {
 }
 .tl-item.is-current { color: var(--ink); font-weight: 700; }
 
+/* ---- phone / portrait --------------------------------------------- */
+/* The wide layout assumes two trees flanking the graph. On a narrow,
+   vertical screen that can't fit, so we shrink the chrome, pin both trees
+   compactly to the top, keep the graph as a full-bleed backdrop, and let
+   the command line + timeline live in the space that's left. The !important
+   overrides beat the JS-toggled focus/paired states, which all assume a
+   wide screen. */
 @media (max-width: 760px) {
-  .tree { display: none; }
+  :root {
+    /* smaller command-line type so long commands fit a phone width */
+    --cli-size: clamp(1.15rem, 6vw, 1.7rem);
+  }
+
+  /* lighter chrome in the corners */
+  .brand { top: 0.7rem; left: 0.9rem; }
+  .brand__word { font-size: clamp(1.5rem, 8vw, 2rem); }
+  .wip {
+    top: 0.75rem;
+    right: 0.8rem;
+    font-size: 0.8rem;
+    padding: 0.1rem 0.45rem 0.15rem;
+  }
+
+  /* both trees: compact, pinned to the top, side by side */
+  .tree {
+    top: clamp(3.8rem, 13vw, 5rem) !important;
+    transform: none !important;
+    width: 43vw !important;
+    font-size: 0.8rem !important;
+    max-height: 34vh;
+    overflow: hidden;
+  }
+  #filetree { left: 0.8rem !important; }
+  #remotetree {
+    left: auto !important;
+    right: 0.8rem !important;
+    /* opacity / pointer-events still controlled by .is-shown */
+  }
+  .tree.is-focus .tree__title,
+  .tree__title { font-size: 0.66rem; margin-bottom: 0.4rem; }
+  .tree.is-focus .d--git .f__note,
+  .d--git .f__note,
+  .f--modified .f__note { font-size: 0.66rem; }
+  .tree__list li { padding: 0.1rem 0; line-height: 1.25; }
+
+  /* lesson + command line stay inside the viewport */
+  #stage { padding: 0 0.8rem; gap: 0.8rem; }
+  .lesson { max-width: 100%; }
+  .lesson__why { max-width: 90vw; }
+  #cmd { max-width: 88vw; }
+  .nudge { font-size: 1.15rem; }
+  .nudge.info { font-size: 1.35rem; }
+
+  /* timeline scrolls sideways once the run gets long */
+  .timeline {
+    max-width: 96vw;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.2rem;
+    justify-content: flex-start;
+    -webkit-overflow-scrolling: touch;
+  }
   .tl-label { display: none; }
 }
 
