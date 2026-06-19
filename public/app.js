@@ -592,6 +592,14 @@ async function doPush() {
     }
     placePill(originPill, { x: mainTip.x, y: mainTip.y + mainTip.r + 66 }, firstPush);
 }
+// ---- the basics 2: moving to the laptop -----------------------------
+// git clone copies the remote down onto a second machine (the laptop). The
+// laptop view + the clone drawing land in a later step; for now this advances
+// the lesson so the timeline section can be built and wired.
+async function doClone() {
+    // TODO(basics-2): switch the board to the laptop, draw the cloned history,
+    // then auto-run `cd my-site/`.
+}
 // when the whole sequence is finished, the board shouldn't read as blank: a
 // hand-written closing line sits under HEAD so it's clearly the end, not a gap.
 function showEndState() {
@@ -830,6 +838,25 @@ const steps = [
             ],
         },
         run: doPush,
+    },
+    {
+        key: "clone",
+        atoms: [
+            A("git", "cmd", { sep: "" }), A("clone", "cmd"),
+            A(() => remoteUrl, "flag", { free: true }),
+        ],
+        test: (s) => { const m = s.match(/^git\s+clone\s+(\S+)$/i); return !!m && isUrl(m[1]); },
+        extract: (s) => s,
+        hint: "Copy the project down:  git clone <url>",
+        teach: {
+            goal: "Clone it onto the laptop",
+            why: "You're on a second computer now. git clone copies the whole project down from the remote, so the laptop gets its own full copy of the history.",
+            parts: [
+                { t: "clone", tone: "cmd", why: "copy a remote repo down onto this machine" },
+                { t: "the url", tone: "flag", why: "the address of the remote to copy from" },
+            ],
+        },
+        run: doClone,
     },
 ];
 const END = {
@@ -1936,25 +1963,28 @@ function updateLayout() {
     remoteTreeEl.classList.toggle("is-focus", !paired);
     remoteTreeEl.classList.toggle("is-paired", paired);
 }
-// ---- timeline (bottom, clickable) ----------------------------------
-// The timeline reads as milestones, not single commands: each stop groups the
-// commands that make up one task. A stop is done once all its commands are, and
-// clicking it jumps to the moment that task is finished.
-const TIMELINE_TASKS = [
-    { label: "Initialize repo", keys: ["init", "add", "commit"] },
-    { label: "Add a remote", keys: ["remote", "push"] },
-    { label: "Branch HEAD", keys: ["branch", "checkout", "add2", "commit2"] },
-    { label: "Merge to HEAD", keys: ["checkout-main", "merge", "push2"] },
+const TIMELINE_SECTIONS = [
+    { name: "The basics 1", tasks: [
+            { label: "Initialize repo", keys: ["init", "add", "commit"] },
+            { label: "Add a remote", keys: ["remote", "push"] },
+            { label: "Branch HEAD", keys: ["branch", "checkout", "add2", "commit2"] },
+            { label: "Merge to HEAD", keys: ["checkout-main", "merge", "push2"] },
+        ] },
+    { name: "The basics 2", tasks: [
+            { label: "Clone the repo", keys: ["clone"] },
+        ] },
 ];
 // a command label for a sub-step, e.g. "checkout-main" -> "git checkout"
 function cmdLabel(key) {
     return `git ${key.replace(/[-\d].*$/, "")}`;
 }
 const tlStops = [];
+const tlSections = [];
 let tlComplete = null;
 function buildTimeline() {
     timelineEl.replaceChildren();
     tlStops.length = 0;
+    tlSections.length = 0;
     const linkInto = (parent, sub = false, order = -1) => {
         const l = document.createElement("span");
         l.className = sub ? "tl-link tl-link--sub" : "tl-link";
@@ -1975,43 +2005,80 @@ function buildTimeline() {
         btn.addEventListener("click", onClick);
         return btn;
     };
-    TIMELINE_TASKS.forEach((t, i) => {
-        const idx = t.keys.map(stepIdx).filter((s) => s >= 0).sort((a, b) => a - b);
-        const first = idx[0], last = idx[idx.length - 1];
-        if (i > 0)
-            linkInto(timelineEl);
-        // the whole task: its milestone stop plus a sub-row that expands when current
-        const group = document.createElement("div");
-        group.className = "tl-group";
-        // clicking a stop goes TO that point (it becomes the current step), it does
-        // not run the task. The milestone lands you at the start of its task.
-        const taskBtn = makeStop("tl-item", "tl-dot", t.label, () => { void seekTo(first); });
-        taskBtn.title = `Go to: ${t.label}`;
-        group.appendChild(taskBtn);
-        // .tl-sub is a 0fr<->1fr grid that animates to the exact content width; the
-        // inner layer clips it so the sub-steps reveal left-to-right. Each child
-        // carries its order (--i) so they stagger in as the section expands.
-        const sub = document.createElement("div");
-        sub.className = "tl-sub";
-        const inner = document.createElement("div");
-        inner.className = "tl-sub-inner";
-        sub.appendChild(inner);
-        const subs = [];
-        let order = 0;
-        idx.forEach((si) => {
-            linkInto(inner, true, order++); // connector from the milestone / previous sub-step
-            const sBtn = makeStop("tl-substep", "tl-dot tl-dot--sub", cmdLabel(steps[si].key), () => { void seekTo(si); });
-            sBtn.title = `Go to: ${cmdLabel(steps[si].key)}`;
-            sBtn.style.setProperty("--i", String(order++));
-            inner.appendChild(sBtn);
-            subs.push({ btn: sBtn, si });
+    const rangeOf = (keys) => {
+        const idx = keys.map(stepIdx).filter((s) => s >= 0).sort((a, b) => a - b);
+        return { idx, first: idx[0], last: idx[idx.length - 1] };
+    };
+    TIMELINE_SECTIONS.forEach((section, sIdx) => {
+        if (sIdx > 0)
+            linkInto(timelineEl); // connector between sections
+        const sectionEl = document.createElement("div");
+        sectionEl.className = "tl-section";
+        // collapsed view: one labelled square standing in for the whole section
+        const allKeys = section.tasks.flatMap((t) => t.keys);
+        const { first: sFirst, last: sLast } = rangeOf(allKeys);
+        const squareBtn = document.createElement("button");
+        squareBtn.type = "button";
+        squareBtn.className = "tl-section-square";
+        const squareInner = document.createElement("span");
+        squareInner.className = "tl-section-square-inner";
+        const sq = document.createElement("span");
+        sq.className = "tl-square";
+        const sName = document.createElement("span");
+        sName.className = "tl-label tl-section-name";
+        sName.textContent = section.name;
+        squareInner.append(sq, sName);
+        squareBtn.appendChild(squareInner);
+        squareBtn.title = `Go to: ${section.name}`;
+        squareBtn.addEventListener("click", () => { void seekTo(sFirst); });
+        // expanded view: the section's task milestones (the accordion from before)
+        const body = document.createElement("div");
+        body.className = "tl-section-body";
+        const bodyInner = document.createElement("div");
+        bodyInner.className = "tl-section-body-inner";
+        body.appendChild(bodyInner);
+        const taskStops = [];
+        section.tasks.forEach((t, i) => {
+            const { idx, first, last } = rangeOf(t.keys);
+            if (i > 0)
+                linkInto(bodyInner);
+            const group = document.createElement("div");
+            group.className = "tl-group";
+            // clicking a stop goes TO that point (it becomes the current step), it does
+            // not run the task. The milestone lands you at the start of its task.
+            const taskBtn = makeStop("tl-item", "tl-dot", t.label, () => { void seekTo(first); });
+            taskBtn.title = `Go to: ${t.label}`;
+            group.appendChild(taskBtn);
+            // .tl-sub is a 0fr<->1fr grid that animates to the exact content width; the
+            // inner layer clips it so the sub-steps reveal left-to-right. Each child
+            // carries its order (--i) so they stagger in as the task expands.
+            const sub = document.createElement("div");
+            sub.className = "tl-sub";
+            const inner = document.createElement("div");
+            inner.className = "tl-sub-inner";
+            sub.appendChild(inner);
+            const subs = [];
+            let order = 0;
+            idx.forEach((si) => {
+                linkInto(inner, true, order++); // connector from the milestone / previous sub-step
+                const sBtn = makeStop("tl-substep", "tl-dot tl-dot--sub", cmdLabel(steps[si].key), () => { void seekTo(si); });
+                sBtn.title = `Go to: ${cmdLabel(steps[si].key)}`;
+                sBtn.style.setProperty("--i", String(order++));
+                inner.appendChild(sBtn);
+                subs.push({ btn: sBtn, si });
+            });
+            group.appendChild(sub);
+            bodyInner.appendChild(group);
+            const stop = { group, taskBtn, first, last, subs };
+            taskStops.push(stop);
+            tlStops.push(stop);
         });
-        group.appendChild(sub);
-        timelineEl.appendChild(group);
-        tlStops.push({ group, taskBtn, first, last, subs });
+        sectionEl.append(squareBtn, body);
+        timelineEl.appendChild(sectionEl);
+        tlSections.push({ el: sectionEl, squareBtn, first: sFirst, last: sLast, tasks: taskStops });
     });
-    // a final star stands for the finished loop: click it to jump straight to the
-    // completed end state. It lights up the moment the last command is done.
+    // a final star stands for the whole tutorial being finished: click it to jump
+    // straight to the completed end state. It lights the moment the last step lands.
     linkInto(timelineEl);
     const done = document.createElement("button");
     done.type = "button";
@@ -2030,15 +2097,24 @@ function buildTimeline() {
     updateTimeline();
 }
 function updateTimeline() {
-    for (const s of tlStops) {
-        const current = stepIndex >= s.first && stepIndex <= s.last;
-        s.taskBtn.classList.toggle("is-done", stepIndex > s.last);
-        s.taskBtn.classList.toggle("is-current", current);
-        // only the task you're working through expands into its sub-commands
-        s.group.classList.toggle("is-expanded", current);
-        for (const { btn, si } of s.subs) {
-            btn.classList.toggle("is-done", stepIndex > si);
-            btn.classList.toggle("is-current", stepIndex === si);
+    for (const sec of tlSections) {
+        const current = stepIndex >= sec.first && stepIndex <= sec.last;
+        // the section you're in expands into its task milestones; the rest compact
+        // into a single square (filled once done, dim while still ahead)
+        sec.el.classList.toggle("is-current", current);
+        sec.el.classList.toggle("is-collapsed", !current);
+        sec.el.classList.toggle("is-done", stepIndex > sec.last);
+        sec.el.classList.toggle("is-upcoming", stepIndex < sec.first);
+        for (const s of sec.tasks) {
+            const tcur = stepIndex >= s.first && stepIndex <= s.last;
+            s.taskBtn.classList.toggle("is-done", stepIndex > s.last);
+            s.taskBtn.classList.toggle("is-current", tcur);
+            // only the task you're working through expands into its sub-commands
+            s.group.classList.toggle("is-expanded", tcur);
+            for (const { btn, si } of s.subs) {
+                btn.classList.toggle("is-done", stepIndex > si);
+                btn.classList.toggle("is-current", stepIndex === si);
+            }
         }
     }
     // the star fills as soon as every command is done

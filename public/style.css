@@ -823,6 +823,66 @@ body {
   text-shadow: 0 0 10px rgba(199, 154, 58, 0.55);
 }
 
+/* ---- timeline sections (compact a finished arc into one square) ----- */
+.tl-section { display: flex; align-items: flex-start; flex: 0 0 auto; }
+
+/* collapsed view: a single square + the section name. Uses the same 0fr<->1fr
+   grid accordion as the sub-steps, so the square grows in as the body that was
+   there compacts away (and vice-versa) in one motion. */
+.tl-section-square {
+  display: grid;
+  grid-template-columns: 1fr;
+  transition: grid-template-columns 0.5s var(--ease-settle), opacity 0.35s ease,
+              color 0.2s ease, transform 0.2s ease;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--mono);
+  color: var(--ink-soft);
+}
+.tl-section.is-current .tl-section-square {
+  grid-template-columns: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+.tl-section-square-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  overflow: hidden;
+}
+.tl-square {
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: calc((var(--tl-row) - 0.95rem) / 2) 0;
+  border: 2px solid var(--ink-soft);
+  border-radius: 3px;
+  background: var(--paper);
+  transition: all 0.25s var(--ease-settle);
+}
+.tl-section.is-done .tl-square { border-color: var(--pen-blue); background: var(--pen-blue); }
+.tl-section.is-done .tl-section-square { color: var(--ink); }
+.tl-section.is-upcoming .tl-square { opacity: 0.55; }
+.tl-section-square:hover { color: var(--ink); transform: translateY(-1px); }
+.tl-section-square:focus-visible { outline: 2px solid var(--pen-blue); outline-offset: 3px; border-radius: 6px; }
+
+/* expanded view: the section's task milestones, revealed with the accordion */
+.tl-section-body {
+  display: grid;
+  grid-template-columns: 0fr;
+  transition: grid-template-columns 0.5s var(--ease-settle);
+}
+.tl-section.is-current .tl-section-body { grid-template-columns: 1fr; }
+.tl-section-body-inner {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  overflow: hidden;
+}
+
 /* ---- phone / portrait --------------------------------------------- */
 /* The wide layout assumes two trees flanking the graph. On a narrow,
    vertical screen that can't fit, so we shrink the chrome, pin both trees
