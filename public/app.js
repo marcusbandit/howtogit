@@ -44,6 +44,8 @@ function needSel(sel) {
     return e;
 }
 const graph = need("graph");
+const gRemote = need("remote-graph");
+const gRemoteInner = need("remote-graph-inner");
 const gEdges = need("edges");
 const gNodes = need("nodes");
 const gNib = need("ink-nib");
@@ -232,22 +234,6 @@ async function drawConnector(from, to, color, seed) {
         return; // already rendered in full
     await drawOn(p, { duration: 460, nibGroup: gNib, color });
 }
-// a handwritten label inside a hand-drawn box
-function pill(parent, text, cx, midY, color, seed, delay) {
-    const w = text.length * 12 + 22;
-    const g = S.el("g");
-    g.appendChild(S.el("path", {
-        d: S.rectPath(cx, midY, w, 30, seed), class: "tag-box",
-        stroke: color, "stroke-width": 1.8, fill: "#efe7d2",
-    }));
-    const t = S.el("text", {
-        x: cx, y: midY + 7, "text-anchor": "middle", class: "tag", fill: color,
-    });
-    t.textContent = text;
-    g.appendChild(t);
-    parent.appendChild(g);
-    animateIn(g, delay);
-}
 // a pill centred on its own origin, so it can be translated into place
 function makePill(text, color, seed) {
     const g = S.el("g");
@@ -373,12 +359,30 @@ function caption(text, cx, y, delay, faint = false) {
 // The graph grows rightward; rather than let it crawl off-screen, every step
 // pans the whole board (all four layers move as one) so wherever HEAD landed is
 // centred. Pills keep their own per-element transforms; this is the parent.
-const boardGroups = [gEdges, gNodes, gNib, gLabels];
+const boardGroups = [gRemote, gEdges, gNodes, gNib, gLabels];
+// the graph lives in a central box this fraction of the view wide. While the
+// whole graph fits inside it we centre the graph on its own midpoint; only once
+// it outgrows the box do we pin HEAD to the centre and let the older commits
+// slide out into the faded edges. Keep in sync with --box-fade in style.css,
+// which fades the outer (1 - BOX_FRAC) / 2 on each side.
+const BOX_FRAC = 0.66;
 function centerOnHead() {
-    // HEAD is always pinned to the horizontal centre — the graph may run off
-    // either edge, but wherever HEAD landed stays dead-centre on screen.
-    const h = headNode();
-    const targetX = h ? h.x : boardCenter().x;
+    const xs = model.nodes.map((n) => n.x);
+    let targetX;
+    if (xs.length) {
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const margin = NODE_R * 2.4;
+        if ((maxX - minX) + margin * 2 <= viewW * BOX_FRAC) {
+            targetX = (minX + maxX) / 2; // fits the box: centre the graph
+        }
+        else {
+            const h = headNode();
+            targetX = h ? h.x : boardCenter().x; // outgrew the box: follow HEAD
+        }
+    }
+    else {
+        targetX = boardCenter().x;
+    }
     const panX = viewW / 2 - targetX;
     for (const g of boardGroups) {
         g.style.transition = instant || S.prefersReduced
@@ -540,12 +544,23 @@ async function doRemoteAdd(arg) {
         remoteUrl = m[2];
     }
 }
-// push: stamp origin/main onto main's tip commit; the remote panel then fills
+// push: origin/main catches up to main's tip. The first push also kicks off the
+// float-up that copies the trunk into the remote mini-graph (see
+// renderRemoteGraph). origin/main is one pill that glides to each pushed tip.
+let originMain = null; // node id origin/main points at
+let originPill = null;
 async function doPush() {
     const mainTip = nodeById(model.branches.main?.tip ?? null) ?? headNode();
     if (!mainTip)
         return;
-    pill(gLabels, "origin/main", mainTip.x, mainTip.y + mainTip.r + 66, COLORS.remote, 7, 120);
+    const firstPush = originMain === null;
+    originMain = mainTip.id;
+    if (!originPill) {
+        originPill = makePill("origin/main", COLORS.remote, 7);
+        originPill.classList.add("ref-pill");
+        gLabels.appendChild(originPill);
+    }
+    placePill(originPill, { x: mainTip.x, y: mainTip.y + mainTip.r + 66 }, firstPush);
 }
 // when the whole sequence is finished, the board shouldn't read as blank: a
 // hand-written closing line sits under HEAD so it's clearly the end, not a gap.
@@ -649,6 +664,26 @@ const steps = [
         run: doRemoteAdd,
     },
     {
+        key: "push",
+        atoms: [
+            A("git", "cmd", { sep: "" }), A("push", "cmd"), A("-u", "flag"),
+            A(() => remoteName, "val", { free: true }), A("main", "val"),
+        ],
+        test: (s) => /^git\s+push\s+-u\s+\S+\s+main$/i.test(s),
+        hint: "Send your commit up:  git push -u origin main",
+        teach: {
+            goal: "Send it to the remote",
+            why: "Upload your commit so the remote has it too. This is the first time your work leaves your computer — the remote now holds a copy of your tree.",
+            parts: [
+                { t: "push", tone: "cmd", why: "upload your commits to the remote" },
+                { t: "-u", tone: "flag", why: "upstream: tie this branch to the remote so next time you can just type git push" },
+                { t: "origin", tone: "val", why: "which remote to send to (the nickname you chose)" },
+                { t: "main", tone: "val", why: "which branch to send (main is your default branch)" },
+            ],
+        },
+        run: doPush,
+    },
+    {
         key: "branch",
         atoms: [A("git", "cmd", { sep: "" }), A("branch", "cmd"), A("feature", "val", { free: true })],
         test: (s) => /^git\s+branch\s+\S+$/i.test(s),
@@ -750,21 +785,15 @@ const steps = [
         run: doMerge,
     },
     {
-        key: "push",
-        atoms: [
-            A("git", "cmd", { sep: "" }), A("push", "cmd"), A("-u", "flag"),
-            A(() => remoteName, "val", { free: true }), A("main", "val"),
-        ],
-        test: (s) => /^git\s+push(\s+-u\s+\S+\s+main)?$/i.test(s),
-        hint: "Send your commits:  git push -u origin main",
+        key: "push2",
+        atoms: [A("git", "cmd", { sep: "" }), A("push", "cmd")],
+        test: (s) => /^git\s+push$/i.test(s),
+        hint: "Send the merge up:  git push",
         teach: {
-            goal: "Send it to the remote",
-            why: "Upload your commits so the remote copy has them too.",
+            goal: "Send the merge up",
+            why: "You already set the upstream with -u, so a bare git push sends main — merge and all — to the remote. The remote tree catches up to yours.",
             parts: [
-                { t: "push", tone: "cmd", why: "upload your commits to the remote" },
-                { t: "-u", tone: "flag", why: "upstream: tie this branch to the remote so next time you can just type git push" },
-                { t: "origin", tone: "val", why: "which remote to send to (the nickname you chose)" },
-                { t: "main", tone: "val", why: "which branch to send (main is your default branch)" },
+                { t: "push", tone: "cmd", why: "upload the new commits to the remote you already linked" },
             ],
         },
         run: doPush,
@@ -1030,6 +1059,7 @@ form.addEventListener("submit", async (e) => {
         showEndState();
     renderFileTree();
     renderRemoteTree();
+    renderRemoteGraph();
     updateLayout();
 });
 cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
@@ -1194,6 +1224,73 @@ function renderRemoteTree() {
     lastRemoteShown = shown;
     lastRemotePushed = pushed;
 }
+// ---- remote mini-graph (the remote's own tree, drawn above the local one) ---
+// The remote is the shared source of truth. On the FIRST push we copy the local
+// trunk, lay it exactly over the real graph, then float it up and shrink it into
+// a simplified mini-graph: same colours and shapes, no labels, half-size. It
+// only ever shows what's actually been pushed (origin/main), so it lags behind
+// the local graph until you push again. Later, when other machines arrive, this
+// is the tree that changes first and flows back down.
+const REMOTE_GRAPH_SCALE = 0.42;
+const REMOTE_GRAPH_DY = 215; // viewBox units the copy floats upward
+let remoteGraphShown = false;
+// the commits that live on the remote: the main-lane trunk up to origin/main's
+// tip (everything reachable from what you pushed).
+function remoteTrunk() {
+    const tip = nodeById(originMain);
+    if (!tip)
+        return [];
+    return model.nodes
+        .filter((n) => n.lane === 0 && n.col <= tip.col)
+        .sort((a, b) => a.col - b.col);
+}
+function renderRemoteGraph(allowAnim = true) {
+    const trunk = remoteTrunk();
+    gRemoteInner.replaceChildren();
+    if (!trunk.length) {
+        gRemote.style.opacity = "0";
+        remoteGraphShown = false;
+        return;
+    }
+    gRemote.style.opacity = "1";
+    // draw the copy at FULL local coordinates so it overlays the real trunk; the
+    // inner-group transform is what floats it up and shrinks it. The nodes are
+    // solid filled blobs (not outlined rings) so the minified tree reads as small
+    // simple shapes rather than thin line-drawings once it shrinks.
+    for (let i = 1; i < trunk.length; i++) {
+        const a = trunk[i - 1], b = trunk[i];
+        gRemoteInner.appendChild(S.el("path", {
+            d: connectorPath({ x: a.x, y: a.y, r: NODE_R * 0.8 }, { x: b.x, y: b.y, r: NODE_R * 0.8 }, b.id * 5 + 2),
+            class: "edge-stroke", stroke: COLORS.main, "stroke-width": 2.2,
+        }));
+    }
+    for (const n of trunk) {
+        gRemoteInner.appendChild(S.el("path", {
+            d: shapePath(n.shape, n.x, n.y, NODE_R * 0.8, n.id * 7 + 1),
+            fill: n.color, stroke: n.color, "stroke-width": 2, "stroke-linejoin": "round",
+        }));
+    }
+    // shrink + raise about the board centre. Maps a trunk point (x, cy) to
+    // (cx + s*(x - cx), cy - DY): same horizontal spread, scaled, lifted up.
+    const cx = boardCenter().x, cy = boardCenter().y;
+    const minify = `translate(${cx}px, ${cy - REMOTE_GRAPH_DY}px) scale(${REMOTE_GRAPH_SCALE}) translate(${-cx}px, ${-cy}px)`;
+    const animate = allowAnim && !remoteGraphShown && !instant && !S.prefersReduced;
+    if (animate) {
+        // start as a copy sitting on the local graph, then float up and simplify
+        gRemoteInner.style.transition = "none";
+        gRemoteInner.style.transform = "none";
+        gRemoteInner.getBoundingClientRect(); // commit the start state
+        requestAnimationFrame(() => {
+            gRemoteInner.style.transition = "transform .9s cubic-bezier(.16,1,.3,1)";
+            gRemoteInner.style.transform = minify;
+        });
+    }
+    else {
+        gRemoteInner.style.transition = "none";
+        gRemoteInner.style.transform = minify;
+    }
+    remoteGraphShown = true;
+}
 // once a remote exists the local tree shares the stage; before that it leads
 function updateLayout() {
     const paired = stepIndex > stepIdx("remote");
@@ -1202,8 +1299,10 @@ function updateLayout() {
 }
 // ---- timeline (bottom, clickable) ----------------------------------
 const tlItems = [];
+let tlComplete = null;
 function buildTimeline() {
     timelineEl.replaceChildren();
+    tlItems.length = 0;
     steps.forEach((st, i) => {
         if (i > 0) {
             const link = document.createElement("span");
@@ -1224,17 +1323,40 @@ function buildTimeline() {
         timelineEl.appendChild(btn);
         tlItems.push(btn);
     });
+    // a final star stands for the finished loop: click it to jump straight to the
+    // completed end state. It lights up the moment the last command is done.
+    const link = document.createElement("span");
+    link.className = "tl-link";
+    timelineEl.appendChild(link);
+    const done = document.createElement("button");
+    done.type = "button";
+    done.className = "tl-item tl-item--complete";
+    const star = document.createElement("span");
+    star.className = "tl-star";
+    star.textContent = "✦";
+    const label = document.createElement("span");
+    label.className = "tl-label";
+    label.textContent = "complete";
+    done.append(star, label);
+    done.title = "Jump to the finished loop";
+    done.addEventListener("click", () => { void seekTo(steps.length); });
+    timelineEl.appendChild(done);
+    tlComplete = done;
     updateTimeline();
 }
 function updateTimeline() {
+    const finished = stepIndex >= steps.length;
     tlItems.forEach((btn, i) => {
         btn.classList.toggle("is-done", i < stepIndex);
         btn.classList.toggle("is-current", i === stepIndex);
     });
+    // the star fills as soon as every command is done
+    tlComplete?.classList.toggle("is-done", finished);
+    tlComplete?.classList.toggle("is-current", finished);
 }
 // ---- seek: rebuild instantly to a chosen step ----------------------
 function resetBoard() {
-    [gEdges, gNodes, gNib, gLabels].forEach((g) => g.replaceChildren());
+    [gEdges, gNodes, gNib, gLabels, gRemoteInner].forEach((g) => g.replaceChildren());
     model.nodes = [];
     model.head = null;
     model.headBranch = "main";
@@ -1243,6 +1365,10 @@ function resetBoard() {
     model.pending = null;
     refPills.clear();
     refTicks = null;
+    originMain = null;
+    originPill = null;
+    remoteGraphShown = false;
+    gRemote.style.opacity = "0";
 }
 async function seekTo(target) {
     if (busy || target === stepIndex)
@@ -1269,6 +1395,7 @@ async function seekTo(target) {
     updateTimeline();
     renderFileTree();
     renderRemoteTree();
+    renderRemoteGraph(false); // seek: the remote tree is just there, no float
     updateLayout();
     busy = false;
     if (!isPhone)
@@ -1284,6 +1411,7 @@ function boot() {
     buildTimeline();
     renderFileTree();
     renderRemoteTree();
+    renderRemoteGraph(false);
     // No file editor exists yet, so the local tree leads (is-focus) until a remote
     // appears. When the editor lands, the compact corner state takes over instead.
     updateLayout();
@@ -1295,6 +1423,7 @@ window.addEventListener("resize", () => {
     if (stepIndex > 0)
         dockStage();
     centerOnHead(); // viewW changed: keep HEAD centred
+    renderRemoteGraph(false); // recompute the mini-graph's float-up transform
     updateInk(); // recompute field width + redraw the underline
 });
 if (document.readyState === "loading") {

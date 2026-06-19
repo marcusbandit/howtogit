@@ -57,6 +57,10 @@
           <feDisplacementMap in="SourceGraphic" in2="n" scale="3" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </defs>
+      <!-- the remote's own tree: a copy of the trunk floats up here on push and
+           shrinks into a simplified mini-graph. Outer group pans with the board;
+           inner group carries the float-up + shrink transform. -->
+      <g id="remote-graph" filter="url(#boil)"><g id="remote-graph-inner"></g></g>
       <g id="edges" filter="url(#boil)"></g>
       <g id="nodes" filter="url(#boil)"></g>
       <g id="ink-nib"></g>

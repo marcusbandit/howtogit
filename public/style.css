@@ -108,6 +108,13 @@ body {
   width: 100%;
   height: 100%;
   display: block;
+  /* central box: the graph is solid through the middle and dissolves into the
+     paper toward the left/right edges, so a graph that outgrows the box fades
+     out instead of hitting a hard cut. The solid band is the central ~66%
+     (BOX_FRAC in app.ts); keep --box-fade in sync with (1 - BOX_FRAC) / 2. */
+  --box-fade: 17%;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--box-fade), #000 calc(100% - var(--box-fade)), transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 var(--box-fade), #000 calc(100% - var(--box-fade)), transparent 100%);
 }
 .node-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .edge-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
@@ -485,6 +492,29 @@ body {
   box-shadow: 0 0 0 3px rgba(192, 73, 47, 0.2);
 }
 .tl-item.is-current { color: var(--ink); font-weight: 700; }
+
+/* the closing "complete" star: hollow grey until the loop is finished, then it
+   fills with a warm glow the instant the last command lands */
+.tl-star {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.85rem;
+  height: 0.85rem;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  opacity: 0.55;
+  transition: color 0.3s var(--ease-settle), opacity 0.3s ease,
+              transform 0.3s var(--ease-settle), text-shadow 0.3s ease;
+}
+.tl-item--complete:hover .tl-star { opacity: 0.8; }
+.tl-item--complete.is-done .tl-star {
+  color: #c79a3a;
+  opacity: 1;
+  transform: scale(1.18);
+  text-shadow: 0 0 9px rgba(199, 154, 58, 0.5);
+}
 
 /* ---- phone / portrait --------------------------------------------- */
 /* The wide layout assumes two trees flanking the graph. On a narrow,

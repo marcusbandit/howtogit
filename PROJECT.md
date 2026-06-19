@@ -22,8 +22,10 @@ total beginner is never lost.
 
 ## Done
 
-- Full sequence: `git init` → `add` → `commit` → `branch` → `checkout` →
-  commit-on-branch → `remote add` → `push`.
+- Full sequence: `git init` → `add` → `commit` → `remote add` → `push` →
+  `branch` → `checkout` → commit-on-branch → `checkout main` → `merge` →
+  `push`. The remote is connected and first-pushed right after the first
+  commit (before branching), then a bare `git push` sends the merge at the end.
 - `git init` → first node, `.git/` appears in the file tree.
 - `git add` → staged preview + files marked staged.
 - `git commit -m` → new node, connector, HEAD/branch tags glide to the tip.
@@ -65,11 +67,14 @@ This is the target experience, not a committed spec yet. Refine before building.
 
 Ideas to keep so they aren't forgotten. Refine each before building.
 
-### Remote mini-graph (when the remote is added)
+### Remote mini-graph (when the remote is added) **[DONE]**
 
-When `git remote add` lands, draw a second, smaller, simplified graph **above**
-the current (local) graph. It's a stripped-down copy of the remote: no labels,
-no text, just the colours and shapes of the tree, simplified.
+On the first `git push` (right after `git remote add`), a copy of the local
+trunk lays itself over the real graph, then floats **up** and shrinks into a
+smaller, simplified mini-graph above the local one: same colours and shapes, no
+labels or text. It only ever shows what's actually on the remote (origin/main),
+so it lags behind the local graph until you push again; the final `git push`
+catches it up to the merge commit.
 
 Purpose: it represents the remote as the shared source of truth. When other
 people or other machines change things in the future, that mini-graph changes
@@ -128,10 +133,16 @@ of colour. Plan for it as its own effort.
 
 ### Polish / fixes
 
-- **Center the graph on HEAD. [DONE]** Every step pans the whole board (all
-  four layers as one) so wherever HEAD landed glides to the horizontal centre,
-  instead of letting the graph crawl off-screen to the right. The pan is instant
-  during timeline seeks and re-runs on resize.
+- **Center the graph in a box, follow HEAD on overflow. [DONE]** The graph
+  lives in a central box (~66% of the width, `BOX_FRAC`); while the whole graph
+  fits there it stays centred on its own midpoint. Only once it outgrows the box
+  does HEAD get pinned to the centre, and the older commits slide out into the
+  faded edges (a CSS mask on `#graph` dissolves the graph into the paper at the
+  left/right edges). The pan is instant during timeline seeks and re-runs on
+  resize.
+- **A "complete" star on the timeline. [DONE]** The bottom timeline ends in a
+  star that jumps straight to the finished end state when clicked; it fills with
+  a warm glow the instant the last command is done.
 - **Stop the idle drift. [DONE]** The whole-sheet float is gone and the board
   is completely still when idle. The boil now only runs while ink is actively
   being laid down: each stroke nudges it awake, it eases back to a fixed warp a
