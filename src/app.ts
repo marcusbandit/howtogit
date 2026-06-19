@@ -137,26 +137,60 @@ function drawRule(svg: SVGSVGElement, color: string, seed: number): void {
   }));
 }
 
-// ---- ambient life: boil + a slow whole-sheet drift ------------------
-function startAmbient(): void {
-  const turb = graph.querySelector("#boil feTurbulence");
-  const disp = graph.querySelector("#boil feDisplacementMap");
-  if (turb) turb.setAttribute("seed", "4"); // one fixed noise field, no snapping
-  if (S.prefersReduced) {
-    if (disp) disp.setAttribute("scale", "0");
+// ---- ambient life: the ink "boils" only while it's being laid down --
+// When nothing is drawing the board is completely still: a fixed warp and no
+// sheet drift. Every stroke nudges `activeUntil` forward; the boil eases back
+// to rest a beat after the last stroke, then the loop parks itself so an idle
+// board costs nothing and never wanders.
+const BOIL_REST = 1.6;   // static warp scale held while idle
+const BOIL_TAIL = 700;   // keep boiling this long past the last stroke
+let boilDisp: Element | null = null;
+let activeUntil = 0;
+let boilRunning = false;
+
+function boilLoop(now: number): void {
+  if (!boilDisp) { boilRunning = false; return; }
+  if (now >= activeUntil) {
+    // settle to a still, fixed warp and park until the next stroke
+    boilDisp.setAttribute("scale", BOIL_REST.toFixed(2));
+    boilRunning = false;
     return;
   }
-  const loop = (now: number) => {
-    const t = now / 1000;
-    // the whole sheet floats, smoothly and continuously
-    const x = Math.sin(t * 0.16) * 7 + Math.sin(t * 0.07) * 3;
-    const y = Math.cos(t * 0.13) * 5 + Math.sin(t * 0.05) * 2;
-    graph.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
-    // the ink warp breathes by degrees instead of clicking between frames
-    if (disp) disp.setAttribute("scale", (1.8 + Math.sin(t * 0.85) * 0.8).toFixed(2));
-    requestAnimationFrame(loop);
-  };
-  requestAnimationFrame(loop);
+  const t = now / 1000;
+  // the ink warp breathes by degrees instead of clicking between frames
+  boilDisp.setAttribute("scale", (1.8 + Math.sin(t * 0.85) * 0.8).toFixed(2));
+  requestAnimationFrame(boilLoop);
+}
+
+// keep (or kick off) the boil because ink is moving right now
+function nudgeBoil(): void {
+  if (S.prefersReduced || !boilDisp) return;
+  activeUntil = performance.now() + BOIL_TAIL;
+  if (!boilRunning) {
+    boilRunning = true;
+    requestAnimationFrame(boilLoop);
+  }
+}
+
+function startAmbient(): void {
+  const turb = graph.querySelector("#boil feTurbulence");
+  boilDisp = graph.querySelector("#boil feDisplacementMap");
+  if (turb) turb.setAttribute("seed", "4"); // one fixed noise field, no snapping
+  graph.style.transform = "none";            // the sheet stays put: no idle drift
+  if (S.prefersReduced) {
+    if (boilDisp) boilDisp.setAttribute("scale", "0");
+    return;
+  }
+  // rest still until the first stroke nudges the boil awake
+  if (boilDisp) boilDisp.setAttribute("scale", BOIL_REST.toFixed(2));
+}
+
+// every on-board stroke keeps the boil alive for its draw (plus a short tail)
+function drawOn(pathEl: SVGPathElement, opts: S.DrawOnOptions = {}): Promise<void> {
+  nudgeBoil();
+  const done = S.drawOn(pathEl, opts);
+  void done.then(() => nudgeBoil());
+  return done;
 }
 
 // when true, drawing happens with no animation (used for timeline replay)
@@ -165,6 +199,7 @@ let instant = false;
 // ---- small animation helpers ---------------------------------------
 function animateIn(node: SVGElement | HTMLElement, delay = 0): void {
   if (instant || S.prefersReduced) return;
+  nudgeBoil();
   node.style.opacity = "0";
   node.style.transform = "translateY(6px) scale(0.9)";
   node.style.transformOrigin = "center";
@@ -178,6 +213,7 @@ function animateIn(node: SVGElement | HTMLElement, delay = 0): void {
 }
 function fadeOutRemove(node: SVGElement | HTMLElement, dur = 300): void {
   if (instant || S.prefersReduced) { node.remove(); return; }
+  nudgeBoil();
   node.style.transition = `opacity ${dur}ms ease`;
   node.style.opacity = "0";
   setTimeout(() => node.remove(), dur + 20);
@@ -202,8 +238,8 @@ async function drawNode(node: CommitNode, seed: number): Promise<void> {
   gNodes.appendChild(main);
   gNodes.appendChild(second);
   if (instant) return;            // already rendered in full
-  await S.drawOn(main, { duration: 720, nibGroup: gNib, color: node.color });
-  S.drawOn(second, { duration: 360 });
+  await drawOn(main, { duration: 720, nibGroup: gNib, color: node.color });
+  drawOn(second, { duration: 360 });
 }
 
 // a stroke from one node's edge to another's, trimmed so it kisses the rims
@@ -222,7 +258,7 @@ async function drawConnector(from: CommitNode, to: CommitNode, color: string, se
   }) as SVGPathElement;
   gEdges.appendChild(p);
   if (instant) return;            // already rendered in full
-  await S.drawOn(p, { duration: 460, nibGroup: gNib, color });
+  await drawOn(p, { duration: 460, nibGroup: gNib, color });
 }
 
 // a handwritten label inside a hand-drawn box

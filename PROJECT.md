@@ -125,10 +125,11 @@ of colour. Plan for it as its own effort.
 - **Center the graph on HEAD.** Horizontally center the view on wherever HEAD
   is, not on the `git init` node. Right now it just sits where it is; it should
   follow HEAD.
-- **Stop the idle drift.** The graph slightly moves around when nothing is
-  happening (the boil/turbulence). It should be completely stationary when
-  idle. The constant drift is distracting and not as neat as hoped. Boil only
-  while something is actively being drawn, settle to still when done.
+- **Stop the idle drift. [DONE]** The whole-sheet float is gone and the board
+  is completely still when idle. The boil now only runs while ink is actively
+  being laid down: each stroke nudges it awake, it eases back to a fixed warp a
+  beat after the last stroke, then the loop parks itself, so an idle board
+  never wanders and costs nothing.
 - **A "completed" end state.** When the whole sequence is finished the board is
   just empty with nothing there. Instead it should read as done: a message like
   "completed, nothing more to do" (or a fun line) so it's clearly the end, not a
