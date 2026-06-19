@@ -747,6 +747,9 @@ async function playAutoCd(): Promise<void> {
   cmd.value = ""; autoTyping = false; updateInk();  // entered the project
   busy = false;
   showStep(stepIndex);                             // refresh the lesson for the next real step
+  // now play the laptop's own edit of index.html, the way the desktop did on its
+  // feature branch (the user then stages + commits it)
+  if (alive()) void playEditSequence("laptop");
 }
 
 // when the whole sequence is finished, the board shouldn't read as blank: a
@@ -1036,6 +1039,41 @@ const steps: Step[] = [
       ],
     },
     run: doClone,
+  },
+  {
+    key: "add3",
+    atoms: [A("git", "cmd", { sep: "" }), A("add", "cmd"), A(".", "val", { free: true })],
+    test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
+    hint: "Stage your laptop change with  git add .",
+    teach: {
+      goal: "Stage it on the laptop",
+      why: "You edited index.html here on the laptop. Stage it so it goes in the next commit.",
+      parts: [
+        { t: "add", tone: "cmd", why: "stage the change you just made on the laptop" },
+        { t: ".", tone: "val", why: "the dot means everything you changed" },
+      ],
+    },
+    run: doAdd,
+  },
+  {
+    key: "commit3",
+    atoms: [
+      A("git", "cmd", { sep: "" }), A("commit", "cmd"), A("-m", "flag"),
+      ...msgAtoms("tweak from the laptop"),
+    ],
+    test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
+    extract: (s) => { const m = s.match(/-m\s+(["'])(.+?)\1/); return m ? m[2] : "tweak from the laptop"; },
+    hint: 'Commit on the laptop:  git commit -m "tweak from the laptop"',
+    teach: {
+      goal: "Commit on the laptop",
+      why: "Save the snapshot. This commit only lives on the laptop until you push it.",
+      parts: [
+        { t: "commit", tone: "cmd", why: "save the snapshot on the laptop" },
+        { t: "-m", tone: "flag", why: "attach a short message" },
+        { t: '"message"', tone: "val", why: "describe the change you made on the laptop" },
+      ],
+    },
+    run: doCommit,
   },
 ];
 const END = {
@@ -1866,7 +1904,7 @@ function closeFileViewer(): void {
   editorEl.style.opacity = "0";
 }
 
-async function playEditSequence(): Promise<void> {
+async function playEditSequence(side: FileSide = "local"): Promise<void> {
   if (instant || S.prefersReduced) return;     // timeline seeks just show the result
   const gen = ++editSeqGen;
   viewerFile = null;                            // this is the auto-edit, not a click view
@@ -1881,7 +1919,7 @@ async function playEditSequence(): Promise<void> {
   editorEl.style.pointerEvents = "none";        // the auto-edit isn't interactive
   renderEditorLines(lines);
   editorEl.style.transition = "none";
-  editorEl.style.transform = tuckedTransformFor(fileRowRect(EDIT_FILE, "local"));
+  editorEl.style.transform = tuckedTransformFor(fileRowRect(EDIT_FILE, side));
   editorEl.style.opacity = "0";
   editorEl.getBoundingClientRect();             // commit the tucked start state
 
@@ -1915,7 +1953,7 @@ async function playEditSequence(): Promise<void> {
   // 4) fold back into the tree line, then leave index.html marked modified
   editorEl.style.transition =
     `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
-  editorEl.style.transform = tuckedTransformFor(fileRowRect(EDIT_FILE, "local"));
+  editorEl.style.transform = tuckedTransformFor(fileRowRect(EDIT_FILE, side));
   editorEl.style.opacity = "0";
   await sleep(SHRINK_MS + 60); if (!alive()) return;
   editorSave.classList.remove("show");
@@ -2006,11 +2044,17 @@ function renderRemoteTree(): void {
   lastRemotePushed = pushed;
 }
 
-// the laptop's file state for the cloned my-site files. After clone they read as
-// committed (a full copy of the remote); M3 makes this track the laptop's own
-// edit + commit.
-function laptopFileState(_file: string): FileState {
-  return "committed";
+// the laptop's file state. Cloned files are in sync with the remote (pushed);
+// the edited file walks modified -> staged -> committed -> pushed as the laptop
+// does its own edit + commit + push. Purely stepIndex-derived, so seek-safe.
+function laptopFileState(file: string): FileState {
+  const a3 = stepIdx("add3"), c3 = stepIdx("commit3"), p3 = stepIdx("push3");
+  if (file === EDIT_FILE && a3 >= 0) {
+    if (stepIndex === a3) return "modified";                 // edited, not staged
+    if (c3 >= 0 && stepIndex === c3) return "staged";        // staged, not committed
+    if (c3 >= 0 && stepIndex > c3 && (p3 < 0 || stepIndex <= p3)) return "committed"; // committed, not pushed
+  }
+  return "pushed";   // in sync with the remote (the clone, or after a laptop push)
 }
 function renderLaptopTree(): void {
   const shown = laptopVisible();
@@ -2286,6 +2330,7 @@ const TIMELINE_SECTIONS: TLSection[] = [
   ] },
   { name: "The basics 2", tasks: [
     { label: "Clone the repo", keys: ["clone"] },
+    { label: "Edit on the laptop", keys: ["add3", "commit3"] },
   ] },
 ];
 // a command label for a sub-step, e.g. "checkout-main" -> "git checkout"
