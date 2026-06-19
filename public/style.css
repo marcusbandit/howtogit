@@ -9,6 +9,7 @@
   --pen-blue:  #2e5c9e;  /* main */
   --pen-red:   #c0492f;  /* feature */
   --pen-green: #3f7a4e;  /* extra branches */
+  --pen-remote: #6b5ca5; /* the remote / mini-graph purple */
   --pencil:    #8e8473;
 
   --grid: rgba(42, 37, 33, 0.05);
@@ -167,7 +168,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  max-width: 38rem;
+  max-width: min(54rem, 92vw);
   text-align: center;
   transition: opacity 0.3s ease;
 }
@@ -180,24 +181,51 @@ body {
 }
 .lesson__why {
   font-size: clamp(0.98rem, 2.2vw, 1.12rem);
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--ink-soft);
-  max-width: 30rem;
+  max-width: min(48rem, 90vw);
 }
-/* token in the left column, meaning in the right, rows aligned */
+/* a quieter aside: caveats and "do it now" hints, set apart from the main why */
+.lesson__note {
+  font-size: clamp(0.82rem, 1.7vw, 0.92rem);
+  line-height: 1.35;
+  color: var(--ink-soft);
+  opacity: 0.72;
+  font-style: italic;
+  max-width: min(42rem, 88vw);
+}
+.lesson__note[hidden] { display: none; }
+/* one part at a time: the chip for the token the cursor is in, then its meaning.
+   The strip is a clipped window and captions scroll vertically to replace one
+   another. min-height keeps a stable line so the layout never jumps. */
 .lesson__parts {
-  display: grid;
-  grid-template-columns: auto auto;
-  column-gap: 0.7rem;
-  row-gap: 0.32rem;
-  justify-content: center;
-  align-items: baseline;
+  position: relative;
+  overflow: hidden;
+  min-height: 1.6em;
   margin-top: 0.45rem;
   font-size: clamp(0.92rem, 2vw, 1.05rem);
 }
-.part { display: contents; }
+.part {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0.55rem;
+  width: 100%;
+  max-width: min(46rem, 90vw);
+  margin-inline: auto;
+}
+/* the outgoing row is lifted out of flow so the incoming row owns the height,
+   then it scrolls clear of the window and removes itself */
+.part--out {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: auto;
+  pointer-events: none;
+}
 .part .tok {
-  justify-self: end;
+  flex: 0 0 auto;
   font-family: var(--mono);
   font-weight: 700;
   font-size: 0.92em;
@@ -208,7 +236,22 @@ body {
 .part .tok--cmd  { color: var(--pen-blue);  background: rgba(46, 92, 158, 0.10); }
 .part .tok--flag { color: var(--pen-red);   background: rgba(192, 73, 47, 0.10); }
 .part .tok--val  { color: var(--pen-green); background: rgba(63, 122, 78, 0.12); }
-.part .why { justify-self: start; text-align: left; color: var(--ink-soft); }
+.part .why { min-width: 0; text-align: left; color: var(--ink-soft); }
+/* scroll directions. -up = advancing: the old line exits the top while the new
+   one rises in from below. -down = the caret moved back: old exits the bottom,
+   new drops in from above. Same curve + duration so they move as one strip. */
+.part--in-up    { animation: partScrollInUp    0.36s cubic-bezier(0.33, 0, 0.2, 1) both; }
+.part--in-down  { animation: partScrollInDown  0.36s cubic-bezier(0.33, 0, 0.2, 1) both; }
+.part--out-up   { animation: partScrollOutUp   0.36s cubic-bezier(0.33, 0, 0.2, 1) both; }
+.part--out-down { animation: partScrollOutDown 0.36s cubic-bezier(0.33, 0, 0.2, 1) both; }
+@keyframes partScrollInUp    { from { transform: translateY(115%); }  to { transform: translateY(0); } }
+@keyframes partScrollInDown  { from { transform: translateY(-115%); } to { transform: translateY(0); } }
+@keyframes partScrollOutUp   { from { transform: translateY(0); } to { transform: translateY(-115%); } }
+@keyframes partScrollOutDown { from { transform: translateY(0); } to { transform: translateY(115%); } }
+@media (prefers-reduced-motion: reduce) {
+  .part, .part--out,
+  .part--in-up, .part--in-down, .part--out-up, .part--out-down { animation: none; }
+}
 
 /* ---- command line with highlight + ghost overlay ------------------- */
 #cli {
@@ -364,13 +407,27 @@ body {
   transform: translateY(-50%) translateX(26px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.55s var(--ease-settle), transform 0.55s var(--ease-settle);
+  transition:
+    opacity 0.55s var(--ease-settle), transform 0.55s var(--ease-settle),
+    top 0.6s var(--ease-settle), right 0.6s var(--ease-settle),
+    width 0.6s var(--ease-settle), font-size 0.6s var(--ease-settle);
 }
 #remotetree.is-shown {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(-50%) translateX(0);
 }
+/* Large state: the remote tree first appears at full size on the right,
+   mirroring the focused local tree, until the first push pairs them off. */
+#remotetree.is-focus {
+  top: 50%;
+  left: auto;
+  right: clamp(1.5rem, 4.5vw, 5rem);
+  width: clamp(19rem, 28vw, 26rem);
+  font-size: 1.55rem;
+}
+#remotetree.is-focus .tree__title { font-size: 0.98rem; margin-bottom: 1.1rem; }
+#remotetree.is-focus .d--git .f__note { font-size: 0.95rem; }
 .remote-empty {
   color: var(--ink-soft);
   font-style: italic;
@@ -401,20 +458,62 @@ body {
   gap: 0.45rem;
   padding: 0.2rem 0;
   line-height: 1.35;
+  position: relative;
 }
+/* the underline dips below the name into the next row; lift the hovered row so
+   it paints over the file beneath instead of being clipped by it */
+.tree__list li.is-openable:hover { z-index: 2; }
 .tree__list .d > .f__name { color: var(--ink); font-weight: 700; }
-.tree__list .f { padding-left: 1.35rem; position: relative; }
-.tree__list .f::before {
-  content: "";
-  position: absolute;
-  left: 0.4rem;
-  top: 0.66em;
-  width: 0.6rem;
-  height: 1.5px;
-  background: var(--ink-soft);
-  opacity: 0.5;
+.tree__list .f { padding-left: 0.9rem; }
+.f__name { white-space: nowrap; position: relative; display: inline-block; }
+
+/* ---- sketched file/heading icons ---------------------------------- */
+.ic {
+  width: 1.15em;
+  height: 1.15em;
+  flex: 0 0 auto;
+  align-self: center;
+  overflow: visible;
 }
-.f__name { white-space: nowrap; }
+.ic-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ic--html { color: #e0652f; }
+.ic--css  { color: var(--pen-blue); }
+.ic--js   { color: #c79a3a; }
+.ic--folder, .ic--computer, .ic--cloud { color: var(--ink-soft); }
+.tree__title { display: flex; align-items: center; gap: 0.45rem; }
+.tree__title .ic { width: 1.3rem; height: 1.3rem; }
+
+/* files open in the editor on click; the name carries a sketched underline that
+   draws on (left->right) on hover and erases (right->left) when you leave */
+.tree__list li.is-openable { cursor: pointer; }
+.f__underline {
+  position: absolute;
+  left: 0;
+  bottom: -0.16em;
+  width: 100%;
+  height: 0.4em;
+  overflow: visible;
+  pointer-events: none;
+  /* reveal left->right on hover by uncovering the right edge; reverses on leave.
+     clip-path is geometric, so it tracks the name's real width at any text size.
+     top/bottom insets stay negative so the line's wobble + downward tail are never
+     clipped vertically — only the right edge sweeps in. */
+  clip-path: inset(-6px 100% -6px -2px);
+  transition: clip-path 0.5s var(--ease-settle);
+}
+.f__underline-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.tree__list li.is-openable:hover .f__underline { clip-path: inset(-6px -2px -6px -2px); }
 .f__mark { font-weight: 700; font-size: 1em; }
 .f--untracked .f__name { color: var(--ink-soft); }
 .f--untracked .f__mark { color: var(--ink-soft); }
@@ -428,12 +527,31 @@ body {
 .f--staged    .f__mark { color: var(--pen-green); }
 .f--committed .f__name { color: var(--ink); }
 .f--committed .f__mark { color: var(--pen-blue); }
+/* committed but not yet on the remote — nudge toward pushing */
+.f--committed .f__note {
+  font-family: var(--ui); font-size: 0.78rem; font-style: italic;
+  color: #b07d2b; opacity: 0.9;
+}
+/* pushed: double-check + remote purple says "this is safely on the remote" */
+.f--pushed .f__name { color: var(--ink); }
+.f--pushed .f__mark { color: var(--pen-remote); letter-spacing: -0.18em; padding-right: 0.12em; }
+.f--pushed .f__note {
+  font-family: var(--ui); font-size: 0.78rem; font-style: italic;
+  color: var(--pen-remote); opacity: 0.85;
+}
 /* a file just edited: a quick warm highlight so the change is noticed */
 .tree__list li.is-edited { animation: edit-pulse 0.9s ease both; border-radius: 6px; }
 @keyframes edit-pulse {
   0%   { background: rgba(176, 125, 43, 0); }
   25%  { background: rgba(176, 125, 43, 0.22); }
   100% { background: rgba(176, 125, 43, 0); }
+}
+/* a file just pushed: the same flash, in the remote's purple */
+.tree__list li.is-pushed-now { animation: push-pulse 0.9s ease both; border-radius: 6px; }
+@keyframes push-pulse {
+  0%   { background: rgba(107, 92, 165, 0); }
+  25%  { background: rgba(107, 92, 165, 0.24); }
+  100% { background: rgba(107, 92, 165, 0); }
 }
 .d--git { opacity: 0.72; }
 .d--git .f__name { color: var(--pen-red); font-style: italic; }
@@ -481,8 +599,14 @@ body {
   padding: 0.5rem 0.85rem;
   border-bottom: 2px solid rgba(42, 37, 33, 0.16);
   background: rgba(42, 37, 33, 0.045);
+  cursor: pointer;   /* the title bar is the close affordance */
 }
 .editor__dots { display: inline-flex; gap: 0.34rem; }
+/* hovering the bar warms the first dot, the classic "close" hint */
+.editor__bar:hover .editor__dots i:first-child {
+  border-color: var(--pen-red);
+  background: rgba(192, 73, 47, 0.55);
+}
 .editor__dots i {
   width: 0.6rem;
   height: 0.6rem;
@@ -539,8 +663,25 @@ body {
   opacity: 0.5;
   user-select: none;
 }
-/* the freshly typed line reads as an insertion: feature-coloured */
-.editor__line.is-active .editor__txt { color: var(--pen-green); }
+/* a locally changed line: a green diff-insertion band + gutter, while the code
+   itself keeps its syntax colours (like a real editor's diff view) */
+.editor__line.is-changed {
+  background: rgba(63, 122, 78, 0.13);
+  box-shadow: inset 3px 0 0 var(--pen-green);
+}
+.editor__line.is-changed .editor__num { color: var(--pen-green); opacity: 0.9; }
+
+/* syntax highlighting palette (kept within the inked colour set) */
+.sx-tag     { color: var(--pen-blue); }
+.sx-attr    { color: #b07d2b; }
+.sx-str     { color: var(--pen-green); }
+.sx-kw      { color: var(--pen-blue); font-weight: 700; }
+.sx-fn      { color: var(--pen-remote, #6b5ca5); }
+.sx-num     { color: var(--pen-red); }
+.sx-comment { color: var(--ink-soft); font-style: italic; }
+.sx-val     { color: var(--ink); }
+.sx-punct   { color: var(--ink-soft); }
+
 .editor__caret {
   display: inline-block;
   width: 2px;
@@ -724,7 +865,9 @@ body {
   .tree__title { font-size: 0.66rem; margin-bottom: 0.4rem; }
   .tree.is-focus .d--git .f__note,
   .d--git .f__note,
-  .f--modified .f__note { font-size: 0.66rem; }
+  .f--modified .f__note,
+  .f--committed .f__note,
+  .f--pushed .f__note { font-size: 0.66rem; }
   .tree__list li { padding: 0.1rem 0; line-height: 1.25; }
 
   /* the editor sits centred and narrower so it fits the phone width */
@@ -757,5 +900,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   #stage, .lesson { transition: none; }
-  .shake, .tree__list li.is-new, .tree__list li.is-edited { animation: none; }
+  .shake, .tree__list li.is-new, .tree__list li.is-edited, .tree__list li.is-pushed-now { animation: none; }
+  /* no draw-on; the underline just appears/leaves on hover */
+  .f__underline { transition: none; }
 }

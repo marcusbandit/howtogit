@@ -58,6 +58,7 @@ const ink = need<HTMLElement>("ink");
 const tabhint = need<HTMLElement>("tabhint");
 const goalEl = need<HTMLElement>("goal");
 const whyEl = need<HTMLElement>("why");
+const noteEl = need<HTMLElement>("note");
 const partsEl = need<HTMLElement>("parts");
 const nudgeEl = need<HTMLElement>("nudge");
 const treeEl = need<HTMLElement>("filetree");
@@ -88,6 +89,7 @@ interface Branch {
   shape: Shape;
   lane: number;
   tip: number | null;  // node id this branch points at
+  staged?: boolean;    // changes staged on a freshly-branched (projected) lane
 }
 interface Pending {
   els: SVGElement[];
@@ -107,6 +109,19 @@ const GAP = 150;     // horizontal distance between commits (viewBox units)
 const LANE_GAP = 118; // vertical distance between branch lanes
 const NODE_R = 28;   // base node radius (viewBox units)
 const BRANCH_PALETTE = ["#c0492f", "#3f7a4e", "#6b5ca5"]; // feature, then more
+
+// One graph line system, so every node ring + connector reads the same.
+// Stroke weights match between a preview and the real commit it becomes, so
+// solidifying never makes the line jump in thickness.
+const EDGE_W = 2.4;  // every connector (preview or committed)
+const NODE_W = 2.8;  // every node ring's main stroke
+// The dash ladder runs least-real -> real: a branched lane is loose dashes, a
+// staged commit tightens to denser dashes, a real commit is solid (no entry).
+// "staged" is one look whether it lands on the trunk or a freshly branched lane.
+const LINE = {
+  ghost:  { dash: "7 6", opacity: 0.5 },  // branched, nothing staged yet
+  staged: { dash: "4 3", opacity: 0.65 }, // about to commit (trunk or branch)
+};
 
 // viewBox dimensions: the drawing space, smaller than the screen by ZOOM
 let viewW = window.innerWidth / ZOOM;
@@ -241,7 +256,7 @@ function shapePath(shape: Shape, x: number, y: number, r: number, seed: number):
 async function drawNode(node: CommitNode, seed: number): Promise<void> {
   const main = S.el("path", {
     d: shapePath(node.shape, node.x, node.y, node.r, seed),
-    class: "node-stroke", stroke: node.color, "stroke-width": 2.8,
+    class: "node-stroke", stroke: node.color, "stroke-width": NODE_W,
   }) as SVGPathElement;
   const second = S.el("path", {
     d: shapePath(node.shape, node.x, node.y, node.r * 0.97, seed + 31),
@@ -266,7 +281,7 @@ function connectorPath(from: { x: number; y: number; r: number }, to: { x: numbe
 async function drawConnector(from: CommitNode, to: CommitNode, color: string, seed: number): Promise<void> {
   const p = S.el("path", {
     d: connectorPath(from, to, seed), class: "edge-stroke",
-    stroke: color, "stroke-width": 2.4,
+    stroke: color, "stroke-width": EDGE_W,
   }) as SVGPathElement;
   gEdges.appendChild(p);
   if (instant) return;            // already rendered in full
@@ -351,17 +366,21 @@ function drawRefs(): void {
     // shoots from the commit up to a ghost node outline where its first commit
     // will land, with the label floating above that
     if (isProjected(b)) {
+      // two looks along the way to a real commit, from the shared ladder:
+      //   branched, nothing staged -> loose dashes (LINE.ghost)
+      //   staged on the branch      -> tighter dashes (LINE.staged)
+      const st = b.staged ? LINE.staged : LINE.ghost;
       refTicks.appendChild(S.el("path", {
         d: connectorPath(tip, { x: a.x, y: a.y, r: NODE_R }, 21),
-        class: "edge-stroke", stroke: b.color, "stroke-width": 2,
-        "stroke-dasharray": "7 6", opacity: 0.5,
+        class: "edge-stroke", stroke: b.color, "stroke-width": EDGE_W,
+        "stroke-dasharray": st.dash, opacity: st.opacity,
       }));
       const ghost = b.shape === "square"
         ? S.squarePath(a.x, a.y, NODE_R * 1.7, 23)
         : S.circlePath(a.x, a.y, NODE_R, 23);
       refTicks.appendChild(S.el("path", {
-        d: ghost, class: "node-stroke", stroke: b.color, "stroke-width": 2,
-        "stroke-dasharray": "7 6", opacity: 0.5,
+        d: ghost, class: "node-stroke", stroke: b.color, "stroke-width": NODE_W,
+        "stroke-dasharray": st.dash, opacity: st.opacity,
       }));
     }
     refTicks.appendChild(S.el("path", {
@@ -468,18 +487,23 @@ async function doAdd(): Promise<void> {
   if (!next) return;
   const { parent, pos, branch } = next;
   const els: SVGElement[] = [];
-  // on a projected branch the dashed stub + ghost node already show the spot;
-  // on the trunk we draw a dashed connector and ring preview here
-  if (!isProjected(branch)) {
+  // on a projected branch the dashed stub + ghost are already on screen: restyle
+  // them in place (loose dashes -> tighter staged dashes) so staging visibly
+  // changes the look instead of drawing nothing. On the trunk we draw the
+  // preview here, in the same staged style the branch case lands on.
+  if (isProjected(branch)) {
+    branch.staged = true;
+    drawRefs();
+  } else {
     const conn = S.el("path", {
       d: connectorPath(parent, { x: pos.x, y: pos.y, r: NODE_R }, 9),
-      class: "edge-stroke", stroke: branch.color, "stroke-width": 2,
-      "stroke-dasharray": "1 9", opacity: 0,
+      class: "edge-stroke", stroke: branch.color, "stroke-width": EDGE_W,
+      "stroke-dasharray": LINE.staged.dash, opacity: 0,
     });
     const shape = branch.shape === "square" ? S.squarePath(pos.x, pos.y, NODE_R * 1.7, 9) : S.circlePath(pos.x, pos.y, NODE_R, 9);
     const ring = S.el("path", {
       d: shape, class: "node-stroke",
-      stroke: branch.color, "stroke-width": 2, "stroke-dasharray": "1 8", opacity: 0,
+      stroke: branch.color, "stroke-width": NODE_W, "stroke-dasharray": LINE.staged.dash, opacity: 0,
     });
     gEdges.appendChild(conn);
     gNodes.appendChild(ring);
@@ -487,13 +511,14 @@ async function doAdd(): Promise<void> {
   }
   const tag = caption("staged", pos.x, pos.y + NODE_R + 30, 120, true);
   els.push(tag);
+  const stagedOpacity = String(LINE.staged.opacity); // match the branch-staged look
   if (instant) {
-    els.forEach((e) => { e.style.opacity = e === tag ? "0.6" : "0.55"; });
+    els.forEach((e) => { e.style.opacity = e === tag ? "0.6" : stagedOpacity; });
   } else {
     requestAnimationFrame(() => {
       els.forEach((e) => {
         e.style.transition = "opacity .4s ease";
-        e.style.opacity = e === tag ? "0.6" : "0.55";
+        e.style.opacity = e === tag ? "0.6" : stagedOpacity;
       });
     });
   }
@@ -518,6 +543,7 @@ async function doCommit(message = "first commit"): Promise<void> {
   model.nodes.push(node);
   model.head = node.id;
   branch.tip = node.id;
+  branch.staged = false;  // the staged preview just became a real commit
   drawRefs();
   caption(message, node.x, node.y + node.r + 32, 320);
 }
@@ -614,8 +640,8 @@ function showEndState(): void {
 
 // ---- step machine ---------------------------------------------------
 type Tone = "cmd" | "flag" | "val";
-interface Part { t: string; tone: Tone; why: string; }
-interface Teach { goal: string; why: string; parts: Part[]; }
+interface Part { t: string; tone: Tone; why: string; span?: number; }
+interface Teach { goal: string; why: string; parts: Part[]; note?: string; }
 
 // a command is a sequence of atoms. Fixed atoms are typed verbatim; free atoms
 // are user values with a soft suggestion (a nickname, a username, a message).
@@ -706,6 +732,7 @@ const steps: Step[] = [
       parts: [
         { t: "commit", tone: "cmd", why: "save that snapshot to history" },
         { t: "-m", tone: "flag", why: "attach a short message" },
+        { t: '"message"', tone: "val", why: "a short note describing what this snapshot changed" },
       ],
     },
     run: doCommit,
@@ -726,9 +753,10 @@ const steps: Step[] = [
     hint: "The last part must be a url, e.g.  https://github.com/user/my-site.git",
     teach: {
       goal: "Connect a remote",
-      why: "Right after your first commit, link the repo to a copy kept elsewhere (like GitHub) so your work is backed up before you start branching. Optional — git works fine with no remote at all.",
+      why: "A remote is a copy of your project that lives online, so your work stays safe even if something happens to your computer. This points your repo at one.",
+      note: "Optional, and easiest to set up now, before you start branching. Git works fine with no remote at all.",
       parts: [
-        { t: "remote add", tone: "cmd", why: "save a link to a copy of your repo kept elsewhere" },
+        { t: "remote add", tone: "cmd", span: 2, why: "save a link to a copy of your repo kept elsewhere" },
         { t: "origin", tone: "val", why: "the nickname we give the url, so you can type it instead of the full address next time" },
         { t: "the url", tone: "flag", why: "the address where the remote copy lives, usually in the cloud" },
       ],
@@ -820,6 +848,7 @@ const steps: Step[] = [
       parts: [
         { t: "commit", tone: "cmd", why: "save the snapshot on feature" },
         { t: "-m", tone: "flag", why: "attach a short message" },
+        { t: '"message"', tone: "val", why: "describe the change (here: add feature)" },
       ],
     },
     run: doCommit,
@@ -884,30 +913,110 @@ function currentAtoms(): Atom[] | null {
   return stepIndex < steps.length ? steps[stepIndex].atoms : null;
 }
 
+// the lesson now reveals one part at a time: the part the text cursor is
+// currently sitting in. `activeParts` is the current step's list; `activePart`
+// is which one is on screen, so we only re-render (and re-animate) on a change.
+let activeParts: Part[] = [];
+let activePart = -2;
+// true during a step's lesson cross-fade. While set, the caption is swapped
+// instantly (under the fade) instead of scroll-animating, so a step change
+// never looks like the caption rewinding through its parts.
+let lessonSwapping = false;
+
 function renderTeach(teach: Teach): void {
   goalEl.textContent = teach.goal;
   whyEl.textContent = teach.why;
-  partsEl.replaceChildren();
-  for (const p of teach.parts) {
-    const row = document.createElement("div");
-    row.className = "part";
-    const tok = document.createElement("span");
-    tok.className = `tok tok--${p.tone}`;
-    tok.textContent = p.t;
-    const why = document.createElement("span");
-    why.className = "why";
-    why.textContent = p.why;
-    row.append(tok, why);
-    partsEl.appendChild(row);
+  noteEl.textContent = teach.note ?? "";
+  noteEl.hidden = !teach.note;
+  activeParts = teach.parts;
+  renderActivePart(true, true);   // step change: swap instantly, no scroll
+}
+
+// which word the caret is in: word 0 is the command name, then one word per
+// token. A caret resting just after a space belongs to the upcoming word.
+function caretWordIndex(typed: string, caret: number): number {
+  const before = typed.slice(0, caret);
+  const words = before.match(/\S+/g);
+  if (!words) return 0;
+  if (caret > 0 && /\s/.test(typed[caret - 1])) return words.length;
+  return words.length - 1;
+}
+
+// map the caret's word onto a part. Word 0 (git itself) shows the first part;
+// each part then claims `span` words (default 1); trailing words (a long commit
+// message) stay on the last part.
+function activePartIndex(): number {
+  if (activeParts.length === 0) return -1;
+  const word = caretWordIndex(cmd.value, cmd.selectionStart ?? cmd.value.length);
+  if (word <= 1) return 0;
+  let w = 1;
+  for (let pi = 0; pi < activeParts.length; pi++) {
+    const span = activeParts[pi].span ?? 1;
+    if (word >= w && word < w + span) return pi;
+    w += span;
   }
+  return activeParts.length - 1;
+}
+
+function buildPartRow(p: Part): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "part";
+  const tok = document.createElement("span");
+  tok.className = `tok tok--${p.tone}`;
+  tok.textContent = p.t;
+  const why = document.createElement("span");
+  why.className = "why";
+  why.textContent = p.why;
+  row.append(tok, why);
+  return row;
+}
+
+function renderActivePart(force = false, instant = false): void {
+  // mid step cross-fade: leave the caption alone (the step swap renders it once,
+  // instantly). Without this, the immediate updateInk() after a step advance
+  // would scroll the old step's caption back to its first part.
+  if (lessonSwapping && !force) return;
+  const idx = activePartIndex();
+  const prev = activePart;
+  if (!force && idx === prev) return;
+  activePart = idx;
+
+  // instant swap (step change) or reduced motion: no scroll
+  if (instant || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    partsEl.replaceChildren();
+    if (idx >= 0) partsEl.appendChild(buildPartRow(activeParts[idx]));
+    return;
+  }
+
+  // vertical push: the strip scrolls so the new caption replaces the old one.
+  // Advancing through the command (or a step change) scrolls up: the old line
+  // exits the top while the new one rises in from below. Moving the caret back
+  // scrolls down. The old row goes absolute so the incoming row owns the height,
+  // then removes itself once it has scrolled out.
+  const back = !force && prev >= 0 && idx < prev;
+  for (const el of Array.from(partsEl.querySelectorAll<HTMLElement>(".part:not(.part--out)"))) {
+    el.classList.remove("part--in-up", "part--in-down");
+    el.classList.add("part--out", back ? "part--out-down" : "part--out-up");
+    window.setTimeout(() => el.remove(), 380);
+  }
+  if (idx < 0) return;
+  const row = buildPartRow(activeParts[idx]);
+  row.classList.add(back ? "part--in-down" : "part--in-up");
+  partsEl.appendChild(row);
 }
 
 function showStep(i: number): void {
   const teach = i < steps.length ? steps[i].teach : END.teach;
   const lesson = goalEl.parentElement;
   if (lesson && !S.prefersReduced) {
+    lessonSwapping = true;
     lesson.style.opacity = "0";
-    setTimeout(() => { renderTeach(teach); lesson.style.opacity = ""; positionStage(false); }, 200);
+    setTimeout(() => {
+      renderTeach(teach);
+      lesson.style.opacity = "";
+      positionStage(false);
+      lessonSwapping = false;
+    }, 200);
   } else {
     renderTeach(teach);
     positionStage(false);
@@ -1017,6 +1126,7 @@ function updateInk(): void {
   ink.style.transform = `translateX(${-cmd.scrollLeft}px)`;
 
   tabhint.classList.toggle("show", suggestActive && typed.trim().length > 0);
+  renderActivePart();
 
   // live tip: flag a non-origin remote nickname the moment it diverges
   if (atoms && steps[stepIndex]?.key === "remote") {
@@ -1141,6 +1251,11 @@ cmd.addEventListener("keydown", (e) => {
   if (e.key === "Tab" && suggestActive) { e.preventDefault(); acceptNextWord(); }
   else if (e.key === "ArrowRight" && suggestActive && caretAtEnd()) { e.preventDefault(); acceptNextWord(); }
 });
+// caret moves (arrows, clicking into the line) change which part is shown.
+// Wrap so the Event object is never passed as the `force` flag.
+cmd.addEventListener("keyup", () => renderActivePart());
+cmd.addEventListener("click", () => renderActivePart());
+cmd.addEventListener("select", () => renderActivePart());
 // keep the coloured overlay aligned when a long command scrolls the input
 cmd.addEventListener("scroll", () => {
   ink.style.transform = `translateX(${-cmd.scrollLeft}px)`;
@@ -1162,8 +1277,9 @@ document.addEventListener("click", keepFocus);
 // ---- file tree (left) ----------------------------------------------
 const PROJECT = { root: "my-site", files: ["index.html", "style.css", "app.js"] };
 const EDIT_FILE = PROJECT.files[0]; // the file we "edit" on the feature branch
-type FileState = "plain" | "untracked" | "modified" | "staged" | "committed";
-const MARK: Record<FileState, string> = { plain: "", untracked: "·", modified: "M", staged: "+", committed: "✓" };
+type FileState = "plain" | "untracked" | "modified" | "staged" | "committed" | "pushed";
+// one check = saved in a local commit; two checks = delivered to the remote
+const MARK: Record<FileState, string> = { plain: "", untracked: "·", modified: "M", staged: "+", committed: "✓", pushed: "✓✓" };
 
 // step index of a step by key (so inserting steps doesn't break thresholds)
 function stepIdx(key: string): number {
@@ -1176,6 +1292,15 @@ function fileStateForStep(i: number): FileState {
   if (i <= stepIdx("commit")) return "staged";
   return "committed";
 }
+// has this committed file actually reached the remote? The first push sends
+// every file; index.html is re-committed on the branch (commit2), so it falls
+// behind the remote again until that work is pushed with the merge (push2).
+function isPushed(file: string): boolean {
+  if (stepIndex <= stepIdx("push")) return false;            // first push not done
+  if (file === EDIT_FILE && stepIndex > stepIdx("commit2") && stepIndex <= stepIdx("push2"))
+    return false;                                            // edited again, awaiting push2
+  return true;
+}
 // per-file state: index.html gets edited on the branch, so it diverges from the
 // baseline between checkout and the feature commit
 function fileState(file: string): FileState {
@@ -1183,19 +1308,24 @@ function fileState(file: string): FileState {
     if (stepIndex === stepIdx("add2")) return "modified";   // edited, not staged
     if (stepIndex === stepIdx("commit2")) return "staged";  // staged the edit
   }
-  return fileStateForStep(stepIndex);
+  const base = fileStateForStep(stepIndex);
+  if (base === "committed" && isPushed(file)) return "pushed";
+  return base;
 }
 
 let lastGitPresent = false;
 let wasEditing = false;
+let pushedBefore = new Set<string>();   // files already on the remote last render
 function renderFileTree(): void {
   const gitPresent = stepIndex > stepIdx("init");
   const editing = stepIndex === stepIdx("add2");
+  const remoteExists = stepIndex > stepIdx("remote");   // is there anywhere to push to yet?
+  const pushedNow = new Set<string>();
   treeList.replaceChildren();
 
   const root = document.createElement("li");
   root.className = "d";
-  root.append(makeName(`${PROJECT.root}/`));
+  root.append(folderIcon(), makeName(`${PROJECT.root}/`));
   treeList.appendChild(root);
 
   if (gitPresent) {
@@ -1205,39 +1335,108 @@ function renderFileTree(): void {
     const note = document.createElement("span");
     note.className = "f__note";
     note.textContent = "git lives here";
-    git.append(makeName(".git/"), note);
+    git.append(folderIcon(), makeName(".git/"), note);
     treeList.appendChild(git);
   }
 
-  for (const f of PROJECT.files) {
+  PROJECT.files.forEach((f, fi) => {
     const st = fileState(f);
     const li = document.createElement("li");
     li.className = st === "plain" ? "f is-openable" : `f f--${st} is-openable`;
     li.dataset.file = f;                          // click to open it in the editor
     if (f === EDIT_FILE && st === "modified" && !wasEditing) li.classList.add("is-edited");
-    li.append(makeName(f));
+    if (st === "pushed") pushedNow.add(f);
+    // the moment a file lands on the remote, give it a quick purple flash
+    if (st === "pushed" && !pushedBefore.has(f)) li.classList.add("is-pushed-now");
+    const name = makeName(f);
+    name.appendChild(makeUnderline(fi * 9 + 5));  // sketched hover underline
+    li.append(fileIcon(f), name);
     if (MARK[st]) {
       const m = document.createElement("span");
       m.className = "f__mark";
       m.textContent = MARK[st];
       li.appendChild(m);
     }
-    if (f === EDIT_FILE && st === "modified") {
-      const note = document.createElement("span");
-      note.className = "f__note";
-      note.textContent = "just edited";
-      li.appendChild(note);
+    // spell out the commit-vs-push distinction next to the file
+    let note = "";
+    if (f === EDIT_FILE && st === "modified") note = "just edited";
+    else if (st === "pushed") note = "pushed";
+    else if (st === "committed" && remoteExists) note = "committed, not pushed";
+    if (note) {
+      const n = document.createElement("span");
+      n.className = "f__note";
+      n.textContent = note;
+      li.appendChild(n);
     }
     treeList.appendChild(li);
-  }
+  });
   lastGitPresent = gitPresent;
   wasEditing = editing;
+  pushedBefore = pushedNow;
 }
 function makeName(text: string): HTMLElement {
   const s = document.createElement("span");
   s.className = "f__name";
   s.textContent = text;
   return s;
+}
+
+// ---- hand-drawn icons (same inked language as the board) ------------
+// Built from the sketch helpers so the wobble matches everything else. Each is
+// a 24x24 viewBox; colour comes from currentColor (set per type in CSS).
+function mkIcon(kind: string): SVGSVGElement {
+  const svg = S.el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }) as SVGSVGElement;
+  svg.setAttribute("class", `ic ic--${kind}`);
+  return svg;
+}
+function icStroke(svg: SVGSVGElement, d: string): void {
+  svg.appendChild(S.el("path", { d, class: "ic-stroke" }));
+}
+// a sheet of paper with a folded corner and a couple of text lines
+function fileIcon(file: string): SVGSVGElement {
+  const svg = mkIcon(langOf(file));   // html / css / js -> colour
+  icStroke(svg, S.smooth([[6.4, 3.6], [13.6, 3.3], [18.6, 8.2], [18.3, 20.4], [5.8, 20.6], [6.1, 3.7]], true));
+  icStroke(svg, S.smooth([[13.4, 3.6], [13.9, 8.1], [18.4, 7.9]]));   // the fold
+  icStroke(svg, S.smooth([[8.6, 12.4], [15.2, 12.0]]));               // text line
+  icStroke(svg, S.smooth([[8.5, 15.4], [14.4, 15.1]]));               // text line
+  return svg;
+}
+function folderIcon(): SVGSVGElement {
+  const svg = mkIcon("folder");
+  icStroke(svg, S.smooth([[3.4, 7.2], [8.8, 7.0], [10.7, 9.0], [20.4, 9.0], [20.6, 18.6], [3.6, 18.8], [3.3, 7.3]], true));
+  return svg;
+}
+function computerIcon(): SVGSVGElement {
+  const svg = mkIcon("computer");
+  icStroke(svg, S.smooth([[3.3, 5.4], [20.7, 4.8], [20.4, 15.2], [3.6, 15.5], [3.4, 5.5]], true));
+  icStroke(svg, S.smooth([[11.9, 15.4], [12.1, 18.4]]));   // stand
+  icStroke(svg, S.smooth([[8.4, 18.8], [15.6, 18.5]]));    // base
+  return svg;
+}
+function cloudIcon(): SVGSVGElement {
+  const svg = mkIcon("cloud");
+  icStroke(svg, S.smooth([
+    [7.5, 16.4], [5.0, 16.2], [3.5, 14.0], [4.6, 11.6], [7.0, 11.2],
+    [7.8, 8.2], [11.0, 7.2], [13.8, 8.4], [14.8, 10.8],
+    [17.6, 10.6], [19.2, 13.0], [18.0, 16.0], [14.5, 16.4], [7.5, 16.4],
+  ], true));
+  return svg;
+}
+// a sketched underline that draws on left->right (hover) and erases
+// right->left (unhover). The reveal is a CSS clip-path inset, not a dash trick:
+// because the line is stretched to the name's width (preserveAspectRatio=none)
+// with a non-scaling stroke, dash lengths land in screen pixels and stop
+// matching the line — clipping is purely geometric, so it works at any text size.
+function makeUnderline(seed: number): SVGSVGElement {
+  const svg = S.el("svg", {
+    class: "f__underline", viewBox: "0 0 100 8",
+    preserveAspectRatio: "none", "aria-hidden": "true",
+  }) as SVGSVGElement;
+  svg.appendChild(S.el("path", {
+    d: S.linePath(3, 5, 97, 5, seed, 1.1),
+    class: "f__underline-stroke", "stroke-width": 1.8,
+  }));
+  return svg;
 }
 
 // ---- the make-believe file editor ----------------------------------
@@ -1307,9 +1506,74 @@ function fileLines(file: string, side: "local" | "remote"): { lines: string[]; c
   return { lines: FILE_TEXT[file] ?? ["(empty)"], changed: [] };
 }
 
+// ---- tiny syntax highlighter (per language) ------------------------
+// A small ordered-rule tokenizer: at each position the first sticky rule that
+// matches wins and its text is wrapped in a coloured span; anything no rule
+// claims is emitted as plain (escaped) text. Enough for the short snippets here.
+type Lang = "html" | "css" | "js";
+interface SxRule { re: RegExp; cls: string; }
+const sxWrap = (cls: string, s: string): string => `<span class="sx-${cls}">${esc(s)}</span>`;
+
+const HTML_RULES: SxRule[] = [
+  { re: /<!--[\s\S]*?-->/y, cls: "comment" },
+  { re: /<!?\/?[\w-]+/y, cls: "tag" },       // <tag  </tag  <!DOCTYPE
+  { re: /\/?>/y, cls: "punct" },             // >  or  />
+  { re: /"[^"]*"|'[^']*'/y, cls: "str" },
+  { re: /[\w-]+(?==)/y, cls: "attr" },       // attribute name before =
+  { re: /=/y, cls: "punct" },
+];
+const CSS_RULES: SxRule[] = [
+  { re: /\/\*[\s\S]*?\*\//y, cls: "comment" },
+  { re: /"[^"]*"|'[^']*'/y, cls: "str" },
+  { re: /#[0-9a-fA-F]{3,8}\b/y, cls: "num" },
+  { re: /\b\d+(?:px|rem|em|%|vh|vw|s|ms)?\b/y, cls: "num" },
+  { re: /[.#][\w-]+/y, cls: "tag" },         // .class / #id selectors
+  { re: /[\w-]+(?=\s*:)/y, cls: "attr" },    // property before the colon
+  { re: /[{}();:,]/y, cls: "punct" },
+  { re: /[A-Za-z][\w-]*/y, cls: "val" },     // keywords / element selectors / values
+];
+const JS_RULES: SxRule[] = [
+  { re: /\/\/.*/y, cls: "comment" },
+  { re: /"[^"]*"|'[^']*'|`[^`]*`/y, cls: "str" },
+  { re: /\b(?:const|let|var|function|return|if|else|for|while|new|import|export|from|class)\b/y, cls: "kw" },
+  { re: /=>/y, cls: "kw" },
+  { re: /\b(?:document|window|console|alert|querySelector|addEventListener)\b/y, cls: "fn" },
+  { re: /\b\d+\b/y, cls: "num" },
+  { re: /[A-Za-z_$][\w$]*/y, cls: "val" },
+];
+const RULES: Record<Lang, SxRule[]> = { html: HTML_RULES, css: CSS_RULES, js: JS_RULES };
+
+function highlight(line: string, lang: Lang): string {
+  const rules = RULES[lang];
+  let out = "", i = 0;
+  while (i < line.length) {
+    let matched = false;
+    for (const r of rules) {
+      r.re.lastIndex = i;
+      const m = r.re.exec(line);
+      if (m && m.index === i && m[0].length > 0) {
+        out += sxWrap(r.cls, m[0]);
+        i += m[0].length;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) { out += esc(line[i]); i++; }
+  }
+  return out;
+}
+function langOf(file: string): Lang {
+  if (file.endsWith(".css")) return "css";
+  if (file.endsWith(".js")) return "js";
+  return "html";
+}
+// the language the editor is currently showing (drives highlighting)
+let editorLang: Lang = "html";
+
 interface LineOpts { changed?: number[]; caret?: number; }
-// render the file as `lines`. `changed` line indices are coloured as local
-// changes; `caret` parks a blinking caret on the line being typed (-1 = none).
+// render the file as `lines`, syntax-highlighted for `editorLang`. `changed`
+// line indices read as a local change; `caret` parks a blinking caret on the
+// line being typed (-1 = none).
 function renderEditorLines(lines: string[], opts: LineOpts = {}): void {
   const changed = new Set(opts.changed ?? []);
   const caret = opts.caret ?? -1;
@@ -1324,7 +1588,7 @@ function renderEditorLines(lines: string[], opts: LineOpts = {}): void {
     num.textContent = String(i + 1);
     const txt = document.createElement("span");
     txt.className = "editor__txt";
-    txt.textContent = line;
+    txt.innerHTML = highlight(line, editorLang);
     row.append(num, txt);
     if (i === caret) {
       const c = document.createElement("span");
@@ -1386,6 +1650,7 @@ function openFileViewer(file: string, side: "local" | "remote", row: HTMLElement
   const gen = ++editSeqGen;                      // cancel the auto-edit or a prior view
   viewerFile = file;
   viewerSide = side;
+  editorLang = langOf(file);
   const { lines, changed } = fileLines(file, side);
   editorName.textContent = file;
   editorUnsaved.style.opacity = "0";             // viewing, nothing unsaved
@@ -1435,6 +1700,7 @@ async function playEditSequence(): Promise<void> {
 
   // prime: render the file, park the editor tucked into the index.html row
   const lines = EDIT_LINES.slice();
+  editorLang = "html";
   editorName.textContent = EDIT_FILE;
   editorUnsaved.style.opacity = "0";
   editorSave.classList.remove("show");
@@ -1528,7 +1794,7 @@ function renderRemoteTree(): void {
 
   const root = document.createElement("li");
   root.className = "d";
-  root.append(makeName(`${PROJECT.root}/`));
+  root.append(folderIcon(), makeName(`${PROJECT.root}/`));
   remoteList.appendChild(root);
 
   const git = document.createElement("li");
@@ -1537,22 +1803,24 @@ function renderRemoteTree(): void {
   const note = document.createElement("span");
   note.className = "f__note";
   note.textContent = "the remote repo";
-  git.append(makeName(".git/"), note);
+  git.append(folderIcon(), makeName(".git/"), note);
   remoteList.appendChild(git);
 
   if (pushed) {
-    for (const f of PROJECT.files) {
+    PROJECT.files.forEach((f, fi) => {
       const li = document.createElement("li");
       li.className = "f f--committed is-openable";
       li.dataset.file = f;                        // remote files open too
       if (!lastRemotePushed) li.classList.add("is-new");
-      li.append(makeName(f));
+      const name = makeName(f);
+      name.appendChild(makeUnderline(fi * 9 + 31));
+      li.append(fileIcon(f), name);
       const m = document.createElement("span");
       m.className = "f__mark";
       m.textContent = MARK.committed;
       li.appendChild(m);
       remoteList.appendChild(li);
-    }
+    });
   } else {
     const empty = document.createElement("li");
     empty.className = "remote-empty";
@@ -1675,11 +1943,16 @@ function renderRemoteGraph(allowAnim = true): void {
   shownRemoteIds.clear(); trunk.forEach((nn) => shownRemoteIds.add(nn.id));
 }
 
-// once a remote exists the local tree shares the stage; before that it leads
+// the trees stay large (is-focus) for now — they never pair off / shrink yet.
+// Flip `paired` back to a step threshold once we decide where the shrink belongs.
 function updateLayout(): void {
-  const paired = stepIndex > stepIdx("remote");
+  const paired = false;
   treeEl.classList.toggle("is-focus", !paired);
   treeEl.classList.toggle("is-paired", paired);
+  // the remote tree mirrors the local one: large while it first appears, then
+  // it shrinks into its side slot in step with the local tree
+  remoteTreeEl.classList.toggle("is-focus", !paired);
+  remoteTreeEl.classList.toggle("is-paired", paired);
 }
 
 // ---- timeline (bottom, clickable) ----------------------------------
@@ -1865,6 +2138,10 @@ function boot(): void {
   // No file editor exists yet, so the local tree leads (is-focus) until a remote
   // appears. When the editor lands, the compact corner state takes over instead.
   updateLayout();
+  // sketched icons on the two tree headings: a computer for the local copy, a
+  // cloud for the remote
+  needSel<HTMLElement>("#filetree .tree__title").prepend(computerIcon());
+  needSel<HTMLElement>("#remotetree .tree__title").prepend(cloudIcon());
   wireFileViewer();   // click any file in either tree to open it
   if (!isPhone) cmd.focus();
 }
