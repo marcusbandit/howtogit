@@ -347,18 +347,24 @@ type Tone = "cmd" | "flag" | "val";
 interface Part { t: string; tone: Tone; why: string; }
 interface Teach { goal: string; why: string; parts: Part[]; }
 
-// a command is a template of tokens: fixed words (lit) and free slots the user
-// fills in (a nickname, a url, a message). This drives the adaptive ghost,
-// per-word Tab completion, and per-slot validation.
-type Slot = { kind: "slot"; example: string | (() => string); ghost: string; tone: Tone; rest?: boolean };
-type Token = { kind: "lit"; text: string; tone: Tone } | Slot;
-
-const lit = (text: string, tone: Tone = "cmd"): Token => ({ kind: "lit", text, tone });
-const slotExample = (t: Slot): string => (typeof t.example === "function" ? t.example() : t.example);
+// a command is a sequence of atoms. Fixed atoms are typed verbatim; free atoms
+// are user values with a soft suggestion (a nickname, a username, a message).
+// `sep` is what precedes the atom: " " by default, "" keeps it joined to the
+// previous atom, so a url can be several atoms inside one word.
+interface Atom {
+  text: string | (() => string);
+  tone: Tone;
+  sep?: string;
+  free?: boolean;   // user value; soft-suggests `text` while it still matches
+  rest?: boolean;   // consumes the remainder (a quoted message)
+}
+const atomText = (a: Atom): string => (typeof a.text === "function" ? a.text() : a.text);
+const atomSep = (atoms: Atom[], i: number): string => atoms[i].sep ?? (i === 0 ? "" : " ");
+const A = (text: string | (() => string), tone: Tone, opts: Partial<Atom> = {}): Atom => ({ text, tone, ...opts });
 
 interface Step {
-  key: string;                       // short label for the timeline
-  template: Token[];                 // the command, token by token
+  key: string;
+  atoms: Atom[];
   test: (s: string) => boolean;
   hint: string;
   teach: Teach;
@@ -368,7 +374,13 @@ interface Step {
 
 // what a fully-typed command looks like (for replay + width sizing)
 function canonical(step: Step): string {
-  return step.template.map((t) => (t.kind === "lit" ? t.text : slotExample(t))).join(" ");
+  return step.atoms.map((a, i) => atomSep(step.atoms, i) + atomText(a)).join("");
+}
+// one colour per whitespace-separated word (joined atoms share their first tone)
+function tokenTones(atoms: Atom[]): Tone[] {
+  const tones: Tone[] = [];
+  atoms.forEach((a, i) => { if (i === 0 || atomSep(atoms, i) === " ") tones.push(a.tone); });
+  return tones;
 }
 
 const isUrl = (s: string): boolean =>
@@ -378,7 +390,7 @@ let stepIndex = 0;
 const steps: Step[] = [
   {
     key: "init",
-    template: [lit("git"), lit("init")],
+    atoms: [A("git", "cmd", { sep: "" }), A("init", "cmd")],
     test: (s) => /^git\s+init$/i.test(s),
     hint: "Type  git init  to begin.",
     teach: {
@@ -392,7 +404,7 @@ const steps: Step[] = [
   },
   {
     key: "add",
-    template: [lit("git"), lit("add"), { kind: "slot", example: ".", ghost: ".", tone: "val" }],
+    atoms: [A("git", "cmd", { sep: "" }), A("add", "cmd"), A(".", "val", { free: true })],
     test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
     hint: "Stage everything with  git add .  (or  git add -A )",
     teach: {
@@ -407,9 +419,9 @@ const steps: Step[] = [
   },
   {
     key: "commit",
-    template: [
-      lit("git"), lit("commit"), lit("-m", "flag"),
-      { kind: "slot", example: '"first commit"', ghost: '"a short message"', tone: "val", rest: true },
+    atoms: [
+      A("git", "cmd", { sep: "" }), A("commit", "cmd"), A("-m", "flag"),
+      A('"first commit"', "val", { rest: true }),
     ],
     test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
     extract: (s) => {
@@ -429,34 +441,34 @@ const steps: Step[] = [
   },
   {
     key: "remote",
-    template: [
-      lit("git"), lit("remote"), lit("add"),
-      { kind: "slot", example: "origin", ghost: "origin", tone: "val" },
-      { kind: "slot", example: "https://github.com/you/site.git", ghost: "<url>", tone: "flag" },
+    atoms: [
+      A("git", "cmd", { sep: "" }), A("remote", "cmd"), A("add", "cmd"),
+      A("origin", "val", { free: true }),
+      A("https://", "flag"), A("github.com/", "flag", { sep: "" }),
+      A("user", "flag", { sep: "", free: true }), A("/my-site.git", "flag", { sep: "" }),
     ],
     test: (s) => {
       const m = s.match(/^git\s+remote\s+add\s+(\S+)\s+(\S+)$/i);
       return !!m && isUrl(m[2]);
     },
     extract: (s) => s,
-    hint: "The last part must be a url, e.g.  https://github.com/you/site.git",
+    hint: "The last part must be a url, e.g.  https://github.com/user/my-site.git",
     teach: {
       goal: "Connect a remote",
       why: "Optional, but it backs up your work and makes collaborating possible. Git works fine with no remote at all.",
       parts: [
         { t: "remote add", tone: "cmd", why: "save a link to a copy of your repo kept elsewhere" },
-        { t: "origin", tone: "val", why: "a short nickname for that copy's address, so you never retype the url" },
-        { t: "<url>", tone: "flag", why: "the address where the remote copy lives, usually in the cloud (here, on GitHub)" },
+        { t: "origin", tone: "val", why: "the nickname we give the url, so you can type it instead of the full address next time" },
+        { t: "the url", tone: "flag", why: "the address where the remote copy lives, usually in the cloud" },
       ],
     },
     run: doRemoteAdd,
   },
   {
     key: "push",
-    template: [
-      lit("git"), lit("push"), lit("-u", "flag"),
-      { kind: "slot", example: () => remoteName, ghost: "origin", tone: "val" },
-      lit("main", "val"),
+    atoms: [
+      A("git", "cmd", { sep: "" }), A("push", "cmd"), A("-u", "flag"),
+      A(() => remoteName, "val", { free: true }), A("main", "val"),
     ],
     test: (s) => /^git\s+push(\s+-u\s+\S+\s+main)?$/i.test(s),
     hint: "Send your commits:  git push -u origin main",
@@ -482,8 +494,8 @@ const END = {
   tease: "That's the whole first loop. More git is on the way ✦",
 };
 
-function currentTemplate(): Token[] | null {
-  return stepIndex < steps.length ? steps[stepIndex].template : null;
+function currentAtoms(): Atom[] | null {
+  return stepIndex < steps.length ? steps[stepIndex].atoms : null;
 }
 
 function renderTeach(teach: Teach): void {
@@ -522,18 +534,8 @@ function esc(s: string): string {
 }
 let suggestActive = false;
 
-// split typed text into the in-progress token index and the partial word there
-function parseTyped(typed: string): { toks: string[]; idx: number; inProg: string } {
-  const endsWithSpace = /\s$/.test(typed);
-  const trimmed = typed.replace(/\s+$/, "");
-  const toks = trimmed === "" ? [] : trimmed.split(/\s+/);
-  const idx = endsWithSpace ? toks.length : Math.max(0, toks.length - 1);
-  const inProg = endsWithSpace ? "" : (toks[toks.length - 1] ?? "");
-  return { toks, idx, inProg };
-}
-
-// colour each typed token to match its part chip, by template token tone
-function colorize(typed: string, template: Token[]): string {
+// colour each whitespace word to match its part chip
+function colorize(typed: string, tones: Tone[]): string {
   let html = "";
   let ti = 0;
   for (const part of typed.split(/(\s+)/)) {
@@ -541,40 +543,73 @@ function colorize(typed: string, template: Token[]): string {
     if (/^\s+$/.test(part)) { html += esc(part); continue; }
     let cls: string;
     if (ti === 0) cls = "git".startsWith(part.toLowerCase()) ? "hl-cmd" : "hl-rest";
-    else cls = `hl-${(template[Math.min(ti, template.length - 1)]?.tone) ?? "rest"}`;
+    else cls = `hl-${tones[Math.min(ti, tones.length - 1)] ?? "rest"}`;
     html += `<span class="${cls}">${esc(part)}</span>`;
     ti++;
   }
   return html;
 }
 
-// the adaptive ghost: keep what the user typed in free slots, suggest the rest
-function suggestionGhost(typed: string, template: Token[]): string {
-  const { idx, inProg } = parseTyped(typed);
-  if (idx >= template.length) return "";
-  const cur = template[idx];
-  let ghost = "";
-  if (cur.kind === "lit") {
-    if (!cur.text.toLowerCase().startsWith(inProg.toLowerCase())) return "";
-    ghost += cur.text.slice(inProg.length);
-  } else if (inProg === "") {
-    ghost += cur.ghost;                 // empty slot: hint with its placeholder
+// the suggestion for atoms[start..], fully unfilled, with their separators
+function suggestFrom(atoms: Atom[], start: number, includeFirstSep: boolean): string {
+  let g = "";
+  for (let j = start; j < atoms.length; j++) {
+    const sep = j === start && !includeFirstSep ? "" : atomSep(atoms, j);
+    g += sep + atomText(atoms[j]);
   }
-  if (cur.kind === "slot" && cur.rest) return ghost;
-  for (let j = idx + 1; j < template.length; j++) {
-    const t = template[j];
-    ghost += " " + (t.kind === "lit" ? t.text : t.ghost);
+  return g;
+}
+
+// walk the typed text against the atoms. `ghost` is everything still to type;
+// `chunk` is just the next atom (what one Tab fills). Free atoms soft-suggest
+// their text while it still matches, then yield to the following atoms.
+function match(typed: string, atoms: Atom[]): { ghost: string; chunk: string } {
+  let pos = 0;
+  for (let a = 0; a < atoms.length; a++) {
+    const sep = atomSep(atoms, a);
+    if (sep) {
+      if (typed.startsWith(sep, pos)) pos += sep.length;
+      else if (pos >= typed.length) return { ghost: suggestFrom(atoms, a, true), chunk: sep + atomText(atoms[a]) };
+      else return { ghost: "", chunk: "" };
+    }
+    const text = atomText(atoms[a]);
+    const rem = typed.slice(pos);
+    if (atoms[a].rest) {
+      return rem.length === 0 ? { ghost: text, chunk: text } : { ghost: "", chunk: "" };
+    }
+    if (rem.length === 0) return { ghost: suggestFrom(atoms, a, false), chunk: text };
+    if (atoms[a].free) {
+      const next = atoms[a + 1];
+      const stop = next ? (atomSep(atoms, a + 1) || atomText(next)[0] || " ") : " ";
+      const stopIdx = rem.indexOf(stop);
+      if (stopIdx === -1) {
+        pos = typed.length;
+        if (text.toLowerCase().startsWith(rem.toLowerCase())) {
+          return { ghost: text.slice(rem.length) + suggestFrom(atoms, a + 1, true), chunk: text.slice(rem.length) };
+        }
+        return {
+          ghost: suggestFrom(atoms, a + 1, true),
+          chunk: next ? atomSep(atoms, a + 1) + atomText(next) : "",
+        };
+      }
+      pos += stopIdx;
+      continue;
+    }
+    if (text.startsWith(rem)) return { ghost: text.slice(rem.length) + suggestFrom(atoms, a + 1, true), chunk: text.slice(rem.length) };
+    if (rem.startsWith(text)) { pos += text.length; continue; }
+    return { ghost: "", chunk: "" };
   }
-  return ghost;
+  return { ghost: "", chunk: "" };
 }
 
 function updateInk(): void {
   const typed = cmd.value;
-  const template = currentTemplate();
-  const ghost = template ? suggestionGhost(typed, template) : "";
+  const atoms = currentAtoms();
+  const ghost = atoms ? match(typed, atoms).ghost : "";
   suggestActive = ghost.length > 0;
 
-  let html = template ? colorize(typed, template) : esc(typed);
+  const tones: Tone[] = atoms ? tokenTones(atoms) : ["cmd"];
+  let html = colorize(typed, tones);
   if (suggestActive) html += `<span class="hl-ghost">${esc(ghost)}</span>`;
   ink.innerHTML = html;
 
@@ -586,11 +621,11 @@ function updateInk(): void {
 
   tabhint.classList.toggle("show", suggestActive && typed.trim().length > 0);
 
-  // live tip: gently flag a non-origin remote nickname as it's typed
-  if (template && steps[stepIndex]?.key === "remote") {
-    const name = parseTyped(typed).toks[3];
+  // live tip: flag a non-origin remote nickname the moment it diverges
+  if (atoms && steps[stepIndex]?.key === "remote") {
+    const name = typed.trim().split(/\s+/)[3];
     if (name && !"origin".startsWith(name.toLowerCase())) {
-      showInfo('heads up: most tools expect this to be "origin"');
+      showInfo("origin is the standard name. most tools expect it.");
     } else {
       clearNudge();
     }
@@ -610,27 +645,13 @@ function syncCliRule(): void {
   }));
 }
 
-// Tab completes only the next word: finish the current fixed word, or drop in
-// the next token's value (a slot's example, or the next fixed word)
+// Tab completes only the next atom (one word, or one url segment)
 function acceptNextWord(): void {
-  const template = currentTemplate();
-  if (!template) return;
-  const { toks, idx, inProg } = parseTyped(cmd.value);
-  if (idx >= template.length) return;
-  const cur = template[idx];
-
-  let newVal: string;
-  if (cur.kind === "lit" && cur.text.toLowerCase().startsWith(inProg.toLowerCase()) && inProg.length < cur.text.length) {
-    const base = toks.slice(0, idx).join(" ");
-    newVal = (base ? base + " " : "") + cur.text;
-  } else {
-    const fillIdx = inProg === "" ? idx : idx + 1;
-    if (fillIdx >= template.length) return;
-    const t = template[fillIdx];
-    const fill = t.kind === "lit" ? t.text : slotExample(t);
-    const base = toks.join(" ");
-    newVal = (base ? base + " " : "") + fill;
-  }
+  const atoms = currentAtoms();
+  if (!atoms) return;
+  const { chunk } = match(cmd.value, atoms);
+  if (!chunk) return;
+  const newVal = cmd.value + chunk;
   cmd.value = newVal;
   cmd.setSelectionRange(newVal.length, newVal.length);
   updateInk();

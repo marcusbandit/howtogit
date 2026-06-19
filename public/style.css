@@ -256,7 +256,12 @@ body {
   text-align: center;
 }
 .nudge.show { opacity: 0.92; }
-.nudge.info { color: var(--ink-soft); }
+/* the origin heads-up: a real note, not a faint whisper */
+.nudge.info {
+  color: #b07d2b;
+  font-size: 1.7rem;
+  opacity: 1;
+}
 
 /* a gentle "nope" nudge when the command isn't right yet */
 .shake { animation: shake 0.4s ease; }
