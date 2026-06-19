@@ -501,7 +501,14 @@ body {
 .tl-item.is-done, .tl-substep.is-done { color: var(--ink); }
 .tl-item.is-done .tl-dot,
 .tl-substep.is-done .tl-dot { border-color: var(--pen-blue); background: var(--pen-blue); }
-.tl-item.is-current .tl-dot,
+/* a milestone you're working through reads as "in progress": solid red. Its
+   sub-steps still pick out the exact current command with a hollow red ring.
+   When all its commands are done the milestone flips to the solid blue done. */
+.tl-item.is-current .tl-dot {
+  border-color: var(--pen-red);
+  background: var(--pen-red);
+  box-shadow: 0 0 0 3px rgba(192, 73, 47, 0.2);
+}
 .tl-substep.is-current .tl-dot {
   border-color: var(--pen-red);
   background: var(--paper);
