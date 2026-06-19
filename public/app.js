@@ -350,6 +350,9 @@ function drawRefs() {
         if (model.headBranch === name) {
             wanted.add("HEAD");
             const hp = ensurePill("HEAD", "HEAD", COLORS.ink, 3);
+            // HEAD's ink colour is theme-driven in CSS (.pill--head) so it lightens
+            // in dark mode instead of staying near-black; classList.add is idempotent.
+            hp.g.classList.add("pill--head");
             placePill(hp.g, refPosition(a.x, a.y, 1), hp.isNew);
         }
     }

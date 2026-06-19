@@ -214,6 +214,10 @@ body {
   font-size: 21px;
 }
 .tag-box { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+/* HEAD reads as "ink": follow the themed --ink so it lightens in dark mode
+   instead of staying near-black on dark paper. Overrides the baked attrs. */
+.pill--head .tag-box { stroke: var(--ink); }
+.pill--head .tag { fill: var(--ink); }
 /* ref pills (HEAD / branch names) glide to follow commits instead of fading */
 .ref-pill { transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease; }
 .commit-msg {
@@ -389,6 +393,11 @@ body {
   height: 0.6rem;
   overflow: visible;
 }
+/* the under-line of the command field follows themed --ink (same colour as the
+   lesson goal headers) instead of a baked near-black, so it stays bright in dark
+   mode; thicken it a touch there so it reads like a confident marker stroke. */
+.cli__rule path { stroke: var(--ink); }
+:root[data-theme="dark"] .cli__rule path { stroke-width: 2.8; }
 /* contextual hint, absolutely placed so it never shifts the centred input */
 .cli__tab {
   position: absolute;
