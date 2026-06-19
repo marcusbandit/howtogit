@@ -266,7 +266,9 @@ function refPosition(node: CommitNode, level: number): Pt {
   return { x: node.x, y: node.y - node.r - 36 - level * 36 };
 }
 function placePill(g: SVGGElement, p: Pt, animateNew: boolean): void {
-  if (animateNew && !S.prefersReduced) {
+  // during instant replay (timeline seek) never schedule a deferred rAF: it
+  // would fire after the seek finished and snap the pill back to a stale spot
+  if (animateNew && !S.prefersReduced && !instant) {
     g.style.opacity = "0";
     g.style.transform = `translate(${p.x}px, ${p.y + 8}px) scale(0.9)`;
     requestAnimationFrame(() => {
@@ -300,6 +302,9 @@ function drawRefs(): void {
       d: S.linePath(node.x, node.y - node.r - 2, node.x, node.y - node.r - 22, 5, 0.6),
       class: "edge-stroke", stroke: COLORS.inkSoft, "stroke-width": 1.4,
     }));
+    // the branch HEAD is on sits at the top of the stack (right under HEAD), so
+    // checking out a different branch visibly swaps the pills
+    names.sort((a, b) => (a === model.headBranch ? 1 : 0) - (b === model.headBranch ? 1 : 0));
     let level = 0;
     for (const name of names) {
       wanted.add(name);
@@ -475,6 +480,14 @@ const atomText = (a: Atom): string => (typeof a.text === "function" ? a.text() :
 const atomSep = (atoms: Atom[], i: number): string => atoms[i].sep ?? (i === 0 ? "" : " ");
 const A = (text: string | (() => string), tone: Tone, opts: Partial<Atom> = {}): Atom => ({ text, tone, ...opts });
 
+// a quoted message is three atoms: opening quote, the free text, closing quote,
+// so typing the quote doesn't look like a wrong word and the text can have spaces
+const msgAtoms = (suggest: string): Atom[] => [
+  A('"', "val"),
+  A(suggest, "val", { sep: "", free: true }),
+  A('"', "val", { sep: "" }),
+];
+
 interface Step {
   key: string;
   atoms: Atom[];
@@ -527,7 +540,7 @@ const steps: Step[] = [
     key: "commit",
     atoms: [
       A("git", "cmd", { sep: "" }), A("commit", "cmd"), A("-m", "flag"),
-      A('"first commit"', "val", { rest: true }),
+      ...msgAtoms("first commit"),
     ],
     test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
     extract: (s) => {
@@ -569,7 +582,7 @@ const steps: Step[] = [
     hint: "Switch to it:  git checkout feature",
     teach: {
       goal: "Switch to the branch",
-      why: "Move onto the branch so your next commits land there, not on main.",
+      why: "Move onto the branch. A branch only becomes its own line of history once you make a commit on it.",
       parts: [
         { t: "checkout", tone: "cmd", why: "move HEAD onto another branch" },
         { t: "feature", tone: "val", why: "the branch to switch to" },
@@ -578,10 +591,25 @@ const steps: Step[] = [
     run: doCheckout,
   },
   {
+    key: "add2",
+    atoms: [A("git", "cmd", { sep: "" }), A("add", "cmd"), A(".", "val", { free: true })],
+    test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
+    hint: "Stage your change with  git add .",
+    teach: {
+      goal: "Stage your change",
+      why: "You edited index.html on the feature branch. Stage it so it goes in the next commit.",
+      parts: [
+        { t: "add", tone: "cmd", why: "stage the change you just made" },
+        { t: ".  /  -A", tone: "val", why: "the . means everything you changed" },
+      ],
+    },
+    run: doAdd,
+  },
+  {
     key: "commit2",
     atoms: [
       A("git", "cmd", { sep: "" }), A("commit", "cmd"), A("-m", "flag"),
-      A('"add feature"', "val", { rest: true }),
+      ...msgAtoms("add feature"),
     ],
     test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
     extract: (s) => {
@@ -591,9 +619,9 @@ const steps: Step[] = [
     hint: 'Commit on the branch:  git commit -m "add feature"',
     teach: {
       goal: "Commit on the branch",
-      why: "This snapshot lands on feature and branches away from main.",
+      why: "Now feature splits off from main with its own commit.",
       parts: [
-        { t: "commit", tone: "cmd", why: "save a snapshot on the current branch" },
+        { t: "commit", tone: "cmd", why: "save the snapshot on feature" },
         { t: "-m", tone: "flag", why: "attach a short message" },
       ],
     },
@@ -735,8 +763,15 @@ function analyze(typed: string, atoms: Atom[]): { html: string; ghost: string; c
       if (stopIdx === -1) {
         html += span(atoms[a].tone, rem);
         pos = typed.length;
-        if (text.toLowerCase().startsWith(rem.toLowerCase())) { ghost = text.slice(rem.length) + suggestFrom(atoms, a + 1, true); setChunk(text.slice(rem.length)); }
-        else { ghost = suggestFrom(atoms, a + 1, true); setChunk(next ? atomSep(atoms, a + 1) + atomText(next) : ""); }
+        if (rem.length < text.length && text.toLowerCase().startsWith(rem.toLowerCase())) {
+          // still completing this slot's suggestion
+          ghost = text.slice(rem.length) + suggestFrom(atoms, a + 1, true);
+          setChunk(text.slice(rem.length));
+        } else {
+          // fully matched the suggestion, or a custom value: Tab moves to next atom
+          ghost = suggestFrom(atoms, a + 1, true);
+          setChunk(next ? atomSep(atoms, a + 1) + atomText(next) : "");
+        }
         return { html, ghost, chunk, invalid };
       }
       html += span(atoms[a].tone, rem.slice(0, stopIdx));
@@ -897,25 +932,36 @@ document.addEventListener("click", keepFocus);
 
 // ---- file tree (left) ----------------------------------------------
 const PROJECT = { root: "my-site", files: ["index.html", "style.css", "app.js"] };
-type FileState = "plain" | "untracked" | "staged" | "committed";
-const MARK: Record<FileState, string> = { plain: "", untracked: "·", staged: "+", committed: "✓" };
+const EDIT_FILE = PROJECT.files[0]; // the file we "edit" on the feature branch
+type FileState = "plain" | "untracked" | "modified" | "staged" | "committed";
+const MARK: Record<FileState, string> = { plain: "", untracked: "·", modified: "M", staged: "+", committed: "✓" };
 
 // step index of a step by key (so inserting steps doesn't break thresholds)
 function stepIdx(key: string): number {
   return steps.findIndex((s) => s.key === key);
 }
-// stepIndex is the next step to do; map it to what's on disk
+// the baseline disk state for the project (stepIndex is the next step to do)
 function fileStateForStep(i: number): FileState {
   if (i <= stepIdx("init")) return "plain";
   if (i <= stepIdx("add")) return "untracked";
   if (i <= stepIdx("commit")) return "staged";
   return "committed";
 }
+// per-file state: index.html gets edited on the branch, so it diverges from the
+// baseline between checkout and the feature commit
+function fileState(file: string): FileState {
+  if (file === EDIT_FILE) {
+    if (stepIndex === stepIdx("add2")) return "modified";   // edited, not staged
+    if (stepIndex === stepIdx("commit2")) return "staged";  // staged the edit
+  }
+  return fileStateForStep(stepIndex);
+}
 
 let lastGitPresent = false;
+let wasEditing = false;
 function renderFileTree(): void {
-  const state = fileStateForStep(stepIndex);
   const gitPresent = stepIndex > stepIdx("init");
+  const editing = stepIndex === stepIdx("add2");
   treeList.replaceChildren();
 
   const root = document.createElement("li");
@@ -935,18 +981,27 @@ function renderFileTree(): void {
   }
 
   for (const f of PROJECT.files) {
+    const st = fileState(f);
     const li = document.createElement("li");
-    li.className = state === "plain" ? "f" : `f f--${state}`;
+    li.className = st === "plain" ? "f" : `f f--${st}`;
+    if (f === EDIT_FILE && st === "modified" && !wasEditing) li.classList.add("is-edited");
     li.append(makeName(f));
-    if (MARK[state]) {
+    if (MARK[st]) {
       const m = document.createElement("span");
       m.className = "f__mark";
-      m.textContent = MARK[state];
+      m.textContent = MARK[st];
       li.appendChild(m);
+    }
+    if (f === EDIT_FILE && st === "modified") {
+      const note = document.createElement("span");
+      note.className = "f__note";
+      note.textContent = "just edited";
+      li.appendChild(note);
     }
     treeList.appendChild(li);
   }
   lastGitPresent = gitPresent;
+  wasEditing = editing;
 }
 function makeName(text: string): HTMLElement {
   const s = document.createElement("span");

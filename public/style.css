@@ -382,10 +382,23 @@ body {
 .f__mark { font-weight: 700; font-size: 1em; }
 .f--untracked .f__name { color: var(--ink-soft); }
 .f--untracked .f__mark { color: var(--ink-soft); }
+.f--modified  .f__name { color: #b07d2b; }
+.f--modified  .f__mark { color: #b07d2b; }
+.f--modified  .f__note {
+  font-family: var(--ui); font-size: 0.78rem; font-style: italic;
+  color: #b07d2b; opacity: 0.85;
+}
 .f--staged    .f__name { color: var(--pen-green); }
 .f--staged    .f__mark { color: var(--pen-green); }
 .f--committed .f__name { color: var(--ink); }
 .f--committed .f__mark { color: var(--pen-blue); }
+/* a file just edited: a quick warm highlight so the change is noticed */
+.tree__list li.is-edited { animation: edit-pulse 0.9s ease both; border-radius: 6px; }
+@keyframes edit-pulse {
+  0%   { background: rgba(176, 125, 43, 0); }
+  25%  { background: rgba(176, 125, 43, 0.22); }
+  100% { background: rgba(176, 125, 43, 0); }
+}
 .d--git { opacity: 0.72; }
 .d--git .f__name { color: var(--pen-red); font-style: italic; }
 .d--git .f__note {
@@ -460,5 +473,5 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   #stage, .lesson { transition: none; }
-  .shake, .tree__list li.is-new { animation: none; }
+  .shake, .tree__list li.is-new, .tree__list li.is-edited { animation: none; }
 }
