@@ -262,8 +262,19 @@ function makePill(text: string, color: string, seed: number): SVGGElement {
 const refPills = new Map<string, SVGGElement>();
 let refTicks: SVGGElement | null = null;
 
-function refPosition(node: CommitNode, level: number): Pt {
-  return { x: node.x, y: node.y - node.r - 36 - level * 36 };
+function refPosition(cx: number, cy: number, level: number): Pt {
+  return { x: cx, y: cy - NODE_R - 36 - level * 36 };
+}
+function ensurePill(key: string, label: string, color: string, seed: number): { g: SVGGElement; isNew: boolean } {
+  let g = refPills.get(key);
+  const isNew = !g;
+  if (!g) {
+    g = makePill(label, color, seed);
+    g.classList.add("ref-pill");
+    gLabels.appendChild(g);
+    refPills.set(key, g);
+  }
+  return { g, isNew };
 }
 function placePill(g: SVGGElement, p: Pt, animateNew: boolean): void {
   // during instant replay (timeline seek) never schedule a deferred rAF: it
@@ -281,45 +292,52 @@ function placePill(g: SVGGElement, p: Pt, animateNew: boolean): void {
   }
 }
 
-function drawRefs(): void {
-  // group branch names by the node they point at, so they stack
-  const atNode = new Map<number, string[]>();
-  for (const [name, b] of Object.entries(model.branches)) {
-    if (b.tip == null) continue;
-    (atNode.get(b.tip) ?? atNode.set(b.tip, []).get(b.tip))!.push(name);
-  }
+// is this branch still pointing at a commit on someone else's lane (i.e. it has
+// no commit of its own yet)? Then we "project" it onto its own lane.
+function isProjected(b: Branch): boolean {
+  const tip = nodeById(b.tip);
+  return !!tip && tip.lane !== b.lane;
+}
+function branchAnchor(b: Branch): Pt | null {
+  const tip = nodeById(b.tip);
+  if (!tip) return null;
+  return isProjected(b) ? nodePos(tip.col + 1, b.lane) : { x: tip.x, y: tip.y };
+}
 
-  // ticks: cheap, just redraw them each time
+function drawRefs(): void {
+  // ticks + dashed branch stubs: cheap, redraw each time
   if (refTicks) refTicks.remove();
   refTicks = S.el("g") as SVGGElement;
   gLabels.appendChild(refTicks);
 
   const wanted = new Set<string>();
-  for (const [nodeId, names] of atNode) {
-    const node = nodeById(nodeId);
-    if (!node) continue;
+  for (const [name, b] of Object.entries(model.branches)) {
+    const tip = nodeById(b.tip);
+    const a = branchAnchor(b);
+    if (!tip || !a) continue;
+
+    // a freshly created branch diverges onto its lane right away: a dashed stub
+    // shoots from the commit up to where its commits will grow, with the label
+    if (isProjected(b)) {
+      refTicks.appendChild(S.el("path", {
+        d: connectorPath(tip, { x: a.x, y: a.y, r: NODE_R }, 21),
+        class: "edge-stroke", stroke: b.color, "stroke-width": 2,
+        "stroke-dasharray": "1 8", opacity: 0.55,
+      }));
+    }
     refTicks.appendChild(S.el("path", {
-      d: S.linePath(node.x, node.y - node.r - 2, node.x, node.y - node.r - 22, 5, 0.6),
+      d: S.linePath(a.x, a.y - NODE_R - 2, a.x, a.y - NODE_R - 22, 5, 0.6),
       class: "edge-stroke", stroke: COLORS.inkSoft, "stroke-width": 1.4,
     }));
-    // the branch HEAD is on sits at the top of the stack (right under HEAD), so
-    // checking out a different branch visibly swaps the pills
-    names.sort((a, b) => (a === model.headBranch ? 1 : 0) - (b === model.headBranch ? 1 : 0));
-    let level = 0;
-    for (const name of names) {
-      wanted.add(name);
-      let g = refPills.get(name);
-      const isNew = !g;
-      if (!g) { g = makePill(name, model.branches[name].color, 2); g.classList.add("ref-pill"); gLabels.appendChild(g); refPills.set(name, g); }
-      placePill(g, refPosition(node, level), isNew);
-      level++;
-    }
-    if (model.head === nodeId) {
+
+    wanted.add(name);
+    const bp = ensurePill(name, name, b.color, 2);
+    placePill(bp.g, refPosition(a.x, a.y, 0), bp.isNew);
+
+    if (model.headBranch === name) {
       wanted.add("HEAD");
-      let g = refPills.get("HEAD");
-      const isNew = !g;
-      if (!g) { g = makePill("HEAD", COLORS.ink, 3); g.classList.add("ref-pill"); gLabels.appendChild(g); refPills.set("HEAD", g); }
-      placePill(g, refPosition(node, level), isNew);
+      const hp = ensurePill("HEAD", "HEAD", COLORS.ink, 3);
+      placePill(hp.g, refPosition(a.x, a.y, 1), hp.isNew);
     }
   }
   // drop refs that no longer exist
@@ -370,31 +388,37 @@ async function doAdd(): Promise<void> {
   const next = nextCommitPos();
   if (!next) return;
   const { parent, pos, branch } = next;
-  const conn = S.el("path", {
-    d: connectorPath(parent, { x: pos.x, y: pos.y, r: NODE_R }, 9),
-    class: "edge-stroke", stroke: branch.color, "stroke-width": 2,
-    "stroke-dasharray": "1 9", opacity: 0,
-  });
+  const els: SVGElement[] = [];
+  // on a projected branch the dashed stub already draws the line, so skip ours
+  if (!isProjected(branch)) {
+    const conn = S.el("path", {
+      d: connectorPath(parent, { x: pos.x, y: pos.y, r: NODE_R }, 9),
+      class: "edge-stroke", stroke: branch.color, "stroke-width": 2,
+      "stroke-dasharray": "1 9", opacity: 0,
+    });
+    gEdges.appendChild(conn);
+    els.push(conn);
+  }
   const shape = branch.shape === "square" ? S.squarePath(pos.x, pos.y, NODE_R * 1.7, 9) : S.circlePath(pos.x, pos.y, NODE_R, 9);
   const ring = S.el("path", {
     d: shape, class: "node-stroke",
     stroke: branch.color, "stroke-width": 2, "stroke-dasharray": "1 8", opacity: 0,
   });
-  gEdges.appendChild(conn);
   gNodes.appendChild(ring);
+  els.push(ring);
   const tag = caption("staged", pos.x, pos.y + NODE_R + 30, 120, true);
+  els.push(tag);
   if (instant) {
-    conn.style.opacity = "0.5";
-    ring.style.opacity = "0.55";
+    els.forEach((e) => { e.style.opacity = e === tag ? "0.6" : "0.55"; });
   } else {
     requestAnimationFrame(() => {
-      conn.style.transition = "opacity .4s ease";
-      ring.style.transition = "opacity .4s ease";
-      conn.style.opacity = "0.5";
-      ring.style.opacity = "0.55";
+      els.forEach((e) => {
+        e.style.transition = "opacity .4s ease";
+        e.style.opacity = e === tag ? "0.6" : "0.55";
+      });
     });
   }
-  model.pending = { els: [conn, ring, tag], pos };
+  model.pending = { els, pos };
 }
 
 async function doCommit(message = "first commit"): Promise<void> {
