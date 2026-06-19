@@ -624,6 +624,31 @@ const steps = [
         run: doCommit,
     },
     {
+        key: "remote",
+        atoms: [
+            A("git", "cmd", { sep: "" }), A("remote", "cmd"), A("add", "cmd"),
+            A("origin", "val", { free: true }),
+            A("https://", "flag"), A("github.com/", "flag", { sep: "" }),
+            A("user", "flag", { sep: "", free: true }), A("/my-site.git", "flag", { sep: "" }),
+        ],
+        test: (s) => {
+            const m = s.match(/^git\s+remote\s+add\s+(\S+)\s+(\S+)$/i);
+            return !!m && isUrl(m[2]);
+        },
+        extract: (s) => s,
+        hint: "The last part must be a url, e.g.  https://github.com/user/my-site.git",
+        teach: {
+            goal: "Connect a remote",
+            why: "Right after your first commit, link the repo to a copy kept elsewhere (like GitHub) so your work is backed up before you start branching. Optional — git works fine with no remote at all.",
+            parts: [
+                { t: "remote add", tone: "cmd", why: "save a link to a copy of your repo kept elsewhere" },
+                { t: "origin", tone: "val", why: "the nickname we give the url, so you can type it instead of the full address next time" },
+                { t: "the url", tone: "flag", why: "the address where the remote copy lives, usually in the cloud" },
+            ],
+        },
+        run: doRemoteAdd,
+    },
+    {
         key: "branch",
         atoms: [A("git", "cmd", { sep: "" }), A("branch", "cmd"), A("feature", "val", { free: true })],
         test: (s) => /^git\s+branch\s+\S+$/i.test(s),
@@ -723,31 +748,6 @@ const steps = [
             ],
         },
         run: doMerge,
-    },
-    {
-        key: "remote",
-        atoms: [
-            A("git", "cmd", { sep: "" }), A("remote", "cmd"), A("add", "cmd"),
-            A("origin", "val", { free: true }),
-            A("https://", "flag"), A("github.com/", "flag", { sep: "" }),
-            A("user", "flag", { sep: "", free: true }), A("/my-site.git", "flag", { sep: "" }),
-        ],
-        test: (s) => {
-            const m = s.match(/^git\s+remote\s+add\s+(\S+)\s+(\S+)$/i);
-            return !!m && isUrl(m[2]);
-        },
-        extract: (s) => s,
-        hint: "The last part must be a url, e.g.  https://github.com/user/my-site.git",
-        teach: {
-            goal: "Connect a remote",
-            why: "Optional, but it backs up your work and makes collaborating possible. Git works fine with no remote at all.",
-            parts: [
-                { t: "remote add", tone: "cmd", why: "save a link to a copy of your repo kept elsewhere" },
-                { t: "origin", tone: "val", why: "the nickname we give the url, so you can type it instead of the full address next time" },
-                { t: "the url", tone: "flag", why: "the address where the remote copy lives, usually in the cloud" },
-            ],
-        },
-        run: doRemoteAdd,
     },
     {
         key: "push",
