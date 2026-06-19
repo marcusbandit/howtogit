@@ -907,9 +907,10 @@ function showStep(i: number): void {
   const lesson = goalEl.parentElement;
   if (lesson && !S.prefersReduced) {
     lesson.style.opacity = "0";
-    setTimeout(() => { renderTeach(teach); lesson.style.opacity = ""; }, 200);
+    setTimeout(() => { renderTeach(teach); lesson.style.opacity = ""; positionStage(false); }, 200);
   } else {
     renderTeach(teach);
+    positionStage(false);
   }
   updateInk();
 }
@@ -1075,7 +1076,25 @@ function shake(): void {
 function dockStage(): void {
   stage.classList.remove("is-centered");
   stage.classList.add("is-docked");
-  stage.style.setProperty("--stage-y", `${Math.round(window.innerHeight * 0.71)}px`);
+  positionStage(true);
+}
+// Bottom-align the docked stage: pin its lower edge a fixed gap above the
+// timeline so the lesson + command line sit at the bottom of the screen and
+// never ride up into the graph, whatever the lesson's height. Recomputed
+// whenever the lesson swaps (its height changes) or the window resizes.
+function positionStage(animate: boolean): void {
+  if (!stage.classList.contains("is-docked")) return;
+  const gap = Math.max(104, Math.round(window.innerHeight * 0.11));  // clears the timeline
+  const y = Math.round(window.innerHeight - gap - stage.offsetHeight / 2);
+  if (animate) {
+    stage.style.setProperty("--stage-y", `${y}px`);
+  } else {
+    // move without gliding when it's just the lesson height changing
+    stage.style.transition = "none";
+    stage.style.setProperty("--stage-y", `${y}px`);
+    void stage.offsetWidth;
+    stage.style.transition = "";
+  }
 }
 function normalize(raw: string): string {
   return raw.trim().replace(/\s+/g, " ");
@@ -1852,7 +1871,7 @@ function boot(): void {
 
 window.addEventListener("resize", () => {
   sizeBoard();
-  if (stepIndex > 0) dockStage();
+  if (stepIndex > 0) positionStage(false);   // keep the stage pinned to the bottom
   centerOnHead();   // viewW changed: keep HEAD centred
   renderRemoteGraph(false);  // recompute the mini-graph's float-up transform
   updateInk(); // recompute field width + redraw the underline
