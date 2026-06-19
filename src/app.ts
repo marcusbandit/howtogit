@@ -326,11 +326,12 @@ async function doCommit(message = "first commit"): Promise<void> {
 }
 
 // the address of the remote, captured from `git remote add`
-let remoteUrl = "https://github.com/you/my-site.git";
+let remoteUrl = "https://github.com/you/site.git";
 
 // connecting a remote changes no graph; the remote panel slides in afterwards
 async function doRemoteAdd(arg?: string): Promise<void> {
-  if (arg) remoteUrl = arg;
+  const m = (arg ?? "").match(/^git\s+remote\s+add\s+(\S+)\s+(\S+)/i);
+  if (m) { remoteName = m[1]; remoteUrl = m[2]; }
 }
 
 // push: stamp origin/main onto the pushed commit; the remote panel then fills
@@ -347,6 +348,7 @@ interface Teach { goal: string; why: string; parts: Part[]; }
 interface Step {
   key: string;                       // short label for the timeline
   cmd: string;                       // full command, including "git"
+  roles: Tone[];                     // colour role per whitespace token
   test: (s: string) => boolean;
   hint: string;
   teach: Teach;
@@ -354,11 +356,15 @@ interface Step {
   extract?: (s: string) => string;
 }
 
+// the remote's nickname, captured from `git remote add <name> <url>`
+let remoteName = "origin";
+
 let stepIndex = 0;
 const steps: Step[] = [
   {
     key: "init",
     cmd: "git init",
+    roles: ["cmd", "cmd"],
     test: (s) => /^git\s+init$/i.test(s),
     hint: "Type  git init  to begin.",
     teach: {
@@ -373,6 +379,7 @@ const steps: Step[] = [
   {
     key: "add",
     cmd: "git add .",
+    roles: ["cmd", "cmd", "val"],
     test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
     hint: "Stage everything with  git add .  (or  git add -A )",
     teach: {
@@ -388,6 +395,7 @@ const steps: Step[] = [
   {
     key: "commit",
     cmd: 'git commit -m "first commit"',
+    roles: ["cmd", "cmd", "flag", "val"],
     test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
     extract: (s) => {
       const m = s.match(/-m\s+(["'])(.+?)\1/);
@@ -406,20 +414,18 @@ const steps: Step[] = [
   },
   {
     key: "remote",
-    cmd: "git remote add origin https://github.com/you/my-site.git",
-    test: (s) => /^git\s+remote\s+add\s+origin\s+\S+$/i.test(s),
-    extract: (s) => {
-      const m = s.match(/add\s+origin\s+(\S+)/i);
-      return m ? m[1] : remoteUrl;
-    },
+    cmd: "git remote add origin https://github.com/you/site.git",
+    roles: ["cmd", "cmd", "cmd", "val", "flag"],
+    test: (s) => /^git\s+remote\s+add\s+\S+\s+\S+$/i.test(s),
+    extract: (s) => s,
     hint: "Connect a remote:  git remote add origin <url>",
     teach: {
       goal: "Connect a remote",
-      why: "Point your repo at a copy hosted elsewhere, like GitHub.",
+      why: "Link your repo to a copy that lives somewhere else, like GitHub, so it's backed up and others can get it.",
       parts: [
-        { t: "remote add", tone: "cmd", why: "register a remote copy of the repo" },
-        { t: "origin", tone: "val", why: "a nickname for it (origin is the usual one)" },
-        { t: "…url", tone: "flag", why: "where the remote lives" },
+        { t: "remote add", tone: "cmd", why: "save a link to a copy of your repo kept elsewhere" },
+        { t: "origin", tone: "val", why: "a short nickname for that copy's address, so you never retype the url" },
+        { t: "…url", tone: "flag", why: "the address where the remote copy lives, usually in the cloud (here, on GitHub)" },
       ],
     },
     run: doRemoteAdd,
@@ -427,14 +433,17 @@ const steps: Step[] = [
   {
     key: "push",
     cmd: "git push -u origin main",
-    test: (s) => /^git\s+push(\s+-u\s+origin\s+main)?$/i.test(s),
+    roles: ["cmd", "cmd", "flag", "val", "val"],
+    test: (s) => /^git\s+push(\s+-u\s+\S+\s+main)?$/i.test(s),
     hint: "Send your commits:  git push -u origin main",
     teach: {
       goal: "Send it to the remote",
-      why: "Upload your commits so the remote has them too.",
+      why: "Upload your commits so the remote copy has them too.",
       parts: [
         { t: "push", tone: "cmd", why: "upload your commits to the remote" },
-        { t: "-u origin main", tone: "flag", why: "send your main branch to origin" },
+        { t: "-u", tone: "flag", why: "upstream: tie this branch to the remote so next time you can just type git push" },
+        { t: "origin", tone: "val", why: "which remote to send to (the nickname you chose)" },
+        { t: "main", tone: "val", why: "which branch to send (main is your default branch)" },
       ],
     },
     run: doPush,
@@ -450,7 +459,11 @@ const END = {
 };
 
 function currentCmd(): string {
-  return stepIndex < steps.length ? steps[stepIndex].cmd : "";
+  if (stepIndex >= steps.length) return "";
+  const step = steps[stepIndex];
+  // the push suggestion uses whatever nickname they set on the remote
+  if (step.key === "push") return `git push -u ${remoteName} main`;
+  return step.cmd;
 }
 
 function renderTeach(teach: Teach): void {
@@ -489,34 +502,57 @@ function esc(s: string): string {
 }
 let suggestActive = false;
 
+// colour each typed token to match its part chip, by the current step's roles
+function colorize(typed: string, roles: Tone[]): string {
+  let html = "";
+  let ti = 0;
+  for (const part of typed.split(/(\s+)/)) {
+    if (part === "") continue;
+    if (/^\s+$/.test(part)) { html += esc(part); continue; }
+    let cls: string;
+    if (ti === 0) cls = "git".startsWith(part.toLowerCase()) ? "hl-cmd" : "hl-rest";
+    else cls = `hl-${roles[Math.min(ti, roles.length - 1)] ?? "rest"}`;
+    html += `<span class="${cls}">${esc(part)}</span>`;
+    ti++;
+  }
+  return html;
+}
+
 function updateInk(): void {
   const typed = cmd.value;
   const cur = currentCmd();
-  const m = typed.match(/^(\s*)(\S*)([\s\S]*)$/);
-  const lead = m ? m[1] : "";
-  const word = m ? m[2] : "";
-  const rest = m ? m[3] : "";
-  // colour the first word blue while it is becoming "git"
-  const isGit = word.length > 0 && "git".startsWith(word.toLowerCase());
-
-  let html = esc(lead);
-  html += `<span class="${isGit ? "hl-git" : "hl-rest"}">${esc(word)}</span>`;
-  html += `<span class="hl-rest">${esc(rest)}</span>`;
+  const roles: Tone[] = stepIndex < steps.length ? steps[stepIndex].roles : ["cmd"];
 
   suggestActive =
     cur.length > 0 &&
     typed.length < cur.length &&
     cur.toLowerCase().startsWith(typed.toLowerCase());
-  if (suggestActive) html += `<span class="hl-ghost">${esc(cur.slice(typed.length))}</span>`;
 
+  let html = colorize(typed, roles);
+  if (suggestActive) html += `<span class="hl-ghost">${esc(cur.slice(typed.length))}</span>`;
   ink.innerHTML = html;
 
   // size the field to the command so the whole line stays centred, never cut
   const chars = Math.max(cur.length, typed.length, 6) + 1;
   cmd.style.width = `${chars}ch`;
+  syncCliRule();
+  ink.style.transform = `translateX(${-cmd.scrollLeft}px)`;
 
   // only nudge about Tab once there's something to complete and they've started
   tabhint.classList.toggle("show", suggestActive && typed.length > 0);
+}
+
+// redraw the underline as a fresh hand-drawn line at the field's real width,
+// so it never gets stretched out of shape when the command is long
+function syncCliRule(): void {
+  const field = cmd.parentElement;
+  if (!field) return;
+  const w = Math.max(40, Math.round(field.clientWidth));
+  cliRule.setAttribute("viewBox", `0 0 ${w} 12`);
+  cliRule.replaceChildren(S.el("path", {
+    d: S.linePath(3, 7, w - 3, 7, 4, 0.7),
+    class: "edge-stroke", stroke: COLORS.ink, "stroke-width": 2,
+  }));
 }
 
 function acceptSuggestion(): void {
@@ -532,8 +568,16 @@ function caretAtEnd(): boolean {
 }
 
 // ---- command line behaviour ----------------------------------------
-function showNudge(text: string): void { nudgeEl.textContent = text; nudgeEl.classList.add("show"); }
-function clearNudge(): void { nudgeEl.classList.remove("show"); }
+function showNudge(text: string): void {
+  nudgeEl.textContent = text;
+  nudgeEl.classList.remove("info");
+  nudgeEl.classList.add("show");
+}
+function showInfo(text: string): void {
+  nudgeEl.textContent = text;
+  nudgeEl.classList.add("show", "info");
+}
+function clearNudge(): void { nudgeEl.classList.remove("show", "info"); }
 function shake(): void {
   form.classList.remove("shake");
   void form.offsetWidth;
@@ -576,12 +620,20 @@ form.addEventListener("submit", async (e) => {
   renderFileTree();
   renderRemoteTree();
   updateLayout();
+  // origin is the convention; gently flag any other nickname
+  if (step.key === "remote" && remoteName.toLowerCase() !== "origin") {
+    showInfo('Tip: most tools expect the remote to be named "origin".');
+  }
 });
 
 cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
 cmd.addEventListener("keydown", (e) => {
   if (e.key === "Tab" && suggestActive) { e.preventDefault(); acceptSuggestion(); }
   else if (e.key === "ArrowRight" && suggestActive && caretAtEnd()) { e.preventDefault(); acceptSuggestion(); }
+});
+// keep the coloured overlay aligned when a long command scrolls the input
+cmd.addEventListener("scroll", () => {
+  ink.style.transform = `translateX(${-cmd.scrollLeft}px)`;
 });
 
 // keep the only input focused: typing should always land, no clicking required
@@ -777,9 +829,8 @@ function boot(): void {
   sizeBoard();
   stage.style.setProperty("--stage-y", "50%");
   drawRule(brandRule, COLORS.main, 11);
-  drawRule(cliRule, COLORS.ink, 4);
   startAmbient();
-  showStep(0);
+  showStep(0); // draws the command underline at the right width via updateInk
   buildTimeline();
   renderFileTree();
   renderRemoteTree();
@@ -792,6 +843,7 @@ function boot(): void {
 window.addEventListener("resize", () => {
   sizeBoard();
   if (stepIndex > 0) dockStage();
+  updateInk(); // recompute field width + redraw the underline
 });
 
 if (document.readyState === "loading") {

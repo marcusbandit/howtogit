@@ -193,7 +193,7 @@ body {
   position: relative;
   z-index: 1;
   width: 9ch;                    /* set per step in JS to fit the command */
-  max-width: 92vw;
+  max-width: min(90vw, 80rem);
   border: none;
   background: transparent;
   outline: none;
@@ -211,7 +211,10 @@ body {
   pointer-events: none;
   overflow: hidden;
 }
-.hl-git   { color: var(--pen-blue); font-weight: 700; }
+/* typed text is coloured to match the part chips in the lesson */
+.hl-cmd   { color: var(--pen-blue);  font-weight: 700; }
+.hl-flag  { color: var(--pen-red); }
+.hl-val   { color: var(--pen-green); }
 .hl-rest  { color: var(--ink); }
 .hl-ghost { color: var(--ink-soft); opacity: 0.42; }
 
@@ -253,6 +256,7 @@ body {
   text-align: center;
 }
 .nudge.show { opacity: 0.92; }
+.nudge.info { color: var(--ink-soft); }
 
 /* a gentle "nope" nudge when the command isn't right yet */
 .shake { animation: shake 0.4s ease; }
@@ -298,19 +302,19 @@ body {
 /* Paired state: once a remote exists, the local tree sits on the left and the
    remote on the right, with the graph between them. */
 .tree.is-paired {
-  top: 50%;
+  top: 42%;
   transform: translateY(-50%);
-  width: clamp(13rem, 18vw, 16.5rem);
-  font-size: 1.18rem;
+  width: clamp(12rem, 16vw, 15rem);
+  font-size: 1.12rem;
 }
-#filetree.is-paired { left: clamp(1.2rem, 3.5vw, 3.5rem); }
+#filetree.is-paired { left: clamp(2rem, 11vw, 12rem); }
 
 #remotetree {
-  top: 50%;
+  top: 42%;
   left: auto;
-  right: clamp(1.2rem, 3.5vw, 3.5rem);
-  width: clamp(13rem, 18vw, 16.5rem);
-  font-size: 1.18rem;
+  right: clamp(2rem, 11vw, 12rem);
+  width: clamp(12rem, 16vw, 15rem);
+  font-size: 1.12rem;
   transform: translateY(-50%) translateX(26px);
   opacity: 0;
   pointer-events: none;
