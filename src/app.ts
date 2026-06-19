@@ -694,6 +694,21 @@ async function doPush(): Promise<void> {
   placePill(originPill, { x: mainTip.x, y: mainTip.y + mainTip.r + 66 }, firstPush);
 }
 
+// push from the laptop: the hub absorbs the laptop's trunk, so the remote grows
+// FIRST (renderRemoteGraph rises the new commit out of the laptop's tip), and
+// origin/main moves onto the laptop's tip.
+async function doPushFromLaptop(): Promise<void> {
+  const tip = nodeById(laptop.model.branches.main?.tip ?? null) ?? headNode();
+  if (!tip) return;
+  remoteHistory = snapshotTrunk(laptop.model);
+  if (!originPill) {
+    originPill = makePill("origin/main", COLORS.remote, 7);
+    originPill.classList.add("ref-pill");
+  }
+  active.labels.appendChild(originPill);   // bring origin/main onto the laptop
+  placePill(originPill, { x: tip.x, y: tip.y + tip.r + 66 }, false);
+}
+
 // ---- the basics 2: moving to the laptop -----------------------------
 // git clone copies the remote down onto a second machine (the laptop). The
 // laptop view + the clone drawing land in a later step; for now this advances
@@ -1074,6 +1089,20 @@ const steps: Step[] = [
       ],
     },
     run: doCommit,
+  },
+  {
+    key: "push3",
+    atoms: [A("git", "cmd", { sep: "" }), A("push", "cmd")],
+    test: (s) => /^git\s+push$/i.test(s),
+    hint: "Send the laptop's commit up:  git push",
+    teach: {
+      goal: "Push from the laptop",
+      why: "Upload the laptop's new commit so the remote has it too. The remote updates first, before the desktop ever sees it.",
+      parts: [
+        { t: "push", tone: "cmd", why: "upload the laptop's commit to the shared remote" },
+      ],
+    },
+    run: doPushFromLaptop,
   },
 ];
 const END = {
@@ -2331,6 +2360,7 @@ const TIMELINE_SECTIONS: TLSection[] = [
   { name: "The basics 2", tasks: [
     { label: "Clone the repo", keys: ["clone"] },
     { label: "Edit on the laptop", keys: ["add3", "commit3"] },
+    { label: "Push from the laptop", keys: ["push3"] },
   ] },
 ];
 // a command label for a sub-step, e.g. "checkout-main" -> "git checkout"
