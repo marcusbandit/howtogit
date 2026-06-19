@@ -509,18 +509,33 @@ body {
 }
 .tl-item.is-current, .tl-substep.is-current { color: var(--ink); font-weight: 700; }
 
-/* sub-row: collapsed to nothing until its task is the current one, then it
-   expands inline to reveal that task's individual commands */
+/* sub-row: an expand/compact accordion. A 0fr<->1fr grid animates to the exact
+   content width (so the collapse is never a sudden snap), and the inner layer
+   clips it so the commands reveal left-to-right as the section opens. */
 .tl-sub {
+  display: grid;
+  grid-template-columns: 0fr;
+  transition: grid-template-columns 0.5s var(--ease-settle);
+}
+.tl-group.is-expanded .tl-sub { grid-template-columns: 1fr; }
+.tl-sub-inner {
   display: flex;
   align-items: flex-start;
-  gap: 0;
-  max-width: 0;
-  opacity: 0;
+  min-width: 0;
   overflow: hidden;
-  transition: max-width 0.45s var(--ease-settle), opacity 0.3s ease;
 }
-.tl-group.is-expanded .tl-sub { max-width: 80vw; opacity: 1; }
+/* each command (and its connector) slides in from the left and fades up, one
+   after the next, while the section is opening; on compact they leave together */
+.tl-sub-inner > * {
+  opacity: 0;
+  transform: translateX(-10px);
+  transition: opacity 0.25s ease, transform 0.35s var(--ease-settle);
+}
+.tl-group.is-expanded .tl-sub-inner > * {
+  opacity: 1;
+  transform: none;
+  transition-delay: calc(var(--i, 0) * 55ms + 90ms);
+}
 
 /* the closing "complete" star: hollow grey until the loop is finished, then it
    fills with a warm glow the instant the last command lands */

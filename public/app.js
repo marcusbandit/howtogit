@@ -1316,9 +1316,11 @@ let tlComplete = null;
 function buildTimeline() {
     timelineEl.replaceChildren();
     tlStops.length = 0;
-    const linkInto = (parent, sub = false) => {
+    const linkInto = (parent, sub = false, order = -1) => {
         const l = document.createElement("span");
         l.className = sub ? "tl-link tl-link--sub" : "tl-link";
+        if (order >= 0)
+            l.style.setProperty("--i", String(order));
         parent.appendChild(l);
     };
     const makeStop = (cls, dotCls, text, onClick) => {
@@ -1347,14 +1349,22 @@ function buildTimeline() {
         const taskBtn = makeStop("tl-item", "tl-dot", t.label, () => { void seekTo(first); });
         taskBtn.title = `Go to: ${t.label}`;
         group.appendChild(taskBtn);
+        // .tl-sub is a 0fr<->1fr grid that animates to the exact content width; the
+        // inner layer clips it so the sub-steps reveal left-to-right. Each child
+        // carries its order (--i) so they stagger in as the section expands.
         const sub = document.createElement("div");
         sub.className = "tl-sub";
+        const inner = document.createElement("div");
+        inner.className = "tl-sub-inner";
+        sub.appendChild(inner);
         const subs = [];
+        let order = 0;
         idx.forEach((si) => {
-            linkInto(sub, true); // connector from the milestone / previous sub-step
+            linkInto(inner, true, order++); // connector from the milestone / previous sub-step
             const sBtn = makeStop("tl-substep", "tl-dot tl-dot--sub", cmdLabel(steps[si].key), () => { void seekTo(si); });
             sBtn.title = `Go to: ${cmdLabel(steps[si].key)}`;
-            sub.appendChild(sBtn);
+            sBtn.style.setProperty("--i", String(order++));
+            inner.appendChild(sBtn);
             subs.push({ btn: sBtn, si });
         });
         group.appendChild(sub);
