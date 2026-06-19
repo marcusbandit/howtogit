@@ -69,6 +69,10 @@ const treeEl = need<HTMLElement>("filetree");
 const treeList = need<HTMLElement>("tree-list");
 const remoteTreeEl = need<HTMLElement>("remotetree");
 const remoteList = need<HTMLElement>("remote-list");
+const laptopTreeEl = need<HTMLElement>("laptoptree");
+const laptopList = need<HTMLElement>("laptop-list");
+const gMiniDesk = need<SVGGElement>("mini-desktop");
+const gMiniDeskInner = need<SVGGElement>("mini-desktop-inner");
 const timelineEl = need<HTMLElement>("timeline");
 const brandRule = needSel<SVGSVGElement>(".brand__rule");
 const cliRule = needSel<SVGSVGElement>(".cli__rule");
@@ -495,6 +499,12 @@ function useMachine(m: Machine): void {
   refTicks = m.refTicks;
   boardPanX = m.panX;
   boardGroups = [m.edges, m.nodes, m.nib, m.labels];
+  // only the active machine's graph layers are visible on the main board. Snap
+  // (transition none) by default so seeks are instant; an animated switch sets
+  // its own transition + fade after calling useMachine.
+  const onDesktop = m === desktop;
+  for (const g of [gEdges, gNodes, gNib, gLabels]) { g.style.transition = "none"; g.style.opacity = onDesktop ? "1" : "0"; }
+  for (const g of [gLapEdges, gLapNodes, gLapNib, gLapLabels]) { g.style.transition = "none"; g.style.opacity = onDesktop ? "0" : "1"; }
 }
 
 // ---- step actions ---------------------------------------------------
@@ -1322,10 +1332,14 @@ form.addEventListener("submit", async (e) => {
   if (stepIndex >= steps.length) showEndState();
   renderFileTree();
   renderRemoteTree();
+  renderLaptopTree();
   renderRemoteGraph();
+  renderMiniDesktop();
   updateLayout();
   // landing on the feature branch means "you edited index.html": play it out
   if (stepIndex === stepIdx("add2")) void playEditSequence();
+  // finishing push2 lands us in "The basics 2": move over to the laptop
+  if (stepIndex === stepIdx("clone")) void playMoveToLaptop();
 });
 
 cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
@@ -1359,6 +1373,18 @@ document.addEventListener("click", keepFocus);
 // ---- file tree (left) ----------------------------------------------
 const PROJECT = { root: "my-site", files: ["index.html", "style.css", "app.js"] };
 const EDIT_FILE = PROJECT.files[0]; // the file we "edit" on the feature branch
+
+// ---- the laptop (second machine) ------------------------------------
+// the laptop's home folder: a few for-show folders, empty of any project until
+// git clone drops my-site/ into it.
+const LAPTOP_HOME = { root: "~", folders: ["Documents", "Pictures", "Downloads"] };
+let laptopHasProject = false;            // my-site/ exists on the laptop (after clone)
+let lastLaptopShown = false;             // for the .is-new slide-in on first show
+let lastLaptopProject = false;
+let miniDesktopTrunk: CommitNode[] = []; // frozen snapshot of the desktop trunk at switch
+// the laptop comes into view once we reach "git clone" (entering The basics 2);
+// it keeps its own project only after the clone has run.
+const laptopVisible = (): boolean => stepIndex >= stepIdx("clone");
 type FileState = "plain" | "untracked" | "modified" | "staged" | "committed" | "pushed";
 // one check = saved in a local commit; two checks = delivered to the remote
 const MARK: Record<FileState, string> = { plain: "", untracked: "·", modified: "M", staged: "+", committed: "✓", pushed: "✓✓" };
@@ -1493,6 +1519,12 @@ function computerIcon(): SVGSVGElement {
   icStroke(svg, S.smooth([[3.3, 5.4], [20.7, 4.8], [20.4, 15.2], [3.6, 15.5], [3.4, 5.5]], true));
   icStroke(svg, S.smooth([[11.9, 15.4], [12.1, 18.4]]));   // stand
   icStroke(svg, S.smooth([[8.4, 18.8], [15.6, 18.5]]));    // base
+  return svg;
+}
+function laptopIcon(): SVGSVGElement {
+  const svg = mkIcon("laptop");
+  icStroke(svg, S.smooth([[6.2, 4.4], [17.8, 4.1], [17.6, 13.4], [6.4, 13.6], [6.2, 4.5]], true)); // screen
+  icStroke(svg, S.smooth([[4.2, 13.6], [19.8, 13.6], [21.4, 17.6], [2.6, 17.6], [4.2, 13.6]], true)); // base wedge
   return svg;
 }
 function cloudIcon(): SVGSVGElement {
@@ -1913,6 +1945,59 @@ function renderRemoteTree(): void {
   lastRemotePushed = pushed;
 }
 
+// the laptop's file state for the cloned my-site files. After clone they read as
+// committed (a full copy of the remote); M3 makes this track the laptop's own
+// edit + commit.
+function laptopFileState(_file: string): FileState {
+  return "committed";
+}
+function renderLaptopTree(): void {
+  const shown = laptopVisible();
+  laptopTreeEl.classList.toggle("is-shown", shown);
+  laptopList.replaceChildren();
+  if (!shown) { lastLaptopShown = false; lastLaptopProject = false; return; }
+
+  const root = document.createElement("li");
+  root.className = "d";
+  root.append(folderIcon(), makeName(`${LAPTOP_HOME.root}/`));
+  laptopList.appendChild(root);
+
+  LAPTOP_HOME.folders.forEach((f) => {
+    const li = document.createElement("li");
+    li.className = "f";
+    if (!lastLaptopShown) li.classList.add("is-new");
+    li.append(folderIcon(), makeName(`${f}/`));
+    laptopList.appendChild(li);
+  });
+
+  // my-site/ only exists once the clone has dropped it here
+  if (laptopHasProject) {
+    const proj = document.createElement("li");
+    proj.className = "f d--cloned";
+    if (!lastLaptopProject) proj.classList.add("is-new");
+    proj.append(folderIcon(), makeName(`${PROJECT.root}/`));
+    laptopList.appendChild(proj);
+    PROJECT.files.forEach((f, fi) => {
+      const st = laptopFileState(f);
+      const li = document.createElement("li");
+      li.className = `f f--${st} is-openable f--laptop`;
+      li.dataset.file = f;
+      const name = makeName(f);
+      name.appendChild(makeUnderline(fi * 9 + 53));
+      li.append(fileIcon(f), name);
+      const m = document.createElement("span");
+      m.className = "f__mark";
+      m.textContent = MARK[st];
+      li.appendChild(m);
+      laptopList.appendChild(li);
+    });
+    lastLaptopProject = true;
+  } else {
+    lastLaptopProject = false;
+  }
+  lastLaptopShown = shown;
+}
+
 // ---- remote mini-graph (the remote's own tree, drawn above the local one) ---
 // The remote is the shared source of truth. On the FIRST push a small copy of
 // the trunk slides straight up out of the local graph and parks near the top,
@@ -2022,16 +2107,105 @@ function renderRemoteGraph(allowAnim = true): void {
   shownRemoteIds.clear(); trunk.forEach((_rc, i) => shownRemoteIds.add(i));
 }
 
-// the trees stay large (is-focus) for now — they never pair off / shrink yet.
-// Flip `paired` back to a step threshold once we decide where the shrink belongs.
+// ---- mini desktop graph (the stowed desktop, beside its slid-down tree) ------
+// Once we move to the laptop, the desktop's graph is hidden from the board and
+// stands in as a small grayed copy parked low-left, by the stowed desktop tree.
+// It reads from a frozen snapshot (not a live model) and is never panned.
+const MINI_NODE_R = NODE_R * 0.34;
+const MINI_GAP = GAP * 0.7;
+const MINI_LEFT_FRAC = 0.16;     // low-left, beside the stowed desktop tree
+const MINI_BOTTOM_FRAC = 0.78;
+const MINI_COLOR = "#9a958c";    // grayed ink: "asleep on the other machine"
+const shownMiniIds = new Set<number>();
+
+function renderMiniDesktop(animate = false): void {
+  const show = laptopVisible();
+  gMiniDeskInner.replaceChildren();
+  if (!show || !miniDesktopTrunk.length) { gMiniDesk.style.opacity = "0"; shownMiniIds.clear(); return; }
+  gMiniDesk.style.opacity = "1";
+  const x0 = viewW * MINI_LEFT_FRAC, y0 = viewH * MINI_BOTTOM_FRAC;
+  const doAnim = animate && !instant && !S.prefersReduced;
+  miniDesktopTrunk.forEach((node, i) => {
+    const g = S.el("g") as SVGGElement;
+    if (i > 0) g.appendChild(S.el("path", {
+      d: connectorPath({ x: -MINI_GAP, y: 0, r: MINI_NODE_R }, { x: 0, y: 0, r: MINI_NODE_R }, node.id * 5 + 2),
+      class: "edge-stroke", stroke: MINI_COLOR, "stroke-width": 1.6,
+    }));
+    g.appendChild(S.el("path", {
+      d: shapePath(node.shape, 0, 0, MINI_NODE_R, node.id * 7 + 1),
+      fill: MINI_COLOR, stroke: MINI_COLOR, "stroke-width": 1.6, "stroke-linejoin": "round",
+    }));
+    g.style.transform = `translate(${x0 + i * MINI_GAP}px, ${y0}px)`;
+    if (doAnim && !shownMiniIds.has(node.id)) {
+      g.style.opacity = "0"; g.style.transition = "none"; gMiniDeskInner.appendChild(g);
+      void g.getBoundingClientRect();
+      requestAnimationFrame(() => { g.style.transition = `opacity .5s ease ${i * 90}ms`; g.style.opacity = "1"; });
+    } else {
+      gMiniDeskInner.appendChild(g);
+    }
+  });
+  shownMiniIds.clear(); miniDesktopTrunk.forEach((n) => shownMiniIds.add(n.id));
+}
+
+// ---- the move to the laptop -----------------------------------------
+// applyMoveToLaptop is the instant-safe state change (snapshot the desktop trunk
+// for the mini-graph, then make the laptop the active machine). playMoveToLaptop
+// adds the one-time animated beat: a soft ink-tinted blob glides from the desktop
+// over to the laptop as the desktop grays + stows and the mini-graph draws in.
+function applyMoveToLaptop(): void {
+  miniDesktopTrunk = desktop.model.nodes.filter((n) => n.lane === 0).sort((a, b) => a.col - b.col).slice();
+  useMachine(laptop);
+}
+let blobGen = 0;
+function makeBlob(): HTMLDivElement {
+  const b = document.createElement("div");
+  b.className = "switch-blob";
+  document.body.appendChild(b);
+  return b;
+}
+function positionBlobOver(b: HTMLDivElement, r: DOMRect): void {
+  const pad = 16;
+  const w = r.width + pad * 2, h = r.height + pad * 2;
+  b.style.width = `${w}px`;
+  b.style.height = `${h}px`;
+  b.style.transform = `translate(${r.left + r.width / 2 - w / 2}px, ${r.top + r.height / 2 - h / 2}px)`;
+}
+async function playMoveToLaptop(): Promise<void> {
+  const deskRect = treeEl.getBoundingClientRect();   // capture before the stow starts
+  const deskLayers = [gEdges, gNodes, gNib, gLabels];
+  applyMoveToLaptop();   // switches to the laptop and snaps the desktop graph hidden
+  renderLaptopTree(); renderMiniDesktop(false); updateLayout(); centerOnHead();
+  if (instant || S.prefersReduced) return;
+  // soften the hand-off: bring the desktop graph back and fade it out as we leave
+  for (const g of deskLayers) { g.style.transition = "none"; g.style.opacity = "1"; }
+  void deskLayers[0].getBoundingClientRect();
+  requestAnimationFrame(() => { for (const g of deskLayers) { g.style.transition = "opacity .75s ease"; g.style.opacity = "0"; } });
+  const gen = ++blobGen; const alive = () => gen === blobGen;
+  const blob = makeBlob();
+  positionBlobOver(blob, deskRect);                  // form over the desktop
+  blob.style.opacity = "0"; void blob.getBoundingClientRect();
+  requestAnimationFrame(() => { blob.style.transition = "opacity .5s ease"; blob.style.opacity = "1"; });
+  await sleep(700); if (!alive()) { blob.remove(); return; }
+  blob.style.transition = "transform 1.1s cubic-bezier(.4,0,.2,1)";
+  positionBlobOver(blob, laptopTreeEl.getBoundingClientRect());   // glide to the (settled) laptop
+  renderMiniDesktop(true);                            // mini-graph fades in as the blob travels
+  await sleep(1150); if (!alive()) { blob.remove(); return; }
+  await sleep(220);
+  blob.style.transition = "opacity .45s ease"; blob.style.opacity = "0";   // dissolve, having landed
+  await sleep(460); if (!alive()) { blob.remove(); return; }
+  blob.remove();
+}
+
+// the desktop tree leads while we work on it; once we move to the laptop it grays
+// and stows low-left (with the mini-graph), the laptop tree takes the focus slot,
+// and the remote tree stays top-right as the shared hub.
 function updateLayout(): void {
-  const paired = false;
-  treeEl.classList.toggle("is-focus", !paired);
-  treeEl.classList.toggle("is-paired", paired);
-  // the remote tree mirrors the local one: large while it first appears, then
-  // it shrinks into its side slot in step with the local tree
-  remoteTreeEl.classList.toggle("is-focus", !paired);
-  remoteTreeEl.classList.toggle("is-paired", paired);
+  const onLaptop = laptopVisible();
+  treeEl.classList.toggle("is-focus", !onLaptop);
+  treeEl.classList.toggle("is-paired", false);
+  treeEl.classList.toggle("is-stowed", onLaptop);
+  remoteTreeEl.classList.toggle("is-focus", true);   // the remote stays the big hub, top-right
+  remoteTreeEl.classList.toggle("is-paired", false);
 }
 
 // ---- timeline (bottom, clickable) ----------------------------------
@@ -2227,7 +2401,7 @@ function updateTimeline(): void {
 
 // ---- seek: rebuild instantly to a chosen step ----------------------
 function resetBoard(): void {
-  [gEdges, gNodes, gNib, gLabels, gLapEdges, gLapNodes, gLapNib, gLapLabels, gRemoteInner]
+  [gEdges, gNodes, gNib, gLabels, gLapEdges, gLapNodes, gLapNib, gLapLabels, gRemoteInner, gMiniDeskInner]
     .forEach((g) => g.replaceChildren());
   for (const m of [desktop, laptop]) {
     Object.assign(m.model, freshModel());
@@ -2246,6 +2420,15 @@ function resetBoard(): void {
   shownRemoteIds.clear();
   gRemote.style.opacity = "0";
   remoteHistory = [];
+  // basics 2 / laptop state
+  laptopHasProject = false;
+  lastLaptopShown = false;
+  lastLaptopProject = false;
+  miniDesktopTrunk = [];
+  shownMiniIds.clear();
+  gMiniDesk.style.opacity = "0";
+  blobGen++;   // cancel any in-flight move-to-laptop blob
+  document.querySelectorAll(".switch-blob").forEach((b) => b.remove());
 }
 async function seekTo(target: number): Promise<void> {
   if (busy || target === stepIndex) return;
@@ -2262,6 +2445,10 @@ async function seekTo(target: number): Promise<void> {
     const st = steps[k];
     await st.run(st.extract ? st.extract(canonical(st)) : undefined);
   }
+  // landing in The basics 2 but before clone has switched us: settle on the
+  // empty laptop so the board reads correctly (doClone does this itself once it
+  // draws, but a seek that lands exactly on clone hasn't run it).
+  if (target >= stepIdx("clone") && active === desktop) applyMoveToLaptop();
   centerOnHead();   // pan instantly while still in replay mode (no glide)
   if (target >= steps.length) showEndState();
   instant = false;
@@ -2271,7 +2458,9 @@ async function seekTo(target: number): Promise<void> {
   updateTimeline();
   renderFileTree();
   renderRemoteTree();
+  renderLaptopTree();
   renderRemoteGraph(false);   // seek: the remote tree is just there, no float
+  renderMiniDesktop(false);
   updateLayout();
   busy = false;
   if (!isPhone) cmd.focus();
@@ -2287,14 +2476,17 @@ function boot(): void {
   buildTimeline();
   renderFileTree();
   renderRemoteTree();
+  renderLaptopTree();
   renderRemoteGraph(false);
+  renderMiniDesktop(false);
   // No file editor exists yet, so the local tree leads (is-focus) until a remote
   // appears. When the editor lands, the compact corner state takes over instead.
   updateLayout();
-  // sketched icons on the two tree headings: a computer for the local copy, a
-  // cloud for the remote
+  // sketched icons on the tree headings: a computer for the desktop, a cloud for
+  // the remote, a laptop for the second machine
   needSel<HTMLElement>("#filetree .tree__title").prepend(computerIcon());
   needSel<HTMLElement>("#remotetree .tree__title").prepend(cloudIcon());
+  needSel<HTMLElement>("#laptoptree .tree__title").prepend(laptopIcon());
   wireFileViewer();   // click any file in either tree to open it
   if (!isPhone) cmd.focus();
   // dev/test hook: read-only snapshot of the step machine + active model, used by

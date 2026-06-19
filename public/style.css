@@ -372,8 +372,10 @@ body {
   user-select: none;
   transition:
     top 0.6s var(--ease-settle), left 0.6s var(--ease-settle),
+    bottom 0.6s var(--ease-settle), right 0.6s var(--ease-settle),
     width 0.6s var(--ease-settle),
-    font-size 0.6s var(--ease-settle), transform 0.6s var(--ease-settle);
+    font-size 0.6s var(--ease-settle), transform 0.6s var(--ease-settle),
+    filter 0.6s ease, opacity 0.6s ease;
 }
 
 /* Focus state: while there's nothing to edit yet, the tree IS the subject,
@@ -428,6 +430,50 @@ body {
 }
 #remotetree.is-focus .tree__title { font-size: 0.98rem; margin-bottom: 1.1rem; }
 #remotetree.is-focus .d--git .f__note { font-size: 0.95rem; }
+
+/* ---- the laptop (second machine) + the move-to-laptop transition ---- */
+/* the laptop tree slides into the focus slot once we move to it. */
+#laptoptree {
+  top: clamp(6rem, 13vh, 8.5rem);
+  left: clamp(1.5rem, 4.5vw, 5rem);
+  right: auto;
+  width: clamp(19rem, 28vw, 26rem);
+  font-size: 1.55rem;
+  transform: translateX(-22px);
+  opacity: 0;
+  pointer-events: none;
+}
+#laptoptree.is-shown { opacity: 1; pointer-events: auto; transform: none; }
+#laptoptree .tree__title { font-size: 0.98rem; margin-bottom: 1.1rem; }
+.d--cloned .f__name { color: var(--pen-green); }
+.ic--laptop { color: var(--ink-soft); }
+
+/* the desktop, once we move to the laptop: grayed and dropped low-left, beside
+   the small mini-graph standing in for its full graph. */
+#filetree.is-stowed {
+  top: auto;
+  bottom: clamp(7rem, 16vh, 11rem);
+  left: clamp(1.1rem, 3vw, 2.4rem);
+  transform: none;
+  width: clamp(13rem, 17vw, 16rem);
+  font-size: 1.0rem;
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+#filetree.is-stowed .tree__title::after { content: " (asleep)"; opacity: 0.7; }
+
+/* the machine-switch highlight: a soft ink-tinted blob that glides between the
+   two machines. Purple = "machine identity" (matches the remote/origin accent). */
+.switch-blob {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: 18px;
+  background: rgba(107, 92, 165, 0.13);
+  border: 2px solid rgba(107, 92, 165, 0.32);
+}
 .remote-empty {
   color: var(--ink-soft);
   font-style: italic;
@@ -920,6 +966,18 @@ body {
     left: auto !important;
     right: 0.8rem !important;
     /* opacity / pointer-events still controlled by .is-shown */
+  }
+  /* no room for three trees on a phone: hide the stowed desktop + its mini-graph
+     and give the laptop the left slot */
+  #filetree.is-stowed { display: none !important; }
+  #mini-desktop { display: none; }
+  #laptoptree {
+    left: 0.8rem !important;
+    right: auto !important;
+    top: clamp(3.8rem, 13vw, 5rem) !important;
+    transform: none !important;
+    width: 43vw !important;
+    font-size: 0.8rem !important;
   }
   .tree.is-focus .tree__title,
   .tree__title { font-size: 0.66rem; margin-bottom: 0.4rem; }

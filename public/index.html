@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=editor13" />
+  <link rel="stylesheet" href="style.css?v=editor14" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -47,6 +47,13 @@
     <ul class="tree__list" id="remote-list"></ul>
   </aside>
 
+  <!-- the laptop (second machine): its home folder ~/ appears when we move to it
+       (git clone onward), and my-site/ lands inside after the clone. -->
+  <aside id="laptoptree" class="tree tree--laptop" aria-label="laptop files" aria-hidden="true">
+    <p class="tree__title">on your laptop</p>
+    <ul class="tree__list" id="laptop-list"></ul>
+  </aside>
+
   <!-- the infinite board where the graph gets drawn -->
   <main id="board" aria-label="git graph">
     <svg id="graph" aria-hidden="true">
@@ -61,6 +68,9 @@
            shrinks into a simplified mini-graph. Outer group pans with the board;
            inner group carries the float-up + shrink transform. -->
       <g id="remote-graph" filter="url(#boil)"><g id="remote-graph-inner"></g></g>
+      <!-- a small grayed copy of the desktop's graph, parked beside the stowed
+           desktop tree once we have moved to the laptop. Never panned. -->
+      <g id="mini-desktop" filter="url(#boil)"><g id="mini-desktop-inner"></g></g>
       <g id="edges" filter="url(#boil)"></g>
       <g id="nodes" filter="url(#boil)"></g>
       <g id="ink-nib"></g>
@@ -108,6 +118,6 @@
   <!-- a clickable history of the steps; returning users can skip ahead -->
   <nav id="timeline" class="timeline" aria-label="lesson steps"></nav>
 
-  <script type="module" src="app.js?v=editor13"></script>
+  <script type="module" src="app.js?v=editor14"></script>
 </body>
 </html>
