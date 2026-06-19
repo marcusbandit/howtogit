@@ -22,23 +22,29 @@ total beginner is never lost.
 
 ## Done
 
+- Full sequence: `git init` → `add` → `commit` → `branch` → `checkout` →
+  commit-on-branch → `remote add` → `push`.
 - `git init` → first node, `.git/` appears in the file tree.
 - `git add` → staged preview + files marked staged.
-- `git commit -m` → second node, connector, HEAD/main travel to the tip.
+- `git commit -m` → new node, connector, HEAD/branch tags glide to the tip.
+- `git branch` + `git checkout` → a second coloured lane (red, square nodes)
+  that diverges from main; HEAD moves onto the branch and the next commit lands
+  on its lane.
 - `git remote add` → a second repo panel slides in (across the graph).
-- `git push` → remote panel fills, `origin/main` stamped on the commit.
-- Guided command line: type `git` yourself (turns blue), tokens colour-matched
-  to the lesson chips, ghost suggestion completes with Tab.
-- Bottom timeline with instant seek. Left file tree with a focus state (it
-  leads while there's nothing to edit) and a compact corner state reserved for
-  when a file editor exists.
+- `git push` → remote panel fills, `origin/main` stamped on main's tip.
+- Guided command line: commands are token "atoms" (fixed words + free values).
+  Type `git` yourself (turns blue), tokens colour-matched to the lesson chips,
+  adaptive ghost (keeps your free values), per-word Tab, modular urls, strict
+  words show typos in error red without wiping the ghost.
+- Bottom timeline with instant seek. Left file tree with a focus state (leads
+  while there's nothing to edit) and a compact corner state reserved for when a
+  file editor exists.
 
 ## Next up (the "collaboration loop" arc)
 
 Build toward two machines sharing a repo through a remote. Rough order:
 
-1. `git branch` + `git checkout` — a second coloured lane with a shape change,
-   HEAD moving onto the branch.
+1. (optional) `git merge` — bring the feature branch back into main.
 2. A second machine appears (e.g. a laptop) — a fresh, empty computer beside
    the desktop.
 3. `git clone` on the laptop — copies the remote down into the laptop.
