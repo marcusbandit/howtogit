@@ -55,6 +55,85 @@ Build toward two machines sharing a repo through a remote. Rough order:
 
 This is the target experience, not a committed spec yet. Refine before building.
 
+## Backlog / future ideas (captured, not yet specced)
+
+Ideas to keep so they aren't forgotten. Refine each before building.
+
+### Remote mini-graph (when the remote is added)
+
+When `git remote add` lands, draw a second, smaller, simplified graph **above**
+the current (local) graph. It's a stripped-down copy of the remote: no labels,
+no text, just the colours and shapes of the tree, simplified.
+
+Purpose: it represents the remote as the shared source of truth. When other
+people or other machines change things in the future, that mini-graph changes
+**first**, then those changes flow down into the local graph on this computer.
+This is how we'll illustrate multiple machines: right now there's just this
+desktop, but later there's a laptop and a desktop, and the remote sits above
+both as the common copy everyone syncs through.
+
+### Simplified timeline (by task, not by command)
+
+Separate task. Today the bottom timeline has one stop per command. That won't
+fit the page once there are many commands; it isn't viable long-term.
+
+Switch the timeline to one stop per **task** (a meaningful unit) instead of per
+command. E.g. one stop for "init", one for "make a branch", one for "add the
+remote and push", rather than a stop for every single command. A simplified
+view of the major milestones.
+
+### State persistence / memory across reloads and seeks
+
+Handle saving so progress isn't lost.
+
+- Cache where the user is on reload so it isn't forgotten.
+- Clicking a point in the timeline that is **later** than where you are now
+  should remember what you've already done. Example: if you named the origin
+  something custom further ahead, seeking back and forward should still
+  remember that name.
+- Clicking **before** the point where you made a change: it still remembers the
+  change for later, but if you redo that step differently, it updates to the
+  new value.
+- If you seek back to the start and walk forward again to the point where you
+  create `git remote add origin`, and you type a name there again, you create a
+  fresh origin and from then on the app remembers that name. So: a way for the
+  user's choices (names, etc.) to persist from the moment they're made onward.
+
+### OS + tool switcher (top-right of the page)
+
+Top-right corner controls:
+
+- Switch between operating systems.
+- Switch between tools: IntelliJ, VS Code, command line.
+
+Each would have its own interface (different UI per tool). Design those later,
+not now. Just reserving the feature.
+
+### Donate button
+
+A way to donate to the creator, somewhere on the page. Present and noticeable
+but not pushy or attention-grabbing. The vibe: "oh, you can donate, that'd be
+nice." Visible, not subtle, not loud.
+
+### Dark mode (big undertaking)
+
+Worth doing eventually, but a large job because the whole thing leans on a lot
+of colour. Plan for it as its own effort.
+
+### Polish / fixes
+
+- **Center the graph on HEAD.** Horizontally center the view on wherever HEAD
+  is, not on the `git init` node. Right now it just sits where it is; it should
+  follow HEAD.
+- **Stop the idle drift.** The graph slightly moves around when nothing is
+  happening (the boil/turbulence). It should be completely stationary when
+  idle. The constant drift is distracting and not as neat as hoped. Boil only
+  while something is actively being drawn, settle to still when done.
+- **A "completed" end state.** When the whole sequence is finished the board is
+  just empty with nothing there. Instead it should read as done: a message like
+  "completed, nothing more to do" (or a fun line) so it's clearly the end, not a
+  blank.
+
 ## Later (common commands to cover)
 
 - `git status`
