@@ -379,6 +379,12 @@ body {
 .hl-cmd   { color: var(--pen-blue);  font-weight: 700; }
 .hl-flag  { color: var(--pen-red); }
 .hl-val   { color: var(--pen-green); }
+/* in dark mode the bright pens glow against the dark field; calm them by
+   muting toward the soft ink grey (less saturation, less glow). Light mode
+   keeps its pens exactly as they are. */
+:root[data-theme="dark"] .hl-cmd  { color: color-mix(in srgb, var(--pen-blue)  68%, var(--ink-soft)); }
+:root[data-theme="dark"] .hl-flag { color: color-mix(in srgb, var(--pen-red)   68%, var(--ink-soft)); }
+:root[data-theme="dark"] .hl-val  { color: color-mix(in srgb, var(--pen-green) 68%, var(--ink-soft)); }
 .hl-rest  { color: var(--ink); }
 .hl-ghost { color: var(--ink-soft); opacity: 0.42; }
 /* a wrong character in a fixed word: harsh error red, the word underlined */
