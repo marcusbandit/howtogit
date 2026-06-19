@@ -21,7 +21,16 @@ const COLORS = {
 
 // the board is drawn ~20% larger than 1:1 by shrinking the viewBox under the
 // full-size <svg>. One knob zooms every node, label and stroke together.
-const ZOOM = 1.2;
+// On a narrow phone we zoom OUT (smaller ZOOM = more board per screen) so the
+// whole git graph — branch lanes and the merge diamond included — fits the
+// width instead of crawling off the edges.
+function computeZoom(): number {
+  const w = window.innerWidth;
+  if (w >= 760) return 1.2;            // desktop / tablet: unchanged
+  // phone: shrink so ~3 commit columns sit comfortably across the width
+  return Math.max(0.5, Math.min(1.0, w / 470));
+}
+let ZOOM = computeZoom();
 
 // ---- DOM ------------------------------------------------------------
 function need<T extends Element>(id: string): T {
@@ -118,6 +127,7 @@ function nodeById(id: number | null): CommitNode | undefined {
 
 // ---- board sizing ---------------------------------------------------
 function sizeBoard(): void {
+  ZOOM = computeZoom();   // re-fit on every resize / orientation change
   const w = window.innerWidth, h = window.innerHeight;
   viewW = w / ZOOM;
   viewH = h / ZOOM;
@@ -407,8 +417,22 @@ function caption(text: string, cx: number, y: number, delay: number, faint = fal
 // centred. Pills keep their own per-element transforms; this is the parent.
 const boardGroups: SVGGElement[] = [gEdges, gNodes, gNib, gLabels];
 function centerOnHead(): void {
-  const h = headNode();
-  const targetX = h ? h.x : boardCenter().x;
+  const xs = model.nodes.map((n) => n.x);
+  let targetX: number;
+  const margin = NODE_R * 2.4;
+  if (xs.length) {
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    if ((maxX - minX) + margin * 2 <= viewW) {
+      // the whole graph fits on screen: centre the graph itself, don't pan
+      // HEAD to the middle (which would shove the early commits off-screen)
+      targetX = (minX + maxX) / 2;
+    } else {
+      const h = headNode();
+      targetX = h ? h.x : boardCenter().x; // outgrew the screen: follow HEAD
+    }
+  } else {
+    targetX = boardCenter().x;
+  }
   const panX = viewW / 2 - targetX;
   for (const g of boardGroups) {
     g.style.transition = instant || S.prefersReduced
@@ -1080,8 +1104,14 @@ cmd.addEventListener("scroll", () => {
   ink.style.transform = `translateX(${-cmd.scrollLeft}px)`;
 });
 
-// keep the only input focused: typing should always land, no clicking required
+// On a phone, force-focusing the input means the soft keyboard can never be
+// dismissed — it permanently eats half the screen. So there we let the user
+// tap the command line when they want to type. On desktop we keep the input
+// focused so typing always lands without clicking.
+const isPhone = window.matchMedia("(max-width: 760px)").matches
+  || ("ontouchstart" in window);
 function keepFocus(): void {
+  if (isPhone) return;
   if (!document.hidden) cmd.focus();
 }
 cmd.addEventListener("blur", () => requestAnimationFrame(keepFocus));
@@ -1295,7 +1325,7 @@ async function seekTo(target: number): Promise<void> {
   renderRemoteTree();
   updateLayout();
   busy = false;
-  cmd.focus();
+  if (!isPhone) cmd.focus();
 }
 
 // ---- boot -----------------------------------------------------------
@@ -1311,7 +1341,7 @@ function boot(): void {
   // No file editor exists yet, so the local tree leads (is-focus) until a remote
   // appears. When the editor lands, the compact corner state takes over instead.
   updateLayout();
-  cmd.focus();
+  if (!isPhone) cmd.focus();
 }
 
 window.addEventListener("resize", () => {
