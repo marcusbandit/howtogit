@@ -51,6 +51,10 @@ const gEdges = need<SVGGElement>("edges");
 const gNodes = need<SVGGElement>("nodes");
 const gNib = need<SVGGElement>("ink-nib");
 const gLabels = need<SVGGElement>("labels");
+const gLapEdges = need<SVGGElement>("lap-edges");
+const gLapNodes = need<SVGGElement>("lap-nodes");
+const gLapNib = need<SVGGElement>("lap-ink-nib");
+const gLapLabels = need<SVGGElement>("lap-labels");
 const stage = need<HTMLElement>("stage");
 const form = need<HTMLFormElement>("cli");
 const cmd = need<HTMLInputElement>("cmd");
@@ -75,6 +79,7 @@ type Pt = { x: number; y: number };
 
 interface CommitNode {
   id: number;
+  parentId: number | null;   // primary parent (lets a machine's graph be redrawn)
   col: number;
   lane: number;     // 0 = main; negative lanes sit above
   x: number;
@@ -104,7 +109,29 @@ interface Model {
   pending: Pending | null;
 }
 
-const model: Model = { nodes: [], head: null, headBranch: "main", branches: {}, tagEls: null, pending: null };
+// A "machine" is one computer's view: its own commit graph (model + id counter),
+// its own SVG layers, refs, and pan. The board reflects ONE machine at a time
+// (the `active` one). `model` and the ref/pan globals are rebound to the active
+// machine by useMachine(), so every existing helper that reads `model` keeps
+// working transparently. The desktop is the only machine until `git clone`.
+interface Machine {
+  model: Model;
+  nextId: number;     // dense, per-machine id counter (ids must not collide)
+  edges: SVGGElement; nodes: SVGGElement; nib: SVGGElement; labels: SVGGElement;
+  refPills: Map<string, SVGGElement>;
+  refTicks: SVGGElement | null;
+  panX: number;
+}
+function freshModel(): Model {
+  return { nodes: [], head: null, headBranch: "main", branches: {}, tagEls: null, pending: null };
+}
+function makeMachine(g: { edges: SVGGElement; nodes: SVGGElement; nib: SVGGElement; labels: SVGGElement }): Machine {
+  return { model: freshModel(), nextId: 0, edges: g.edges, nodes: g.nodes, nib: g.nib, labels: g.labels, refPills: new Map(), refTicks: null, panX: 0 };
+}
+const desktop = makeMachine({ edges: gEdges, nodes: gNodes, nib: gNib, labels: gLabels });
+const laptop = makeMachine({ edges: gLapEdges, nodes: gLapNodes, nib: gLapNib, labels: gLapLabels });
+let active: Machine = desktop;
+let model: Model = active.model;   // rebound on machine switch (see useMachine)
 const GAP = 150;     // horizontal distance between commits (viewBox units)
 const LANE_GAP = 118; // vertical distance between branch lanes
 const NODE_R = 28;   // base node radius (viewBox units)
@@ -262,10 +289,10 @@ async function drawNode(node: CommitNode, seed: number): Promise<void> {
     d: shapePath(node.shape, node.x, node.y, node.r * 0.97, seed + 31),
     class: "node-stroke", stroke: node.color, "stroke-width": 1.5, opacity: 0.5,
   }) as SVGPathElement;
-  gNodes.appendChild(main);
-  gNodes.appendChild(second);
+  active.nodes.appendChild(main);
+  active.nodes.appendChild(second);
   if (instant) return;            // already rendered in full
-  await drawOn(main, { duration: 720, nibGroup: gNib, color: node.color });
+  await drawOn(main, { duration: 720, nibGroup: active.nib, color: node.color });
   drawOn(second, { duration: 360 });
 }
 
@@ -283,9 +310,9 @@ async function drawConnector(from: CommitNode, to: CommitNode, color: string, se
     d: connectorPath(from, to, seed), class: "edge-stroke",
     stroke: color, "stroke-width": EDGE_W,
   }) as SVGPathElement;
-  gEdges.appendChild(p);
+  active.edges.appendChild(p);
   if (instant) return;            // already rendered in full
-  await drawOn(p, { duration: 460, nibGroup: gNib, color });
+  await drawOn(p, { duration: 460, nibGroup: active.nib, color });
 }
 
 // a pill centred on its own origin, so it can be translated into place
@@ -305,8 +332,8 @@ function makePill(text: string, color: string, seed: number): SVGGElement {
 // Refs (branch names + HEAD) are persistent pills that MOVE to follow commits,
 // rather than fading out and redrawing. Recompute every ref's target and glide
 // each pill there; create new ones, drop gone ones.
-const refPills = new Map<string, SVGGElement>();
-let refTicks: SVGGElement | null = null;
+let refPills: Map<string, SVGGElement> = active.refPills;
+let refTicks: SVGGElement | null = active.refTicks;
 
 function refPosition(cx: number, cy: number, level: number): Pt {
   return { x: cx, y: cy - NODE_R - 36 - level * 36 };
@@ -317,7 +344,7 @@ function ensurePill(key: string, label: string, color: string, seed: number): { 
   if (!g) {
     g = makePill(label, color, seed);
     g.classList.add("ref-pill");
-    gLabels.appendChild(g);
+    active.labels.appendChild(g);
     refPills.set(key, g);
   }
   return { g, isNew };
@@ -354,7 +381,7 @@ function drawRefs(): void {
   // ticks + dashed branch stubs: cheap, redraw each time
   if (refTicks) refTicks.remove();
   refTicks = S.el("g") as SVGGElement;
-  gLabels.appendChild(refTicks);
+  active.labels.appendChild(refTicks);
 
   const wanted = new Set<string>();
   for (const [name, b] of Object.entries(model.branches)) {
@@ -410,7 +437,7 @@ function caption(text: string, cx: number, y: number, delay: number, faint = fal
   }) as SVGTextElement;
   if (faint) t.setAttribute("opacity", "0.6");
   t.textContent = text;
-  gLabels.appendChild(t);
+  active.labels.appendChild(t);
   animateIn(t, delay);
   return t;
 }
@@ -421,7 +448,7 @@ function caption(text: string, cx: number, y: number, delay: number, faint = fal
 // centred. Pills keep their own per-element transforms; this is the parent.
 // The remote mini-graph (gRemote) is deliberately NOT panned: it stays centred
 // on the screen's horizontal regardless of where the local graph has scrolled.
-const boardGroups: SVGGElement[] = [gEdges, gNodes, gNib, gLabels];
+let boardGroups: SVGGElement[] = [gEdges, gNodes, gNib, gLabels];
 // the graph lives in a central box this fraction of the view wide. While the
 // whole graph fits inside it we centre the graph on its own midpoint; only once
 // it outgrows the box do we pin HEAD to the centre and let the older commits
@@ -455,17 +482,32 @@ function centerOnHead(): void {
 }
 let boardPanX = 0;
 
+// switch which machine the board reflects: stash the leaving machine's live pan
+// + ticks, then rebind every "active" global to the new machine so all the
+// existing helpers (which read model / refPills / refTicks / boardGroups /
+// boardPanX) operate on it with no other changes.
+function useMachine(m: Machine): void {
+  active.refTicks = refTicks;
+  active.panX = boardPanX;
+  active = m;
+  model = m.model;
+  refPills = m.refPills;
+  refTicks = m.refTicks;
+  boardPanX = m.panX;
+  boardGroups = [m.edges, m.nodes, m.nib, m.labels];
+}
+
 // ---- step actions ---------------------------------------------------
 async function doInit(): Promise<void> {
   const p = nodePos(0, 0);
   const node: CommitNode = {
-    id: 0, col: 0, lane: 0, x: p.x, y: p.y, r: NODE_R,
+    id: active.nextId++, parentId: null, col: 0, lane: 0, x: p.x, y: p.y, r: NODE_R,
     branch: "main", color: COLORS.main, shape: "circle",
   };
   model.nodes.push(node);
-  model.head = 0;
+  model.head = node.id;
   model.headBranch = "main";
-  model.branches = { main: { color: COLORS.main, shape: "circle", lane: 0, tip: 0 } };
+  model.branches = { main: { color: COLORS.main, shape: "circle", lane: 0, tip: node.id } };
   dockStage();
   await drawNode(node, 3);
   drawRefs();
@@ -505,8 +547,8 @@ async function doAdd(): Promise<void> {
       d: shape, class: "node-stroke",
       stroke: branch.color, "stroke-width": NODE_W, "stroke-dasharray": LINE.staged.dash, opacity: 0,
     });
-    gEdges.appendChild(conn);
-    gNodes.appendChild(ring);
+    active.edges.appendChild(conn);
+    active.nodes.appendChild(ring);
     els.push(conn, ring);
   }
   const tag = caption("staged", pos.x, pos.y + NODE_R + 30, 120, true);
@@ -535,7 +577,7 @@ async function doCommit(message = "first commit"): Promise<void> {
     model.pending = null;
   }
   const node: CommitNode = {
-    id: model.nodes.length, col: parent.col + 1, lane: branch.lane, x: pos.x, y: pos.y,
+    id: active.nextId++, parentId: parent.id, col: parent.col + 1, lane: branch.lane, x: pos.x, y: pos.y,
     r: NODE_R, branch: model.headBranch, color: branch.color, shape: branch.shape,
   };
   await drawConnector(parent, node, branch.color, node.id * 7 + 4);
@@ -587,7 +629,7 @@ async function doMerge(arg?: string): Promise<void> {
   const col = Math.max(intoTip.col, otherTip.col) + 1;
   const pos = nodePos(col, into.lane);
   const node: CommitNode = {
-    id: model.nodes.length, col, lane: into.lane, x: pos.x, y: pos.y,
+    id: active.nextId++, parentId: intoTip.id, col, lane: into.lane, x: pos.x, y: pos.y,
     r: NODE_R, branch: model.headBranch, color: into.color, shape: into.shape,
   };
   // two connectors converge: one from the current tip, one from the branch tip
@@ -615,17 +657,29 @@ async function doRemoteAdd(arg?: string): Promise<void> {
 // push: origin/main catches up to main's tip. The first push also kicks off the
 // float-up that copies the trunk into the remote mini-graph (see
 // renderRemoteGraph). origin/main is one pill that glides to each pushed tip.
-let originMain: number | null = null;     // node id origin/main points at
+let originMain: number | null = null;     // node id origin/main points at (desktop)
 let originPill: SVGGElement | null = null;
+
+// the remote is the shared hub: an ordered, machine-agnostic list of the commits
+// that live on it (just shape/colour/seed). push appends a machine's trunk; pull
+// reads commits a machine still lacks. renderRemoteGraph draws this list.
+interface RemoteCommit { shape: Shape; color: string; seed: number; }
+let remoteHistory: RemoteCommit[] = [];
+function snapshotTrunk(m: Model): RemoteCommit[] {
+  return m.nodes.filter((n) => n.lane === 0).sort((a, b) => a.col - b.col)
+    .map((n) => ({ shape: n.shape, color: n.color, seed: n.id }));
+}
+
 async function doPush(): Promise<void> {
   const mainTip = nodeById(model.branches.main?.tip ?? null) ?? headNode();
   if (!mainTip) return;
   const firstPush = originMain === null;
   originMain = mainTip.id;
+  remoteHistory = snapshotTrunk(model);   // the hub absorbs the desktop's trunk
   if (!originPill) {
     originPill = makePill("origin/main", COLORS.remote, 7);
     originPill.classList.add("ref-pill");
-    gLabels.appendChild(originPill);
+    active.labels.appendChild(originPill);
   }
   placePill(originPill, { x: mainTip.x, y: mainTip.y + mainTip.r + 66 }, firstPush);
 }
@@ -1870,17 +1924,8 @@ const REMOTE_GAP = GAP * 0.82;         // compact spacing between them
 const REMOTE_TOP_FRAC = 0.13;          // rests this far down from the top (its own anchor)
 const shownRemoteIds = new Set<number>();   // commits already drawn on the mini-graph
 
-// the commits that live on the remote: the main-lane trunk up to origin/main's
-// tip (everything reachable from what you pushed).
-function remoteTrunk(): CommitNode[] {
-  const tip = nodeById(originMain);
-  if (!tip) return [];
-  return model.nodes
-    .filter((n) => n.lane === 0 && n.col <= tip.col)
-    .sort((a, b) => a.col - b.col);
-}
 function renderRemoteGraph(allowAnim = true): void {
-  const trunk = remoteTrunk();
+  const trunk = remoteHistory;
   gRemoteInner.replaceChildren();
   if (!trunk.length) { gRemote.style.opacity = "0"; shownRemoteIds.clear(); return; }
   gRemote.style.opacity = "1";
@@ -1899,6 +1944,9 @@ function renderRemoteGraph(allowAnim = true): void {
   const xAt = (i: number, c: number) => cx + (i - (c - 1) / 2) * REMOTE_GAP;
   const animate = allowAnim && !instant && !S.prefersReduced;
   const firstShow = oldCount === 0;
+  // a freshly pushed commit rises out of whichever machine pushed it: map each
+  // hub commit (in order) to the active machine's matching main-lane node.
+  const srcTrunk = active.model.nodes.filter((n) => n.lane === 0).sort((a, b) => a.col - b.col);
 
   // caption so it's clearly the remote, not a second local graph
   const label = S.el("text", {
@@ -1908,38 +1956,41 @@ function renderRemoteGraph(allowAnim = true): void {
   gRemoteInner.appendChild(label);
 
   const parts: { g: SVGGElement; conn: SVGPathElement | null; finalX: number; isNew: boolean }[] = [];
-  trunk.forEach((node, i) => {
+  trunk.forEach((rc, i) => {
     const finalX = xAt(i, count);
-    const isNew = !shownRemoteIds.has(node.id);
+    const isNew = !shownRemoteIds.has(i);
     const g = S.el("g") as SVGGElement;
     let conn: SVGPathElement | null = null;
     if (i > 0) {
       conn = S.el("path", {
-        d: connectorPath({ x: -REMOTE_GAP, y: 0, r: REMOTE_NODE_R }, { x: 0, y: 0, r: REMOTE_NODE_R }, node.id * 5 + 2),
+        d: connectorPath({ x: -REMOTE_GAP, y: 0, r: REMOTE_NODE_R }, { x: 0, y: 0, r: REMOTE_NODE_R }, rc.seed * 5 + 2),
         class: "edge-stroke", stroke: COLORS.main, "stroke-width": 2,
       }) as SVGPathElement;
       g.appendChild(conn);
     }
     g.appendChild(S.el("path", {
-      d: shapePath(node.shape, 0, 0, REMOTE_NODE_R, node.id * 7 + 1),
-      fill: node.color, stroke: node.color, "stroke-width": 2, "stroke-linejoin": "round",
+      d: shapePath(rc.shape, 0, 0, REMOTE_NODE_R, rc.seed * 7 + 1),
+      fill: rc.color, stroke: rc.color, "stroke-width": 2, "stroke-linejoin": "round",
     }));
     gRemoteInner.appendChild(g);
 
     if (!animate) { g.style.transform = `translate(${finalX}px, ${restY}px)`; return; }
-    // start state: a new commit starts exactly on its local-graph node (which is
+    // start state: a new commit starts exactly on its source-graph node (which is
     // panned, so add boardPanX), then travels to its centred remote slot;
     // existing ones sit in their old, less-centred slot ready to glide over
+    const src = srcTrunk[i];
+    const startX = (src ? src.x : boardCenter().x) + boardPanX;
+    const startY = src ? src.y : boardCenter().y;
     g.style.transition = "none";
     g.style.transform = isNew
-      ? `translate(${node.x + boardPanX}px, ${node.y}px)`
+      ? `translate(${startX}px, ${startY}px)`
       : `translate(${xAt(i, oldCount)}px, ${restY}px)`;
     g.style.opacity = isNew ? "0" : "1";
     parts.push({ g, conn: isNew ? conn : null, finalX, isNew });
   });
 
   if (!animate) {
-    shownRemoteIds.clear(); trunk.forEach((nn) => shownRemoteIds.add(nn.id));
+    shownRemoteIds.clear(); trunk.forEach((_rc, i) => shownRemoteIds.add(i));
     return;
   }
 
@@ -1968,7 +2019,7 @@ function renderRemoteGraph(allowAnim = true): void {
     }
   });
 
-  shownRemoteIds.clear(); trunk.forEach((nn) => shownRemoteIds.add(nn.id));
+  shownRemoteIds.clear(); trunk.forEach((_rc, i) => shownRemoteIds.add(i));
 }
 
 // the trees stay large (is-focus) for now — they never pair off / shrink yet.
@@ -2176,19 +2227,25 @@ function updateTimeline(): void {
 
 // ---- seek: rebuild instantly to a chosen step ----------------------
 function resetBoard(): void {
-  [gEdges, gNodes, gNib, gLabels, gRemoteInner].forEach((g) => g.replaceChildren());
-  model.nodes = [];
-  model.head = null;
-  model.headBranch = "main";
-  model.branches = {};
-  model.tagEls = null;
-  model.pending = null;
-  refPills.clear();
+  [gEdges, gNodes, gNib, gLabels, gLapEdges, gLapNodes, gLapNib, gLapLabels, gRemoteInner]
+    .forEach((g) => g.replaceChildren());
+  for (const m of [desktop, laptop]) {
+    Object.assign(m.model, freshModel());
+    m.nextId = 0;
+    m.refPills.clear();
+    m.refTicks = null;
+    m.panX = 0;
+  }
+  // neutralize the live globals so useMachine's "stash the outgoing machine"
+  // step saves harmless values, then rebind everything to the fresh desktop
   refTicks = null;
+  boardPanX = 0;
+  useMachine(desktop);
   originMain = null;
   originPill = null;
   shownRemoteIds.clear();
   gRemote.style.opacity = "0";
+  remoteHistory = [];
 }
 async function seekTo(target: number): Promise<void> {
   if (busy || target === stepIndex) return;
@@ -2240,6 +2297,13 @@ function boot(): void {
   needSel<HTMLElement>("#remotetree .tree__title").prepend(cloudIcon());
   wireFileViewer();   // click any file in either tree to open it
   if (!isPhone) cmd.focus();
+  // dev/test hook: read-only snapshot of the step machine + active model, used by
+  // the headless verification harness. Harmless; stripped before release.
+  (window as unknown as { __dbg: () => unknown }).__dbg = () => ({
+    stepIndex, busy, headBranch: model.headBranch, rh: remoteHistory.length,
+    activeIsDesktop: active === desktop, lap: laptop.model.nodes.length,
+    nodes: model.nodes.map((n) => ({ id: n.id, lane: n.lane, col: n.col, branch: n.branch })),
+  });
 }
 
 window.addEventListener("resize", () => {

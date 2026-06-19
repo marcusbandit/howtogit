@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=editor12" />
+  <link rel="stylesheet" href="style.css?v=editor13" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -65,6 +65,12 @@
       <g id="nodes" filter="url(#boil)"></g>
       <g id="ink-nib"></g>
       <g id="labels"></g>
+      <!-- the laptop's own graph layers: the board switches to these when we
+           move to the second machine (clone onward). Empty until then. -->
+      <g id="lap-edges" filter="url(#boil)"></g>
+      <g id="lap-nodes" filter="url(#boil)"></g>
+      <g id="lap-ink-nib"></g>
+      <g id="lap-labels"></g>
     </svg>
   </main>
 
@@ -102,6 +108,6 @@
   <!-- a clickable history of the steps; returning users can skip ahead -->
   <nav id="timeline" class="timeline" aria-label="lesson steps"></nav>
 
-  <script type="module" src="app.js?v=editor12"></script>
+  <script type="module" src="app.js?v=editor13"></script>
 </body>
 </html>
