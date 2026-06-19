@@ -358,6 +358,22 @@ function caption(text, cx, y, delay, faint = false) {
     animateIn(t, delay);
     return t;
 }
+// ---- follow HEAD: glide the board so HEAD sits at the horizontal centre -----
+// The graph grows rightward; rather than let it crawl off-screen, every step
+// pans the whole board (all four layers move as one) so wherever HEAD landed is
+// centred. Pills keep their own per-element transforms; this is the parent.
+const boardGroups = [gEdges, gNodes, gNib, gLabels];
+function centerOnHead() {
+    const h = headNode();
+    const targetX = h ? h.x : boardCenter().x;
+    const panX = viewW / 2 - targetX;
+    for (const g of boardGroups) {
+        g.style.transition = instant || S.prefersReduced
+            ? "none"
+            : "transform .6s cubic-bezier(.16,1,.3,1)";
+        g.style.transform = `translateX(${panX}px)`;
+    }
+}
 // ---- step actions ---------------------------------------------------
 async function doInit() {
     const p = nodePos(0, 0);
@@ -988,6 +1004,7 @@ form.addEventListener("submit", async (e) => {
     busy = true;
     await step.run(arg);
     busy = false;
+    centerOnHead();
     renderFileTree();
     renderRemoteTree();
     updateLayout();
@@ -1212,6 +1229,7 @@ async function seekTo(target) {
         const st = steps[k];
         await st.run(st.extract ? st.extract(canonical(st)) : undefined);
     }
+    centerOnHead(); // pan instantly while still in replay mode (no glide)
     instant = false;
     stepIndex = target;
     cmd.value = "";
@@ -1242,6 +1260,7 @@ window.addEventListener("resize", () => {
     sizeBoard();
     if (stepIndex > 0)
         dockStage();
+    centerOnHead(); // viewW changed: keep HEAD centred
     updateInk(); // recompute field width + redraw the underline
 });
 if (document.readyState === "loading") {

@@ -128,9 +128,10 @@ of colour. Plan for it as its own effort.
 
 ### Polish / fixes
 
-- **Center the graph on HEAD.** Horizontally center the view on wherever HEAD
-  is, not on the `git init` node. Right now it just sits where it is; it should
-  follow HEAD.
+- **Center the graph on HEAD. [DONE]** Every step pans the whole board (all
+  four layers as one) so wherever HEAD landed glides to the horizontal centre,
+  instead of letting the graph crawl off-screen to the right. The pan is instant
+  during timeline seeks and re-runs on resize.
 - **Stop the idle drift. [DONE]** The whole-sheet float is gone and the board
   is completely still when idle. The boil now only runs while ink is actively
   being laid down: each stroke nudges it awake, it eases back to a fixed warp a
