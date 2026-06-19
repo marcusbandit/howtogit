@@ -137,10 +137,10 @@ of colour. Plan for it as its own effort.
   being laid down: each stroke nudges it awake, it eases back to a fixed warp a
   beat after the last stroke, then the loop parks itself, so an idle board
   never wanders and costs nothing.
-- **A "completed" end state.** When the whole sequence is finished the board is
-  just empty with nothing there. Instead it should read as done: a message like
-  "completed, nothing more to do" (or a fun line) so it's clearly the end, not a
-  blank.
+- **A "completed" end state. [DONE]** When the whole sequence finishes, a
+  hand-written closing line ("that's the whole first loop — nothing left to do
+  ✦") fades in under HEAD, so the end reads as done rather than a blank gap. It
+  also appears when you seek to the final step on the timeline.
 
 ## Later (common commands to cover)
 

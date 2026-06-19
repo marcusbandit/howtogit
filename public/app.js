@@ -534,6 +534,14 @@ async function doPush() {
         return;
     pill(gLabels, "origin/main", mainTip.x, mainTip.y + mainTip.r + 66, COLORS.remote, 7, 120);
 }
+// when the whole sequence is finished, the board shouldn't read as blank: a
+// hand-written closing line sits under HEAD so it's clearly the end, not a gap.
+function showEndState() {
+    const h = headNode();
+    if (!h)
+        return;
+    caption("that's the whole first loop — nothing left to do ✦", h.x, h.y + h.r + 100, 420, true);
+}
 const atomText = (a) => (typeof a.text === "function" ? a.text() : a.text);
 const atomSep = (atoms, i) => atoms[i].sep ?? (i === 0 ? "" : " ");
 const A = (text, tone, opts = {}) => ({ text, tone, ...opts });
@@ -1005,6 +1013,8 @@ form.addEventListener("submit", async (e) => {
     await step.run(arg);
     busy = false;
     centerOnHead();
+    if (stepIndex >= steps.length)
+        showEndState();
     renderFileTree();
     renderRemoteTree();
     updateLayout();
@@ -1230,6 +1240,8 @@ async function seekTo(target) {
         await st.run(st.extract ? st.extract(canonical(st)) : undefined);
     }
     centerOnHead(); // pan instantly while still in replay mode (no glide)
+    if (target >= steps.length)
+        showEndState();
     instant = false;
     stepIndex = target;
     cmd.value = "";
