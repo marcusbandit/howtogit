@@ -5,7 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>howtogit — learn git on paper</title>
   <meta name="description" content="An interactive, hand-drawn guide to git for beginners — type real commands and watch the graph get drawn for you." />
-  <meta name="color-scheme" content="light" />
+  <meta name="color-scheme" content="light dark" />
+
+  <!-- apply the saved (or system) theme before first paint, so there's no flash
+       of the wrong colours. The toggle button is wired up on DOMContentLoaded. -->
+  <script>
+    (function () {
+      var KEY = 'htg-theme';
+      var root = document.documentElement;
+      function apply(t) { root.dataset.theme = t; }
+      var saved = null;
+      try { saved = localStorage.getItem(KEY); } catch (e) {}
+      var prefersDark = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+      apply(saved || (prefersDark ? 'dark' : 'light'));
+
+      document.addEventListener('DOMContentLoaded', function () {
+        var btn = document.getElementById('theme-toggle');
+        if (!btn) return;
+        function sync() {
+          var dark = root.dataset.theme === 'dark';
+          btn.setAttribute('aria-pressed', String(dark));
+          btn.setAttribute('title', dark ? 'Lights on — switch to light' : 'Lights off — switch to dark');
+        }
+        sync();
+        btn.addEventListener('click', function () {
+          var next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+          apply(next);
+          try { localStorage.setItem(KEY, next); } catch (e) {}
+          sync();
+        });
+      });
+    })();
+  </script>
 
   <meta property="og:title" content="howtogit — learn git on paper" />
   <meta property="og:description" content="Type real git commands and watch the graph get drawn for you, by hand." />
@@ -16,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=editor11" />
+  <link rel="stylesheet" href="style.css?v=darkmode1" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -32,6 +63,19 @@
     <span class="brand__word">howtogit.dev</span>
     <svg class="brand__rule" aria-hidden="true" viewBox="0 0 160 12" preserveAspectRatio="none"></svg>
   </header>
+
+  <!-- dark-mode toggle: a hand-drawn lightbulb. Lit (with rays) in light mode,
+       dark and unlit in dark mode — "turn the light off to go dark". -->
+  <button id="theme-toggle" class="theme-toggle" type="button"
+          aria-label="Toggle dark mode" aria-pressed="false"
+          title="Lights off — switch to dark">
+    <svg class="bulb" viewBox="0 0 48 56" aria-hidden="true">
+      <path class="bulb__rays" d="M24 -1.5 L24 2.5 M10 2.5 L12.2 6 M38 2.5 L35.8 6 M2 15 L6.5 17 M46 15 L41.5 17 M5 28 L9 26 M43 28 L39 26" />
+      <path class="bulb__glass" d="M24 6.5 C15.5 6.5 10.5 12.5 10.5 19.2 C10.5 24.4 13.8 27.4 16.2 31.5 C16.8 32.6 17.4 33 18 33 L30 33 C30.6 33 31.2 32.6 31.8 31.5 C34.2 27.4 37.5 24.4 37.5 19.2 C37.5 12.5 32.5 6.5 24 6.5 Z" />
+      <path class="bulb__filament" d="M18.5 24 C20 19.5 21.5 22.5 24 17.8 C26.5 22.5 28 19.5 29.5 24 M21.5 25 L22.4 31 M26.5 25 L25.6 31" />
+      <path class="bulb__base" d="M17.6 36.4 L30.4 36.4 M18.4 40 L29.6 40 M19.6 43.6 L28.4 43.6 M21.6 47 L26.4 47" />
+    </svg>
+  </button>
 
   <div class="wip" aria-label="work in progress">work in progress</div>
 
