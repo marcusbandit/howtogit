@@ -30,6 +30,10 @@ total beginner is never lost.
 - `git branch` + `git checkout` → a second coloured lane (red, square nodes)
   that diverges from main; HEAD moves onto the branch and the next commit lands
   on its lane.
+- `git checkout main` + `git merge feature` → the feature lane rejoins main as
+  a merge commit with two parents (a diamond): one connector from main's tip,
+  one from the feature tip drawn in the feature colour. HEAD/main glide to the
+  merge commit; the feature branch stays put.
 - `git remote add` → a second repo panel slides in (across the graph).
 - `git push` → remote panel fills, `origin/main` stamped on main's tip.
 - Guided command line: commands are token "atoms" (fixed words + free values).
@@ -44,7 +48,9 @@ total beginner is never lost.
 
 Build toward two machines sharing a repo through a remote. Rough order:
 
-1. (optional) `git merge` — bring the feature branch back into main.
+1. `git merge` — bring the feature branch back into main. **[DONE]** Added as
+   two guided steps: `git checkout main`, then `git merge feature`, drawing the
+   rejoin diamond.
 2. A second machine appears (e.g. a laptop) — a fresh, empty computer beside
    the desktop.
 3. `git clone` on the laptop — copies the remote down into the laptop.

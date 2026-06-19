@@ -511,6 +511,36 @@ async function doCheckout(arg?: string): Promise<void> {
   drawRefs();
 }
 
+// merge a branch into the one HEAD is on: a new commit on the current lane with
+// two parents (the current tip and the merged branch's tip), so the diverged
+// lanes visibly rejoin into a diamond.
+async function doMerge(arg?: string): Promise<void> {
+  const name = (arg ?? "feature").trim() || "feature";
+  const other = model.branches[name];
+  const into = model.branches[model.headBranch];
+  if (!other || !into) return;
+  const intoTip = nodeById(into.tip);
+  const otherTip = nodeById(other.tip);
+  if (!intoTip || !otherTip) return;
+  // land the merge commit one column past whichever parent is furthest right
+  const col = Math.max(intoTip.col, otherTip.col) + 1;
+  const pos = nodePos(col, into.lane);
+  const node: CommitNode = {
+    id: model.nodes.length, col, lane: into.lane, x: pos.x, y: pos.y,
+    r: NODE_R, branch: model.headBranch, color: into.color, shape: into.shape,
+  };
+  // two connectors converge: one from the current tip, one from the branch tip
+  // (drawn in the branch's colour so you can see where the work came from)
+  await drawConnector(intoTip, node, into.color, node.id * 7 + 4);
+  await drawConnector(otherTip, node, other.color, node.id * 7 + 9);
+  await drawNode(node, node.id * 13 + 6);
+  model.nodes.push(node);
+  model.head = node.id;
+  into.tip = node.id;
+  drawRefs();
+  caption(`merge ${name}`, node.x, node.y + node.r + 32, 320);
+}
+
 // the remote's nickname and address, captured from `git remote add`
 let remoteName = "origin";
 let remoteUrl = "https://github.com/you/site.git";
@@ -694,6 +724,38 @@ const steps: Step[] = [
       ],
     },
     run: doCommit,
+  },
+  {
+    key: "checkout-main",
+    atoms: [A("git", "cmd", { sep: "" }), A("checkout", "cmd"), A("main", "val", { free: true })],
+    test: (s) => /^git\s+checkout\s+main$/i.test(s),
+    extract: (s) => s.split(/\s+/)[2] ?? "main",
+    hint: "Go back to main first:  git checkout main",
+    teach: {
+      goal: "Switch back to main",
+      why: "You merge into the branch you're standing on, so move onto main before bringing the feature in.",
+      parts: [
+        { t: "checkout", tone: "cmd", why: "move HEAD back onto main" },
+        { t: "main", tone: "val", why: "the branch you want the feature merged into" },
+      ],
+    },
+    run: doCheckout,
+  },
+  {
+    key: "merge",
+    atoms: [A("git", "cmd", { sep: "" }), A("merge", "cmd"), A("feature", "val", { free: true })],
+    test: (s) => /^git\s+merge\s+\S+$/i.test(s),
+    extract: (s) => s.split(/\s+/)[2] ?? "feature",
+    hint: "Bring the branch in:  git merge feature",
+    teach: {
+      goal: "Merge the branch back",
+      why: "Combine the feature branch's commit into main, so main has all the work. The two lanes rejoin.",
+      parts: [
+        { t: "merge", tone: "cmd", why: "join another branch's commits into this one" },
+        { t: "feature", tone: "val", why: "the branch whose work you're bringing in" },
+      ],
+    },
+    run: doMerge,
   },
   {
     key: "remote",
@@ -1153,7 +1215,7 @@ function buildTimeline(): void {
     dot.className = "tl-dot";
     const label = document.createElement("span");
     label.className = "tl-label";
-    label.textContent = `git ${st.key.replace(/\d+$/, "")}`;
+    label.textContent = `git ${st.key.replace(/[-\d].*$/, "")}`;
     btn.append(dot, label);
     btn.title = `Jump to: git ${st.key}`;
     btn.addEventListener("click", () => { void seekTo(i); });
