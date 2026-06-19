@@ -462,6 +462,22 @@ body {
 }
 #filetree.is-stowed .tree__title::after { content: " (asleep)"; opacity: 0.7; }
 
+/* the laptop recedes once we pull back to the desktop: grayed + dropped low-left,
+   the mirror of the stowed desktop. */
+#laptoptree.is-stowed-lap {
+  top: auto;
+  bottom: clamp(7rem, 16vh, 11rem);
+  left: clamp(1.1rem, 3vw, 2.4rem);
+  right: auto;
+  transform: none;
+  width: clamp(13rem, 17vw, 16rem);
+  font-size: 1.0rem;
+  filter: grayscale(1);
+  opacity: 0.5;
+  pointer-events: auto;
+}
+#laptoptree.is-stowed-lap .tree__title::after { content: " (asleep)"; opacity: 0.7; }
+
 /* the machine-switch highlight: a soft ink-tinted blob that glides between the
    two machines. Purple = "machine identity" (matches the remote/origin accent). */
 .switch-blob {

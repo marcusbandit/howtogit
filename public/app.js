@@ -656,6 +656,43 @@ async function doPushFromLaptop() {
     active.labels.appendChild(originPill); // bring origin/main onto the laptop
     placePill(originPill, { x: tip.x, y: tip.y + tip.r + 66 }, false);
 }
+// pull on the desktop: switch back (the desktop graph was hidden, not discarded,
+// so it just reappears), then append the hub commits the desktop still lacks so
+// it catches up to the remote. origin/main moves back onto the desktop's tip.
+async function doPull() {
+    if (active !== desktop)
+        applyMoveToDesktop();
+    const m = desktop.model;
+    const trunk = () => m.nodes.filter((n) => n.lane === 0).sort((a, b) => a.col - b.col);
+    let parent = trunk()[trunk().length - 1] ?? null;
+    for (let i = trunk().length; i < remoteHistory.length; i++) {
+        const rc = remoteHistory[i];
+        const col = (parent?.col ?? -1) + 1;
+        const pos = nodePos(col, 0);
+        const node = {
+            id: desktop.nextId++, parentId: parent ? parent.id : null, col, lane: 0,
+            x: pos.x, y: pos.y, r: NODE_R, branch: "main", color: rc.color, shape: rc.shape,
+        };
+        if (parent)
+            await drawConnector(parent, node, COLORS.main, node.id * 7 + 4);
+        await drawNode(node, node.id * 13 + 6);
+        m.nodes.push(node);
+        m.head = node.id;
+        if (m.branches.main)
+            m.branches.main.tip = node.id;
+        parent = node;
+    }
+    if (parent) {
+        originMain = parent.id; // origin/main caught up on the desktop
+        if (originPill) {
+            active.labels.appendChild(originPill); // bring origin/main back onto the desktop
+            placePill(originPill, { x: parent.x, y: parent.y + parent.r + 66 }, false);
+        }
+    }
+    drawRefs();
+    if (parent)
+        caption("pulled from the remote", parent.x, parent.y + NODE_R + 32, 320);
+}
 // ---- the basics 2: moving to the laptop -----------------------------
 // git clone copies the remote down onto a second machine (the laptop). The
 // laptop view + the clone drawing land in a later step; for now this advances
@@ -743,7 +780,7 @@ function showEndState() {
     const h = headNode();
     if (!h)
         return;
-    caption("that's the whole first loop — nothing left to do ✦", h.x, h.y + h.r + 100, 420, true);
+    caption("that's the whole collaboration loop. everything is in sync ✦", h.x, h.y + h.r + 100, 420, true);
 }
 const atomText = (a) => (typeof a.text === "function" ? a.text() : a.text);
 const atomSep = (atoms, i) => atoms[i].sep ?? (i === 0 ? "" : " ");
@@ -850,7 +887,7 @@ const steps = [
         hint: "Send your commit up:  git push -u origin main",
         teach: {
             goal: "Send it to the remote",
-            why: "Upload your commit so the remote has it too. This is the first time your work leaves your computer — the remote now holds a copy of your tree.",
+            why: "Upload your commit so the remote has it too. This is the first time your work leaves your computer. The remote now holds a copy of your tree.",
             parts: [
                 { t: "push", tone: "cmd", why: "upload your commits to the remote" },
                 { t: "-u", tone: "flag", why: "upstream: tie this branch to the remote so next time you can just type git push" },
@@ -969,7 +1006,7 @@ const steps = [
         hint: "Send the merge up:  git push",
         teach: {
             goal: "Send the merge up",
-            why: "You already set the upstream with -u, so a bare git push sends main — merge and all — to the remote. The remote tree catches up to yours.",
+            why: "You already set the upstream with -u, so a bare git push sends main, merge and all, to the remote. The remote tree catches up to yours.",
             parts: [
                 { t: "push", tone: "cmd", why: "upload the new commits to the remote you already linked" },
             ],
@@ -1044,14 +1081,28 @@ const steps = [
         },
         run: doPushFromLaptop,
     },
+    {
+        key: "pull",
+        atoms: [A("git", "cmd", { sep: "" }), A("pull", "cmd")],
+        test: (s) => /^git\s+pull$/i.test(s),
+        hint: "Catch the desktop up:  git pull",
+        teach: {
+            goal: "Pull on the desktop",
+            why: "Back on the desktop. The remote has the laptop's commit but the desktop does not yet. git pull brings it down so the desktop matches the remote.",
+            parts: [
+                { t: "pull", tone: "cmd", why: "download new commits from the remote into this machine" },
+            ],
+        },
+        run: doPull,
+    },
 ];
 const END = {
     teach: {
-        goal: "It's on the remote",
-        why: "Your local repo and the remote now share the same history.",
+        goal: "Everything is in sync",
+        why: "The laptop, the desktop, and the remote all share the same history now. That's the whole collaboration loop.",
         parts: [],
     },
-    tease: "That's the whole first loop. More git is on the way ✦",
+    tease: "That's the whole collaboration loop. More git is on the way ✦",
 };
 function currentAtoms() {
     return stepIndex < steps.length ? steps[stepIndex].atoms : null;
@@ -1432,6 +1483,9 @@ form.addEventListener("submit", async (e) => {
     // right after the clone, auto-type `cd my-site/` to enter the project
     if (steps[stepIndex - 1]?.key === "clone")
         void playAutoCd();
+    // finishing the laptop push lands us at `pull`: move back to the desktop
+    if (stepIndex === stepIdx("pull"))
+        void playMoveToDesktop();
 });
 cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
 cmd.addEventListener("keydown", (e) => {
@@ -2250,7 +2304,8 @@ const MINI_BOTTOM_FRAC = 0.78;
 const MINI_COLOR = "#9a958c"; // grayed ink: "asleep on the other machine"
 const shownMiniIds = new Set();
 function renderMiniDesktop(animate = false) {
-    const show = laptopVisible();
+    const p = stepIdx("pull");
+    const show = laptopVisible() && (p < 0 || stepIndex < p); // only while we're on the laptop
     gMiniDeskInner.replaceChildren();
     if (!show || !miniDesktopTrunk.length) {
         gMiniDesk.style.opacity = "0";
@@ -2359,14 +2414,84 @@ async function playMoveToLaptop() {
     }
     blob.remove();
 }
+// the move back to the desktop (for git pull): the desktop graph was only hidden,
+// so it reappears; the laptop recedes. applyMoveToDesktop is the instant-safe
+// state, playMoveToDesktop adds the blob glide + a crossfade of the two graphs.
+function applyMoveToDesktop() {
+    useMachine(desktop); // reveals the persisted desktop graph, hides the laptop
+    miniDesktopTrunk = []; // the stand-in mini-graph is no longer needed
+}
+async function playMoveToDesktop() {
+    const lapRect = laptopTreeEl.getBoundingClientRect();
+    const deskLayers = [gEdges, gNodes, gNib, gLabels];
+    const lapLayers = [gLapEdges, gLapNodes, gLapNib, gLapLabels];
+    applyMoveToDesktop();
+    renderLaptopTree();
+    renderMiniDesktop(false);
+    updateLayout();
+    centerOnHead();
+    if (instant || S.prefersReduced)
+        return;
+    // crossfade: the desktop graph fades in as the laptop graph fades out
+    for (const g of deskLayers) {
+        g.style.transition = "none";
+        g.style.opacity = "0";
+    }
+    for (const g of lapLayers) {
+        g.style.transition = "none";
+        g.style.opacity = "1";
+    }
+    void deskLayers[0].getBoundingClientRect();
+    requestAnimationFrame(() => {
+        for (const g of deskLayers) {
+            g.style.transition = "opacity .75s ease";
+            g.style.opacity = "1";
+        }
+        for (const g of lapLayers) {
+            g.style.transition = "opacity .75s ease";
+            g.style.opacity = "0";
+        }
+    });
+    const gen = ++blobGen;
+    const alive = () => gen === blobGen;
+    const blob = makeBlob();
+    positionBlobOver(blob, lapRect); // form over the laptop
+    blob.style.opacity = "0";
+    void blob.getBoundingClientRect();
+    requestAnimationFrame(() => { blob.style.transition = "opacity .5s ease"; blob.style.opacity = "1"; });
+    await sleep(700);
+    if (!alive()) {
+        blob.remove();
+        return;
+    }
+    blob.style.transition = "transform 1.1s cubic-bezier(.4,0,.2,1)";
+    positionBlobOver(blob, treeEl.getBoundingClientRect()); // glide back to the desktop
+    await sleep(1150);
+    if (!alive()) {
+        blob.remove();
+        return;
+    }
+    await sleep(220);
+    blob.style.transition = "opacity .45s ease";
+    blob.style.opacity = "0";
+    await sleep(460);
+    if (!alive()) {
+        blob.remove();
+        return;
+    }
+    blob.remove();
+}
 // the desktop tree leads while we work on it; once we move to the laptop it grays
 // and stows low-left (with the mini-graph), the laptop tree takes the focus slot,
 // and the remote tree stays top-right as the shared hub.
 function updateLayout() {
-    const onLaptop = laptopVisible();
-    treeEl.classList.toggle("is-focus", !onLaptop);
+    const p = stepIdx("pull");
+    const onLaptop = laptopVisible() && (p < 0 || stepIndex < p);
+    const backOnDesktop = p >= 0 && stepIndex >= p;
+    treeEl.classList.toggle("is-focus", !onLaptop); // desktop leads except while on the laptop
     treeEl.classList.toggle("is-paired", false);
     treeEl.classList.toggle("is-stowed", onLaptop);
+    laptopTreeEl.classList.toggle("is-stowed-lap", backOnDesktop); // laptop recedes once we pull
     remoteTreeEl.classList.toggle("is-focus", true); // the remote stays the big hub, top-right
     remoteTreeEl.classList.toggle("is-paired", false);
 }
@@ -2381,6 +2506,7 @@ const TIMELINE_SECTIONS = [
             { label: "Clone the repo", keys: ["clone"] },
             { label: "Edit on the laptop", keys: ["add3", "commit3"] },
             { label: "Push from the laptop", keys: ["push3"] },
+            { label: "Pull on the desktop", keys: ["pull"] },
         ] },
 ];
 // a command label for a sub-step, e.g. "checkout-main" -> "git checkout"
@@ -2580,11 +2706,15 @@ async function seekTo(target) {
         const st = steps[k];
         await st.run(st.extract ? st.extract(canonical(st)) : undefined);
     }
-    // landing in The basics 2 but before clone has switched us: settle on the
-    // empty laptop so the board reads correctly (doClone does this itself once it
-    // draws, but a seek that lands exactly on clone hasn't run it).
-    if (target >= stepIdx("clone") && active === desktop)
+    // settle on the right machine for the target. While on the laptop arc
+    // [clone, pull) the laptop is active; from pull on we are back on the desktop.
+    // (doClone / doPull switch themselves during replay, so this only matters when
+    // the target lands exactly on clone or pull, before that step has run.)
+    const pullIdx = stepIdx("pull");
+    if (target >= stepIdx("clone") && (pullIdx < 0 || target < pullIdx) && active === desktop)
         applyMoveToLaptop();
+    if (pullIdx >= 0 && target >= pullIdx && active === laptop)
+        applyMoveToDesktop();
     centerOnHead(); // pan instantly while still in replay mode (no glide)
     if (target >= steps.length)
         showEndState();
