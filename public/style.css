@@ -426,6 +426,143 @@ body {
   .lesson__cue-arrow { animation: none; }
 }
 
+/* ---- landing annotations (only on the centred first screen) ----------
+   The first screen drops the plain lesson body in favour of hand-drawn
+   callouts that point at the real parts of the page: where your files are,
+   where explanations will show up, and a timeline that hides until you find
+   it. Everything here is gated to #stage.is-centered via sibling selectors,
+   so the instant git init docks the stage, every annotation melts away. */
+
+/* keep only the hook (a hand-drawn title) + the start-here cue on the landing;
+   the explanatory lesson body is replaced by the callouts around it */
+#stage.is-centered .lesson__why,
+#stage.is-centered .lesson__note,
+#stage.is-centered .lesson__parts { display: none; }
+
+/* the floating annotation layer: see-through, only the labels opt back in */
+.landing-notes { display: none; }
+#stage.is-centered ~ .landing-notes {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.note { position: fixed; }
+.note__label {
+  font-family: var(--hand);
+  font-weight: 600;
+  font-size: clamp(1.1rem, 2.3vw, 1.5rem);
+  line-height: 1.12;
+  color: var(--ink-soft);
+  pointer-events: auto;            /* selectable */
+}
+.note__arrow { display: block; overflow: visible; }
+.note-stroke {
+  fill: none;
+  stroke: var(--pen-red);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+
+/* file-tree callout: sits to the right of the focused tree, arrow pointing back */
+.note--tree {
+  left: clamp(18rem, 29vw, 32rem);
+  top: 45%;
+  width: clamp(12rem, 17vw, 16rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+.note--tree .note__arrow { width: 5.4rem; height: 3.4rem; }
+.note--tree .note__label { text-align: left; }
+
+/* explainer area, bottom-right: a sketchy dashed region we'll fill in later */
+.note--explainer {
+  right: clamp(1.5rem, 3vw, 3rem);
+  bottom: clamp(2rem, 7vh, 5rem);
+  width: clamp(15rem, 23vw, 21rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.note--explainer .note__arrow { width: 4.6rem; height: 3.4rem; margin-right: 1.4rem; }
+.explainer-box {
+  width: 100%;
+  height: clamp(7rem, 16vh, 10rem);
+  border: 2.5px dashed var(--ink-soft);
+  /* an uneven, hand-drawn box */
+  border-radius: 20px 11px 22px 13px / 13px 22px 11px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 1rem;
+  opacity: 0.9;
+}
+.explainer-box__label {
+  font-family: var(--hand);
+  font-weight: 600;
+  font-size: clamp(1.05rem, 2.2vw, 1.4rem);
+  line-height: 1.12;
+  color: var(--ink-soft);
+  text-align: center;
+  pointer-events: auto;
+}
+
+/* ---- landing timeline: hidden until you hover its strip --------------- */
+.tl-zone { display: none; }
+#stage.is-centered ~ .tl-zone {
+  display: block;
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(40rem, 86vw);
+  height: clamp(3.5rem, 10vh, 6rem);
+  z-index: 5;
+  pointer-events: auto;
+}
+#stage.is-centered ~ #timeline {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+#stage.is-centered ~ .tl-zone:hover ~ #timeline { opacity: 1; }
+
+.tl-found { display: none; }
+#stage.is-centered ~ .tl-found {
+  display: block;
+  position: fixed;
+  left: 50%;
+  bottom: clamp(3.4rem, 9vh, 5.6rem);
+  transform: translateX(-50%);
+  z-index: 6;
+  margin: 0;
+  font-family: var(--hand);
+  font-weight: 600;
+  font-size: clamp(1.15rem, 2.5vw, 1.55rem);
+  line-height: 1.1;
+  text-align: center;
+  white-space: pre-line;            /* honour the line break in the markup */
+  color: var(--pen-green);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+#stage.is-centered ~ .tl-zone:hover ~ .tl-found { opacity: 1; }
+
+/* phones: the fixed annotations don't fit the narrow layout, so skip them
+   and just leave the timeline visible as usual */
+@media (max-width: 760px) {
+  #stage.is-centered ~ .landing-notes,
+  #stage.is-centered ~ .tl-zone,
+  #stage.is-centered ~ .tl-found { display: none; }
+  #stage.is-centered ~ #timeline { opacity: 1; pointer-events: auto; }
+}
+
 /* ---- command line with highlight + ghost overlay ------------------- */
 #cli {
   display: flex;

@@ -47,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=landing1" />
+  <link rel="stylesheet" href="style.css?v=landing2" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -169,9 +169,39 @@
     </div>
   </section>
 
+  <!-- landing-only hover strip: on the first screen the timeline hides until you
+       hover here, then fades in with a friendly note (see CSS gating). -->
+  <div class="tl-zone" aria-hidden="true"></div>
+
   <!-- a clickable history of the steps; returning users can skip ahead -->
   <nav id="timeline" class="timeline" aria-label="lesson steps"></nav>
 
-  <script type="module" src="app.js?v=landing1"></script>
+  <p class="tl-found" aria-hidden="true">You found the timeline!
+this will be useful if you wanna come back later</p>
+
+  <!-- landing-only hand-drawn annotations pointing at the page's parts. Shown
+       only while the stage is centred (before git init); see CSS gating. -->
+  <div id="landing-notes" class="landing-notes" aria-hidden="true">
+    <!-- points back at the focused file tree on the left -->
+    <div class="note note--tree">
+      <svg class="note__arrow" viewBox="0 0 96 60" aria-hidden="true">
+        <path class="note-stroke" d="M90 10 C 62 16, 32 28, 8 48" />
+        <path class="note-stroke" d="M8 48 L21 46 M8 48 L14 37" />
+      </svg>
+      <p class="note__label">these are your project's files, the ones on your computer</p>
+    </div>
+    <!-- the repurposed bottom-right: a sketchy explainer area -->
+    <div class="note note--explainer">
+      <svg class="note__arrow note__arrow--explainer" viewBox="0 0 80 60" aria-hidden="true">
+        <path class="note-stroke" d="M8 8 C 32 16, 56 28, 66 54" />
+        <path class="note-stroke" d="M66 54 L54 50 M66 54 L69 42" />
+      </svg>
+      <div class="explainer-box">
+        <span class="explainer-box__label">i'll explain things over here as you go</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js?v=landing2"></script>
 </body>
 </html>
