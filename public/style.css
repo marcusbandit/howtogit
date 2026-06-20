@@ -469,9 +469,9 @@ body {
 
 /* file-tree callout: sits to the right of the focused tree, arrow pointing back */
 .note--tree {
-  left: clamp(18rem, 29vw, 32rem);
-  top: 45%;
-  width: clamp(12rem, 17vw, 16rem);
+  left: clamp(18.5rem, 20vw, 23rem);
+  top: 42%;
+  width: clamp(11rem, 15vw, 14rem);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -703,7 +703,8 @@ body {
   top: 50%;
   transform: translateY(-50%);
   left: clamp(1.5rem, 4.5vw, 5rem);
-  width: clamp(19rem, 28vw, 26rem);
+  /* hug the filenames instead of reserving a fixed wide column */
+  width: fit-content;
   font-size: 1.55rem;
 }
 .tree.is-focus .tree__title { font-size: 0.98rem; margin-bottom: 1.1rem; }
