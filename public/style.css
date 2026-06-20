@@ -512,6 +512,35 @@ body {
   pointer-events: auto;
 }
 
+/* ---- landing intro: the first screen draws itself in ----------------- */
+/* the file tree fades in ~0.5s after load. Opacity only: its is-focus state
+   carries a translateY(-50%) for centring that a transform animation would
+   clobber. */
+#filetree { animation: landing-fade 0.7s ease 0.5s both; }
+@keyframes landing-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* the tree callout's arrow inks itself on (paths carry pathLength="1", so the
+   dash maths is exact); shaft first, then the arrowhead */
+.note--tree .note-stroke { stroke-dasharray: 1; }
+.note--tree .note__arrow path:nth-of-type(1) { animation: landing-draw 0.55s ease 0.65s both; }
+.note--tree .note__arrow path:nth-of-type(2) { animation: landing-draw 0.35s ease 1.05s both; }
+@keyframes landing-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+/* the clone note and the roadmap wipe on left-to-right, like ink being laid */
+#stage.is-centered .landing__clone { animation: landing-wipe 0.9s var(--ease-settle) 1.5s both; }
+#stage.is-centered .landing__road  { animation: landing-wipe 0.9s var(--ease-settle) 2s both; }
+@keyframes landing-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 -4% 0 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #filetree,
+  .note--tree .note__arrow path,
+  #stage.is-centered .landing__clone,
+  #stage.is-centered .landing__road { animation: none; }
+}
+
 /* ---- landing timeline: hidden until you hover its strip --------------- */
 .tl-zone { display: none; }
 #stage.is-centered ~ .tl-zone {

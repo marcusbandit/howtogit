@@ -47,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=landing2" />
+  <link rel="stylesheet" href="style.css?v=landing3" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -80,7 +80,7 @@
   <div class="wip" aria-label="work in progress">work in progress</div>
 
   <!-- a simplified project on disk; git init adds the .git folder -->
-  <aside id="filetree" class="tree" aria-label="project files">
+  <aside id="filetree" class="tree is-focus" aria-label="project files">
     <p class="tree__title">on your computer</p>
     <ul class="tree__list" id="tree-list"></ul>
   </aside>
@@ -185,10 +185,10 @@ this will be useful if you wanna come back later</p>
     <!-- points back at the focused file tree on the left -->
     <div class="note note--tree">
       <svg class="note__arrow" viewBox="0 0 96 60" aria-hidden="true">
-        <path class="note-stroke" d="M90 10 C 62 16, 32 28, 8 48" />
-        <path class="note-stroke" d="M8 48 L21 46 M8 48 L14 37" />
+        <path class="note-stroke" pathLength="1" d="M90 10 C 62 16, 32 28, 8 48" />
+        <path class="note-stroke" pathLength="1" d="M8 48 L21 46 M8 48 L14 37" />
       </svg>
-      <p class="note__label">these are your project's files, the ones on your computer</p>
+      <p class="note__label" data-text="these are your project's files, the ones on your computer"></p>
     </div>
     <!-- the repurposed bottom-right: a sketchy explainer area -->
     <div class="note note--explainer">
@@ -202,6 +202,6 @@ this will be useful if you wanna come back later</p>
     </div>
   </div>
 
-  <script type="module" src="app.js?v=landing2"></script>
+  <script type="module" src="app.js?v=landing3"></script>
 </body>
 </html>

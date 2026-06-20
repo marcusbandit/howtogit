@@ -2112,6 +2112,29 @@ async function seekTo(target) {
         cmd.focus();
 }
 // ---- boot -----------------------------------------------------------
+// landing intro: type the file-tree callout in, character by character, in step
+// with the CSS draw-on of the tree, its arrow, the clone note and the roadmap.
+// (reduced motion / phones just get the finished text.)
+function typeLandingCallout() {
+    const label = document.querySelector(".note--tree .note__label");
+    if (!label)
+        return;
+    const text = label.getAttribute("data-text") ?? "";
+    if (S.prefersReduced || isPhone) {
+        label.textContent = text;
+        return;
+    }
+    label.textContent = "";
+    let i = 0;
+    const step = () => {
+        label.textContent = text.slice(0, i);
+        if (i < text.length) {
+            i++;
+            window.setTimeout(step, 24);
+        }
+    };
+    window.setTimeout(step, 800);
+}
 function boot() {
     sizeBoard();
     stage.style.setProperty("--stage-y", "50%");
@@ -2130,6 +2153,7 @@ function boot() {
     needSel("#filetree .tree__title").prepend(computerIcon());
     needSel("#remotetree .tree__title").prepend(cloudIcon());
     wireFileViewer(); // click any file in either tree to open it
+    typeLandingCallout(); // landing intro: type the file-tree callout in
     if (!isPhone)
         cmd.focus();
 }
