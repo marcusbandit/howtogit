@@ -250,6 +250,7 @@ body {
 
 /* ---- the lesson (what + why + the parts of the command) ------------ */
 .lesson {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -345,15 +346,25 @@ body {
    roadmap of the journey. All of it is gated to #stage.is-centered, so the
    moment the stage docks (after git init) these melt away and never crowd
    the graph. Kept in the hand-drawn idiom: Caveat, ink, uneven ink-boxes. */
+/* the cue is pulled OUT of the lesson's flow (absolute) so it neither stretches
+   the lesson box nor disturbs positionStage's height maths when the stage docks.
+   It just fades: in on the landing, out the moment git init docks. */
 .lesson__cue {
-  display: none;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.05rem;
-  margin-top: 0.35rem;
+  margin-top: 0.2rem;
   color: var(--pen-red);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
 }
-#stage.is-centered .lesson__cue { display: flex; }
+#stage.is-centered .lesson__cue { opacity: 1; }
 .lesson__cue-label {
   font-family: var(--hand);
   font-weight: 700;
@@ -379,15 +390,27 @@ body {
   50%      { transform: translateY(4px); }
 }
 
+/* clone note + roadmap, pulled below the command line but OUT of #stage's flow
+   (absolute), so the docked stage measures only lesson + cli. They fade out as
+   one when the stage docks. */
 .landing {
-  display: none;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.85rem;
-  margin-top: 0.1rem;
+  margin-top: 0.7rem;
+  width: max-content;
+  max-width: 92vw;
   text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
 }
-#stage.is-centered .landing { display: flex; }
+#stage.is-centered .landing { opacity: 1; pointer-events: auto; }
 .landing__clone {
   font-family: var(--hand);
   font-weight: 600;
@@ -439,15 +462,18 @@ body {
 #stage.is-centered .lesson__note,
 #stage.is-centered .lesson__parts { display: none; }
 
-/* the floating annotation layer: see-through, only the labels opt back in */
-.landing-notes { display: none; }
-#stage.is-centered ~ .landing-notes {
-  display: block;
+/* the floating annotation layer: see-through, only the labels opt back in.
+   Fades (not display-toggles) so the callouts melt away as the stage docks. */
+.landing-notes {
   position: fixed;
   inset: 0;
   z-index: 6;
   pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s ease, visibility 0.45s;
 }
+#stage.is-centered ~ .landing-notes { opacity: 1; visibility: visible; }
 .note { position: fixed; }
 .note__label {
   font-family: var(--hand);
@@ -485,11 +511,16 @@ body {
   right: clamp(1.5rem, 3vw, 3rem);
   bottom: clamp(2rem, 7vh, 5rem);
   width: clamp(15rem, 23vw, 21rem);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
 }
-.note--explainer .note__arrow { width: 4.6rem; height: 3.4rem; margin-right: 1.4rem; }
+/* arrow tucked just above the box's top-left, curving down-right into it, so it
+   reads as "the explanations land here" rather than floating off the corner */
+.note--explainer .note__arrow {
+  position: absolute;
+  top: -2.1rem;
+  left: -0.3rem;
+  width: 4.4rem;
+  height: 3rem;
+}
 .explainer-box {
   width: 100%;
   height: clamp(7rem, 16vh, 10rem);
@@ -519,24 +550,30 @@ body {
 #filetree { animation: landing-fade 0.7s ease 0.5s both; }
 @keyframes landing-fade { from { opacity: 0; } to { opacity: 1; } }
 
-/* the tree callout's arrow inks itself on (paths carry pathLength="1", so the
-   dash maths is exact); shaft first, then the arrowhead */
-.note--tree .note-stroke { stroke-dasharray: 1; }
+/* the callout arrows ink themselves on (paths carry pathLength="1", so the dash
+   maths is exact); shaft first, then the arrowhead */
+.note-stroke { stroke-dasharray: 1; }
 .note--tree .note__arrow path:nth-of-type(1) { animation: landing-draw 0.55s ease 0.65s both; }
 .note--tree .note__arrow path:nth-of-type(2) { animation: landing-draw 0.35s ease 1.05s both; }
 @keyframes landing-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 
 /* the clone note and the roadmap wipe on left-to-right, like ink being laid */
-#stage.is-centered .landing__clone { animation: landing-wipe 0.9s var(--ease-settle) 1.5s both; }
-#stage.is-centered .landing__road  { animation: landing-wipe 0.9s var(--ease-settle) 2s both; }
+#stage.is-centered .landing__clone { animation: landing-wipe 0.9s var(--ease-settle) 1.4s both; }
+#stage.is-centered .landing__road  { animation: landing-wipe 0.9s var(--ease-settle) 1.8s both; }
 @keyframes landing-wipe {
   from { clip-path: inset(0 100% 0 0); }
   to   { clip-path: inset(0 -4% 0 0); }
 }
 
+/* the explainer draws itself in last: the dashed box wipes on, then its arrow inks */
+#stage.is-centered ~ .landing-notes .explainer-box { animation: landing-wipe 0.7s var(--ease-settle) 2.1s both; }
+.note--explainer .note__arrow path:nth-of-type(1) { animation: landing-draw 0.5s ease 2.4s both; }
+.note--explainer .note__arrow path:nth-of-type(2) { animation: landing-draw 0.3s ease 2.75s both; }
+
 @media (prefers-reduced-motion: reduce) {
   #filetree,
-  .note--tree .note__arrow path,
+  .note__arrow path,
+  #stage.is-centered ~ .landing-notes .explainer-box,
   #stage.is-centered .landing__clone,
   #stage.is-centered .landing__road { animation: none; }
 }
@@ -1058,6 +1095,8 @@ body {
   align-items: flex-start;
   gap: 0;
   --tl-row: 0.95rem;   /* common dot centre-line height for every stop + link */
+  /* so it fades in (not pops) when the stage docks off the landing */
+  transition: opacity 0.4s ease;
 }
 .tl-group { display: flex; align-items: flex-start; gap: 0; flex: 0 0 auto; }
 .tl-item, .tl-substep {
