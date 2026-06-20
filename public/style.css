@@ -55,6 +55,10 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* on-brand text selection: a learner can grab any label to ask a chatbot,
+   and the highlight reads as intentional ink rather than default browser blue */
+::selection { background: rgba(46, 92, 158, 0.22); }
+
 html, body { height: 100%; }
 
 body {
@@ -91,7 +95,6 @@ body {
   top: clamp(1rem, 3vw, 1.9rem);
   left: clamp(1.1rem, 3vw, 2.2rem);
   z-index: 6;
-  user-select: none;
   width: fit-content;
 }
 .brand__word {
@@ -550,7 +553,7 @@ body {
   font-family: var(--mono);
   font-size: 1.05rem;
   color: var(--ink);
-  user-select: none;
+  /* selectable: a learner should be able to grab a filename and ask about it */
   transition:
     top 0.6s var(--ease-settle), left 0.6s var(--ease-settle),
     width 0.6s var(--ease-settle),

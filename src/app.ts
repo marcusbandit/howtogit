@@ -1271,8 +1271,20 @@ cmd.addEventListener("scroll", () => {
 // focused so typing always lands without clicking.
 const isPhone = window.matchMedia("(max-width: 760px)").matches
   || ("ontouchstart" in window);
+// ...but never fight the user while they're selecting text. A learner should be
+// able to drag across a label (to copy it, or paste it into a chatbot) without
+// the input yanking focus back and collapsing the selection. So while the mouse
+// is down (a drag in progress) or any text is selected, we leave focus alone.
+let pointerDown = false;
+document.addEventListener("mousedown", () => { pointerDown = true; });
+document.addEventListener("mouseup", () => { pointerDown = false; });
+function hasSelection(): boolean {
+  const sel = window.getSelection();
+  return !!sel && !sel.isCollapsed && sel.toString().length > 0;
+}
 function keepFocus(): void {
   if (isPhone) return;
+  if (pointerDown || hasSelection()) return;   // mid-drag or text selected: leave it be
   if (!document.hidden) cmd.focus();
 }
 cmd.addEventListener("blur", () => requestAnimationFrame(keepFocus));
