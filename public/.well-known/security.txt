@@ -1,0 +1,4 @@
+Contact: https://howtogit.dev/
+Expires: 2027-05-20T23:50:33Z
+Preferred-Languages: en
+Canonical: https://howtogit.dev/.well-known/security.txt

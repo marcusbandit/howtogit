@@ -2,10 +2,13 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "howtogit",
   "compatibility_date": "2026-06-18",
-  // Static-assets-only Worker: serves everything in ./public.
-  // No `main` entry needed until we add server-side logic.
+  // Serve static assets through a tiny Worker so HTTP requests can be
+  // redirected before assets are returned.
+  "main": "./worker.mjs",
   "assets": {
     "directory": "./public",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    "run_worker_first": true
   }
 }
