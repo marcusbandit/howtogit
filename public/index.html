@@ -47,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=landing5" />
+  <link rel="stylesheet" href="style.css?v=landing6" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -130,8 +130,10 @@
       <p class="lesson__why" id="why"></p>
       <p class="lesson__note" id="note" hidden></p>
       <div class="lesson__parts" id="parts"></div>
-      <!-- landing-only "start here" cue: a hand-drawn arrow nudging the eye
-           down to the command line. Gated to #stage.is-centered in CSS. -->
+    </div>
+    <form id="cli" autocomplete="off" spellcheck="false">
+      <!-- landing-only "start here" cue: a hand-drawn arrow sitting just above the
+           command line, pointing down at it. Gated to #stage.is-centered in CSS. -->
       <div class="lesson__cue" id="landing-cue" aria-hidden="true">
         <span class="lesson__cue-label">start here</span>
         <svg class="lesson__cue-arrow" viewBox="0 0 44 40" aria-hidden="true">
@@ -139,8 +141,6 @@
           <path class="cue-stroke" d="M13 23 L21 33 L29 22" />
         </svg>
       </div>
-    </div>
-    <form id="cli" autocomplete="off" spellcheck="false">
       <span class="cli__field">
         <span class="cli__ink" id="ink" aria-hidden="true"></span>
         <input id="cmd" name="cmd" type="text" inputmode="text" autocapitalize="none"
@@ -192,16 +192,23 @@ this will be useful if you wanna come back later</p>
     </div>
     <!-- the repurposed bottom-right: a sketchy explainer area -->
     <div class="note note--explainer">
-      <svg class="note__arrow note__arrow--explainer" viewBox="0 0 80 60" aria-hidden="true">
-        <path class="note-stroke" pathLength="1" d="M8 8 C 32 16, 56 28, 66 54" />
-        <path class="note-stroke" pathLength="1" d="M66 54 L54 50 M66 54 L69 42" />
+      <p class="note__label note__label--explainer">i'll explain things over here as you go</p>
+      <svg class="note__arrow note__arrow--explainer" viewBox="0 0 60 48" aria-hidden="true">
+        <path class="note-stroke" pathLength="1" d="M30 4 C 26 18, 34 27, 30 40" />
+        <path class="note-stroke" pathLength="1" d="M22 31 L30 42 L38 30" />
       </svg>
       <div class="explainer-box">
-        <span class="explainer-box__label">i'll explain things over here as you go</span>
+        <p class="explainer__cmd">git init</p>
+        <p class="explainer__q">What does it do?</p>
+        <p class="explainer__a">Turns this plain folder into a git repository. It adds a hidden <b>.git/</b> folder to keep track of your work, and changes nothing else, your files stay exactly as they are.</p>
+        <details class="explainer__more">
+          <summary><span>What's in that <b>.git/</b> folder?</span><span class="explainer__chev">expand ⌄</span></summary>
+          <p class="explainer__a">Everything git needs to remember your project: every snapshot you save, the branches you make, and a pointer called HEAD that marks where you are. Delete <b>.git/</b> and it's an ordinary folder again.</p>
+        </details>
       </div>
     </div>
   </div>
 
-  <script type="module" src="app.js?v=landing5"></script>
+  <script type="module" src="app.js?v=landing6"></script>
 </body>
 </html>
