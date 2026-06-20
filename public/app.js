@@ -626,8 +626,9 @@ const steps = [
         test: (s) => /^git\s+init$/i.test(s),
         hint: "Type  git init  to begin.",
         teach: {
-            goal: "Start your repository",
-            why: "Sets up a new, empty repository in the folder where it runs.",
+            goal: "Your first repository starts here.",
+            why: "No terminal to install, nothing to memorize, and nothing you can break. Type along and it just clicks.",
+            note: "Type the real command, press Tab to autocomplete, then watch git draw what it did.",
             parts: [
                 { t: "init", tone: "cmd", why: "create the empty repo (the .git folder)" },
             ],

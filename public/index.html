@@ -47,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=darkmode1" />
+  <link rel="stylesheet" href="style.css?v=landing1" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -130,6 +130,15 @@
       <p class="lesson__why" id="why"></p>
       <p class="lesson__note" id="note" hidden></p>
       <div class="lesson__parts" id="parts"></div>
+      <!-- landing-only "start here" cue: a hand-drawn arrow nudging the eye
+           down to the command line. Gated to #stage.is-centered in CSS. -->
+      <div class="lesson__cue" id="landing-cue" aria-hidden="true">
+        <span class="lesson__cue-label">start here</span>
+        <svg class="lesson__cue-arrow" viewBox="0 0 44 40" aria-hidden="true">
+          <path class="cue-stroke" d="M21 3 C 17 13, 25 17, 21 30" />
+          <path class="cue-stroke" d="M13 23 L21 33 L29 22" />
+        </svg>
+      </div>
     </div>
     <form id="cli" autocomplete="off" spellcheck="false">
       <span class="cli__field">
@@ -141,11 +150,28 @@
       </span>
     </form>
     <p class="nudge" id="nudge" aria-live="assertive"></p>
+
+    <!-- landing-only welcome beats (shown while the stage is centred, before
+         git init; they melt away when the stage docks). See .landing in CSS. -->
+    <div class="landing" id="landing" aria-hidden="true">
+      <p class="landing__clone">Most folks come to git wanting to clone a project. We'll get there together, right after this.</p>
+      <nav class="landing__road" aria-label="what you'll learn">
+        <span class="road-chip road-chip--now">init</span>
+        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
+        <span class="road-chip">commit</span>
+        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
+        <span class="road-chip">branch</span>
+        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
+        <span class="road-chip">push</span>
+        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
+        <span class="road-chip road-chip--clone">clone</span>
+      </nav>
+    </div>
   </section>
 
   <!-- a clickable history of the steps; returning users can skip ahead -->
   <nav id="timeline" class="timeline" aria-label="lesson steps"></nav>
 
-  <script type="module" src="app.js?v=darkmode1"></script>
+  <script type="module" src="app.js?v=landing1"></script>
 </body>
 </html>

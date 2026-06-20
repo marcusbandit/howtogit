@@ -336,6 +336,93 @@ body {
   .part--in-up, .part--in-down, .part--out-up, .part--out-down { animation: none; }
 }
 
+/* ---- landing (only on the centred first screen, before git init) ----
+   Extra welcome beats that orient a first-timer: a hand-drawn "start here"
+   cue under the lesson, a warm note that cloning comes later, and a sketchy
+   roadmap of the journey. All of it is gated to #stage.is-centered, so the
+   moment the stage docks (after git init) these melt away and never crowd
+   the graph. Kept in the hand-drawn idiom: Caveat, ink, uneven ink-boxes. */
+.lesson__cue {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  margin-top: 0.35rem;
+  color: var(--pen-red);
+}
+#stage.is-centered .lesson__cue { display: flex; }
+.lesson__cue-label {
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 1.35rem;
+  line-height: 1;
+  transform: rotate(-4deg);
+}
+.lesson__cue-arrow {
+  width: 2.1rem;
+  height: 1.9rem;
+  overflow: visible;
+  animation: cue-bob 1.7s ease-in-out infinite;
+}
+.cue-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@keyframes cue-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(4px); }
+}
+
+.landing {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.1rem;
+  text-align: center;
+}
+#stage.is-centered .landing { display: flex; }
+.landing__clone {
+  font-family: var(--hand);
+  font-weight: 600;
+  font-size: clamp(1.2rem, 2.7vw, 1.55rem);
+  line-height: 1.15;
+  color: var(--ink);
+  max-width: min(40rem, 90vw);
+}
+.landing__road {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.road-chip {
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  padding: 0.14rem 0.7rem 0.22rem;
+  border: 2px solid var(--ink-soft);
+  /* an uneven, hand-drawn ink box */
+  border-radius: 14px 10px 17px 8px / 9px 16px 10px 15px;
+}
+.road-chip--now { color: var(--pen-blue); border-color: var(--pen-blue); }
+.road-chip--clone { color: var(--ink-soft); border-style: dashed; }
+.road-sep {
+  font-family: var(--hand);
+  font-size: 1.2rem;
+  color: var(--ink-soft);
+  opacity: 0.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lesson__cue-arrow { animation: none; }
+}
+
 /* ---- command line with highlight + ghost overlay ------------------- */
 #cli {
   display: flex;
