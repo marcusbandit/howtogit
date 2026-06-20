@@ -694,12 +694,11 @@ const steps: Step[] = [
     test: (s) => /^git\s+init$/i.test(s),
     hint: "Type  git init  to begin.",
     teach: {
+      // the landing's lesson is just the hook; why/parts stay empty so the swap
+      // into "git add" grows the lesson cleanly instead of flashing stale copy
       goal: "Your first repository starts here.",
-      why: "No terminal to install, nothing to memorize, and nothing you can break. Type along and it just clicks.",
-      note: "Type the real command, press Tab to autocomplete, then watch git draw what it did.",
-      parts: [
-        { t: "init", tone: "cmd", why: "create the empty repo (the .git folder)" },
-      ],
+      why: "",
+      parts: [],
     },
     run: doInit,
   },
@@ -930,6 +929,7 @@ let lessonSwapping = false;
 function renderTeach(teach: Teach): void {
   goalEl.textContent = teach.goal;
   whyEl.textContent = teach.why;
+  whyEl.hidden = !teach.why;
   noteEl.textContent = teach.note ?? "";
   noteEl.hidden = !teach.note;
   activeParts = teach.parts;
@@ -1018,7 +1018,10 @@ function showStep(i: number): void {
     setTimeout(() => {
       renderTeach(teach);
       lesson.style.opacity = "";
-      positionStage(false);
+      // glide while docking off the landing (so the command line rides the dock
+      // smoothly); snap for in-place lesson swaps between docked steps
+      positionStage(docking);
+      docking = false;
       lessonSwapping = false;
     }, 200);
   } else {
@@ -1187,9 +1190,14 @@ function shake(): void {
   void form.offsetWidth;
   form.classList.add("shake");
 }
+// true only while the stage is gliding off the landing into its docked spot, so
+// the lesson-height re-measure at the end of the swap glides too, instead of
+// snapping mid-glide and making the command line jump.
+let docking = false;
 function dockStage(): void {
   stage.classList.remove("is-centered");
   stage.classList.add("is-docked");
+  docking = true;
   positionStage(true);
 }
 // Bottom-align the docked stage: pin its lower edge a fixed gap above the
@@ -2158,6 +2166,16 @@ function typeLandingCallout(): void {
   window.setTimeout(step, 800);
 }
 
+// dev helper: ?step=N (index) or ?step=<key> seeks straight to that state on
+// load, so any screen can be screenshotted without typing the whole sequence.
+function applyStepParam(): void {
+  let v: string | null = null;
+  try { v = new URLSearchParams(window.location.search).get("step"); } catch { return; }
+  if (!v) return;
+  const target = /^\d+$/.test(v) ? parseInt(v, 10) : steps.findIndex((s) => s.key === v);
+  if (target > 0) void seekTo(target);
+}
+
 function boot(): void {
   sizeBoard();
   stage.style.setProperty("--stage-y", "50%");
@@ -2178,6 +2196,7 @@ function boot(): void {
   wireFileViewer();   // click any file in either tree to open it
   typeLandingCallout();   // landing intro: type the file-tree callout in
   if (!isPhone) cmd.focus();
+  applyStepParam();   // dev: ?step=N jumps straight to a state for screenshots
 }
 
 window.addEventListener("resize", () => {

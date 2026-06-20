@@ -456,11 +456,9 @@ body {
    it. Everything here is gated to #stage.is-centered via sibling selectors,
    so the instant git init docks the stage, every annotation melts away. */
 
-/* keep only the hook (a hand-drawn title) + the start-here cue on the landing;
-   the explanatory lesson body is replaced by the callouts around it */
-#stage.is-centered .lesson__why,
-#stage.is-centered .lesson__note,
-#stage.is-centered .lesson__parts { display: none; }
+/* on the landing the lesson is just the hook (step 0's why/parts are empty in
+   the data), so the callouts around it carry the explaining. Nothing is
+   display:none here, so docking into git add grows the lesson cleanly. */
 
 /* the floating annotation layer: see-through, only the labels opt back in.
    Fades (not display-toggles) so the callouts melt away as the stage docks. */
@@ -550,6 +548,15 @@ body {
 #filetree { animation: landing-fade 0.7s ease 0.5s both; }
 @keyframes landing-fade { from { opacity: 0; } to { opacity: 1; } }
 
+/* the hook and the command line (one element, reused across every step) rise
+   gently into place first; the rest of the page draws itself in around them */
+#stage.is-centered .lesson__goal { animation: landing-rise 0.6s var(--ease-settle) 0.05s both; }
+#stage.is-centered #cli         { animation: landing-rise 0.6s var(--ease-settle) 0.2s both; }
+@keyframes landing-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
 /* the callout arrows ink themselves on (paths carry pathLength="1", so the dash
    maths is exact); shaft first, then the arrowhead */
 .note-stroke { stroke-dasharray: 1; }
@@ -572,6 +579,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   #filetree,
+  #stage.is-centered .lesson__goal,
+  #stage.is-centered #cli,
   .note__arrow path,
   #stage.is-centered ~ .landing-notes .explainer-box,
   #stage.is-centered .landing__clone,
