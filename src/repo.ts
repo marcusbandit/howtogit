@@ -37,6 +37,10 @@ class MemFs {
     unlink: async (path: string): Promise<void> => { this.nodes.delete(norm(path)); },
     readdir: async (path: string): Promise<string[]> => {
       const base = norm(path), pre = base === "/" ? "/" : base + "/";
+      // honour the fs contract git depends on: missing -> ENOENT, a file -> ENOTDIR
+      const node = this.nodes.get(base);
+      if (base !== "/" && !node) throw enoent(path);
+      if (node && node.type !== "dir") throw Object.assign(new Error(`ENOTDIR: ${path}`), { code: "ENOTDIR" });
       const set = new Set<string>();
       for (const k of this.nodes.keys()) {
         if (k !== base && k.startsWith(pre)) { const seg = k.slice(pre.length).split("/")[0]; if (seg) set.add(seg); }

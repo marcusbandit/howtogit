@@ -1301,17 +1301,24 @@ form.addEventListener("submit", async (e) => {
   // the companion steps back while the action happens, then returns to explain
   // what just appeared (its "post" set points at the now-real thing)
   setCompanion(null, "post");
+  // hold `busy` across the WHOLE step — drawing AND the real-git replay — so a
+  // second Enter or a timeline click can't run a concurrent replay on the
+  // shared in-memory fs. finally guarantees the lock is released even if the
+  // replay throws (otherwise the UI would freeze).
   busy = true;
-  await step.run(arg);
-  busy = false;
-  centerOnHead();
-  if (stepIndex >= steps.length) showEndState();
-  if (step.key === "commit") lastCommitMsg = arg ?? lastCommitMsg;   // replay with the real message
-  await refreshRepo();                                                // real git -> tree + states
-  renderRemoteTree();
-  renderRemoteGraph();
-  updateLayout();
-  syncCompanion();
+  try {
+    await step.run(arg);
+    centerOnHead();
+    if (stepIndex >= steps.length) showEndState();
+    if (step.key === "commit") lastCommitMsg = arg ?? lastCommitMsg;   // replay with the real message
+    await refreshRepo();                                                // real git -> tree + states
+    renderRemoteTree();
+    renderRemoteGraph();
+    updateLayout();
+    syncCompanion();
+  } finally {
+    busy = false;
+  }
   // landing on the feature branch means "you edited index.html": play it out
   if (stepIndex === stepIdx("add2")) void playEditSequence();
 });
@@ -2325,32 +2332,40 @@ function resetBoard(): void {
 async function seekTo(target: number): Promise<void> {
   if (busy || target === stepIndex) return;
   busy = true;
-  closeEditor();        // a seek cancels any in-flight edit and hides the editor
-  resetBoard();
-  if (target <= 0) {
-    stage.classList.remove("is-docked");
-    stage.classList.add("is-centered");
-    stage.style.setProperty("--stage-y", "50%");
+  // try/finally so a thrown replay (real git on the shared fs) can never leave
+  // `busy` or `instant` stuck true and freeze every future command + seek.
+  try {
+    closeEditor();        // a seek cancels any in-flight edit and hides the editor
+    resetBoard();
+    if (target <= 0) {
+      stage.classList.remove("is-docked");
+      stage.classList.add("is-centered");
+      stage.style.setProperty("--stage-y", "50%");
+    }
+    instant = true;
+    try {
+      for (let k = 0; k < target; k++) {
+        const st = steps[k];
+        await st.run(st.extract ? st.extract(canonical(st)) : undefined);
+      }
+      centerOnHead();   // pan instantly while still in replay mode (no glide)
+      if (target >= steps.length) showEndState();
+    } finally {
+      instant = false;
+    }
+    stepIndex = target;
+    cmd.value = "";
+    showStep(stepIndex);
+    updateTimeline();
+    await refreshRepo();
+    renderRemoteTree();
+    renderRemoteGraph(false);   // seek: the remote tree is just there, no float
+    updateLayout();
+    syncCompanion();
+    if (!isPhone) cmd.focus();
+  } finally {
+    busy = false;
   }
-  instant = true;
-  for (let k = 0; k < target; k++) {
-    const st = steps[k];
-    await st.run(st.extract ? st.extract(canonical(st)) : undefined);
-  }
-  centerOnHead();   // pan instantly while still in replay mode (no glide)
-  if (target >= steps.length) showEndState();
-  instant = false;
-  stepIndex = target;
-  cmd.value = "";
-  showStep(stepIndex);
-  updateTimeline();
-  await refreshRepo();
-  renderRemoteTree();
-  renderRemoteGraph(false);   // seek: the remote tree is just there, no float
-  updateLayout();
-  syncCompanion();
-  busy = false;
-  if (!isPhone) cmd.focus();
 }
 
 // ---- boot -----------------------------------------------------------
