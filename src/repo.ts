@@ -144,9 +144,10 @@ export interface GitNode {
   name: string;
   path: string;          // a stable key for open-state + the editor
   isDir: boolean;
-  note: string;          // friendly description shown to the right
+  note: string;          // brief label shown on hover
   readable?: boolean;    // file: show real content vs a description
   content?: string;      // a readable file's real contents
+  explain?: string;      // a readable file: what it does + why (shown with its content)
   desc?: string;         // a not-meant-to-be-read file's purpose
   children?: GitNode[];
 }
@@ -163,23 +164,44 @@ function baseState(row: [string, number, number, number] | undefined): FileBase 
   return "modified";                                        // changed, not staged
 }
 
-// the curated, described view of .git (real entries, friendly notes). We hide
-// the plumbing nobody needs to see (hooks/, info/, the empty objects subdirs).
-const TOP_SHOW = new Set(["HEAD", "config", "description", "objects", "refs", "index"]);
-const READABLE = new Set(["HEAD", "config", "description"]);
-function describe(name: string, rel: string, isDir: boolean): { note: string; readable: boolean; desc?: string } {
-  if (rel === "HEAD") return { note: "points at where you are", readable: true };
-  if (rel === "config") return { note: "this repo's settings", readable: true };
-  if (rel === "description") return { note: "names the repo (rarely used)", readable: true };
-  if (rel === "index") return { note: "the staging area", readable: false, desc: "Git's staging area, a binary list of what's lined up for the next commit. Not meant to be read by hand." };
-  if (rel === "objects") return { note: "every snapshot, stored here", readable: false };
-  if (rel === "refs") return { note: "your branches and tags", readable: false };
+// the curated, described view of .git (real entries). `note` is the brief
+// hover label; readable files carry `explain` (what they do + why, shown with
+// their contents on click), non-readable ones carry `desc`. We hide the
+// plumbing nobody needs (hooks/, info/, the empty objects subdirs). description
+// is intentionally absent: isomorphic-git's init never creates it.
+const TOP_SHOW = new Set(["HEAD", "config", "objects", "refs", "index"]);
+const READABLE = new Set(["HEAD", "config"]);
+interface Described { note: string; readable: boolean; explain?: string; desc?: string }
+function describe(name: string, rel: string, isDir: boolean): Described {
+  if (rel === "HEAD") return {
+    note: "the branch you're on right now", readable: true,
+    explain: "HEAD is how git knows which branch you're on. It holds a pointer, ref: refs/heads/main, so your next commit lands on main. Check out another branch and git rewrites this one line to point there instead.",
+  };
+  if (rel === "config") return {
+    note: "settings for this repo", readable: true,
+    explain: "This repo's settings, in plain text. git init writes the defaults; as you go, things like your remote's URL and your name on commits get saved here.",
+  };
+  if (rel === "index") return {
+    note: "the staging area for your next commit", readable: false,
+    desc: "The staging area: a binary list of exactly what git add has lined up for your next commit. git commit turns it into a snapshot. Not meant to be read by hand.",
+  };
+  if (rel === "objects") return { note: "every snapshot you save, stored by id", readable: false };
+  if (rel === "refs") return { note: "names that point at commits", readable: false };
   if (rel === "refs/heads") return { note: "your branches", readable: false };
   if (rel === "refs/tags") return { note: "your tags", readable: false };
-  if (/^objects\/[0-9a-f]{2}$/.test(rel)) return { note: "snapshots whose id starts with these two letters", readable: false };
-  if (/^objects\/[0-9a-f]{2}\/[0-9a-f]+$/.test(rel)) return { note: "a stored snapshot", readable: false, desc: "A compressed, checksummed snapshot of your files. Git reads it for you, it's not meant to be opened by hand." };
-  if (/^refs\/heads\//.test(rel)) return { note: "points this branch at its latest commit", readable: true };
-  if (/^refs\/tags\//.test(rel)) return { note: "a tag", readable: true };
+  if (/^objects\/[0-9a-f]{2}$/.test(rel)) return { note: "objects whose id starts with these two characters", readable: false };
+  if (/^objects\/[0-9a-f]{2}\/[0-9a-f]+$/.test(rel)) return {
+    note: "one stored object", readable: false,
+    desc: "A compressed, checksummed object, a file's contents, a folder listing (a 'tree'), or a commit. Git names each by a hash of what's inside and unpacks it for you; it's not meant to be opened by hand.",
+  };
+  if (/^refs\/heads\//.test(rel)) return {
+    note: "this branch → its latest commit", readable: true,
+    explain: "A branch is just a file holding one commit's id. This is where the branch points; when you commit again, git updates this id to the new commit. That's all a branch really is.",
+  };
+  if (/^refs\/tags\//.test(rel)) return {
+    note: "a tag → a fixed commit", readable: true,
+    explain: "A tag is a file pinned to one commit's id, a permanent name for a point in history (like a release), unlike a branch which moves as you commit.",
+  };
   return { note: "", readable: !isDir && READABLE.has(name) };
 }
 
@@ -207,6 +229,7 @@ async function walkGit(absPath: string, rel: string): Promise<GitNode[]> {
     } else if (d.readable) {
       node.readable = true;
       node.content = (await fs.promises.readFile(`${absPath}/${e.name}`, "utf8") as string).replace(/\n+$/, "");
+      if (d.explain) node.explain = d.explain;
     } else {
       node.desc = d.desc ?? "This file isn't meant to be read by hand.";
     }

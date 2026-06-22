@@ -543,24 +543,28 @@ body.is-learning .landing-notes {
 .companion.is-visible { opacity: 1; visibility: visible; }
 /* the "i'll explain things over here" flourish only belongs on the centred
    landing; once we've docked it has done its job and goes */
-/* the companion box is pinned to the right edge (right ~5rem, width ~31rem), so
-   its centre sits at 100vw - 20.5rem. To drag this flourish to the page centre
-   (50vw) we shift it by 50vw - (100vw - 20.5rem) = -50vw + 20.5rem. */
+/* the label sits above the questions and the arrow drops onto them, so the whole
+   flourish stays anchored to the companion. We only slide it left toward the
+   centre of the page by a set amount (the page middle itself is taken by the
+   command line, so it can't go all the way). */
 .companion__intro {
   align-self: center;
   text-align: center;
   margin-bottom: 0.3rem;
-  transform: translateX(calc(-50vw + 20.5rem));
+  transform: translateX(-9rem);
 }
 .companion:not(.is-landing) .companion__intro { display: none; }
 .companion__intro-label {
   font-family: var(--hand);
   font-weight: 600;
-  font-size: clamp(1.6rem, 3.6vw, 2.6rem);
-  line-height: 1.12;
+  font-size: clamp(1.5rem, 2.9vw, 2rem);
+  line-height: 1.1;
   color: var(--ink-soft);
+  max-width: 15rem;
+  margin: 0 auto;
+  text-wrap: balance;
 }
-.companion__intro-arrow { display: block; margin: 0.1rem auto 0; width: 2.3rem; height: 3rem; overflow: visible; }
+.companion__intro-arrow { display: block; margin: 0.1rem auto 0; width: 2.3rem; height: 11rem; overflow: visible; }
 
 .companion__qa + .companion__qa { margin-top: 0.4rem; }
 /* a question is a bare, tappable line: hand-drawn caret + the words */
@@ -1170,6 +1174,12 @@ body.is-learning .landing-notes {
   opacity: 0.8;
 }
 .tree__empty .f__note { font-style: italic; opacity: 0.65; }
+/* the descriptive labels stay quiet so the tree reads as names; on row hover the
+   relevant one fades + slides in. The hide rule uses :not(:hover) so it outranks
+   the per-state note rules (and on hover the note reverts to its own opacity).
+   Marks (the ·/✓ status) are untouched and always show. Click a file for more. */
+.tree__list .f__note { transition: opacity 0.22s ease, transform 0.3s var(--ease-settle); }
+.tree__list li:not(:hover) > .f__note { opacity: 0; transform: translateX(-6px); }
 /* the .git/ line writes itself on, left to right, then slides into place.
    `backwards` (not `both`): the row reverts to its plain base after animating,
    so it holds NO transform/clip-path — both would persist as a stacking context
@@ -1275,6 +1285,17 @@ body.is-learning .landing-notes {
   color: var(--ink-soft);
   padding: 0.4rem 1.1rem 0.6rem;
   max-width: 30rem;
+}
+/* a readable file's "what it does + why", above its actual contents */
+.editor__explain {
+  font-family: var(--ui);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  padding: 0.5rem 1.1rem 0.7rem;
+  margin-bottom: 0.4rem;
+  max-width: 32rem;
+  border-bottom: 1.5px dashed rgba(122, 112, 96, 0.35);
 }
 .editor__line.is-active { background: rgba(46, 92, 158, 0.09); }
 .editor__num {

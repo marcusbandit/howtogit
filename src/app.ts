@@ -1887,9 +1887,17 @@ function openGitFile(path: string, row: HTMLElement): void {
   editorUnsaved.style.opacity = "0";
   editorSave.classList.remove("show");
   if (node.content != null) {
+    // readable file: explain what it does + why, then show its real contents
     editorLang = "txt";
     renderEditorLines(node.content.split("\n"));
+    if (node.explain) {
+      const p = document.createElement("p");
+      p.className = "editor__explain";
+      p.textContent = node.explain;
+      editorCode.prepend(p);
+    }
   } else {
+    // not meant to be read: just describe what it's for
     renderEditorNote(node.desc ?? "This file isn't meant to be read by hand.");
   }
   growEditorFrom(row);
