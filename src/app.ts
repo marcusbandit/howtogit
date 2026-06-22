@@ -1865,9 +1865,11 @@ let editSeqGen = 0;
 let viewerFile: string | null = null;
 let viewerSide: "local" | "remote" = "local";
 
+let editorOpen = false;   // is the note currently shown (vs hidden)?
 function closeEditor(): void {
   editSeqGen++;
   viewerFile = null;
+  editorOpen = false;
   editorEl.style.transition = "none";
   editorEl.style.opacity = "0";
   editorEl.style.pointerEvents = "none";
@@ -1883,6 +1885,20 @@ function growEditorFrom(row: HTMLElement): void {
     editorEl.style.transform = OPEN_TRANSFORM;
     editorEl.style.opacity = "1";
     editorEl.style.pointerEvents = "auto";
+    editorOpen = true;
+    return;
+  }
+  if (editorOpen) {
+    // already showing a note (e.g. switching to a same-named file in the other
+    // tree): glide to the new contents with a small settle, never blink to 0.
+    editorEl.style.transition = "none";
+    editorEl.style.transform = "translate(-50%, -50%) translate(0px, 0px) scale(0.96)";
+    editorEl.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      if (gen !== editSeqGen) return;
+      editorEl.style.transition = `transform ${GROW_MS}ms var(--ease-settle)`;
+      editorEl.style.transform = OPEN_TRANSFORM;
+    });
     return;
   }
   editorEl.style.transition = "none";
@@ -1896,6 +1912,7 @@ function growEditorFrom(row: HTMLElement): void {
     editorEl.style.transform = OPEN_TRANSFORM;
     editorEl.style.opacity = "1";
     editorEl.style.pointerEvents = "auto";
+    editorOpen = true;
   });
 }
 
@@ -1956,6 +1973,7 @@ function closeFileViewer(): void {
   if (viewerFile == null) return;
   const rect = fileRowRect(viewerFile, viewerSide);
   viewerFile = null;
+  editorOpen = false;
   editSeqGen++;
   editorEl.style.pointerEvents = "none";
   if (S.prefersReduced) { editorEl.style.opacity = "0"; return; }
@@ -1991,6 +2009,7 @@ async function playEditSequence(): Promise<void> {
       `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
     editorEl.style.transform = OPEN_TRANSFORM;
     editorEl.style.opacity = "1";
+    editorOpen = true;
   });
   await sleep(GROW_MS + 320); if (!alive()) return;   // grow, then a beat to take it in
 
@@ -2016,6 +2035,7 @@ async function playEditSequence(): Promise<void> {
     `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
   editorEl.style.transform = tuckedTransformFor(fileRowRect(EDIT_FILE, "local"));
   editorEl.style.opacity = "0";
+  editorOpen = false;
   await sleep(SHRINK_MS + 60); if (!alive()) return;
   editorSave.classList.remove("show");
 }
@@ -2032,7 +2052,11 @@ function wireTree(tree: TreeView): void {
     if (folder) {
       e.stopPropagation();
       const path = folder.dataset.path!;
-      setNodeOpen(tree, path, !tree.open.has(path));
+      const willOpen = !tree.open.has(path);
+      setNodeOpen(tree, path, willOpen);
+      // toggling .git by hand while a companion question is peeking into it makes
+      // that the state the peek restores when it closes (don't undo the user)
+      if (path === ".git" && tree.side === "local" && openBtn?.dataset.points === "dotgit") gitOpenBeforePeek = willOpen;
       return;
     }
     const gitFile = t.closest<HTMLElement>(".is-gitfile[data-path]");
@@ -2087,7 +2111,7 @@ function remoteModel(): RepoModel | null {
   return {
     root: PROJECT.root,
     url: remoteUrl.replace(/^https?:\/\//, "").replace(/\.git$/, ""),
-    git: pushed && snap?.inited ? snap.git : [],   // mirror the local .git once pushed; empty before
+    git: pushed && snap?.inited ? snap.git : null,   // no .git until something is actually pushed
     gitNote: "the remote repo",
     gitNew: !lastRemoteShown,
     files,
