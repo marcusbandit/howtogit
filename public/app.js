@@ -2357,6 +2357,7 @@ const CARET_PATH = "M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13"; // the hand-draw
 const openArrows = new Map();
 // the one question currently in focus (only one is ever open at a time)
 let openBtn = null;
+let gitOpenBeforePeek = false; // .git open-state before a companion question peeked into it
 // the live snapshot from the REAL git repo (repo.ts) drives the tree + states.
 let snap = null;
 let lastCommitMsg = "first commit";
@@ -2385,12 +2386,18 @@ function repoCommandsFor(i) {
         cmds.push({ kind: "commit", message: lastCommitMsg });
     return cmds;
 }
-// replay real git to the current step, take a fresh snapshot, redraw the tree
+// replay real git to the current step, take a fresh snapshot, redraw the tree.
+// The tree's open/closed state persists across steps by default; a step can opt
+// into a tidy (collapsed) tree on arrival with `collapseTree`.
 async function refreshRepo() {
     await replayTo(repoCommandsFor(stepIndex));
     snap = await snapshot();
     gitNodeByPath = new Map();
     indexGitNodes(snap.git);
+    if (steps[stepIndex]?.collapseTree) {
+        treeOpen.clear();
+        treeOpen.add("root");
+    }
     renderFileTree();
 }
 // open/close a tree node by path: flips its row + the subwrap that follows it,
@@ -2524,8 +2531,12 @@ function openCurio(btn, ans, points) {
     btn.parentElement?.classList.add("is-open");
     openBtn = btn;
     enterLearnMode();
-    if (points === "dotgit")
-        setGitOpen(true); // also show what's inside .git/
+    // peek inside .git for the answer, remembering the prior state so closing the
+    // question restores it (rather than force-collapsing a folder the user opened)
+    if (points === "dotgit") {
+        gitOpenBeforePeek = treeOpen.has(".git");
+        setGitOpen(true);
+    }
     if (points) {
         // let the answer enlarge first, so the arrow leaves from its settled spot
         window.setTimeout(() => {
@@ -2544,7 +2555,7 @@ function closeCurio(btn) {
     btn.parentElement?.classList.remove("is-open");
     removeCompanionArrow(btn);
     if (btn.dataset.points === "dotgit")
-        setGitOpen(false);
+        setGitOpen(gitOpenBeforePeek); // restore prior state
     if (openBtn === btn) {
         openBtn = null;
         exitLearnMode();
@@ -2579,15 +2590,15 @@ function curioBlock(c) {
     qa.append(btn, wrap);
     return qa;
 }
-// tear down any focus state + arrows when the question set is about to change
+// tear down any focus state + arrows when the question set is about to change.
+// It deliberately does NOT touch the tree's open/closed state: advancing a
+// command respects whatever the user (or a prior peek) left open.
 function resetCompanion() {
     openBtn = null;
     companionEl.classList.remove("is-focus");
     document.body.classList.remove("is-learning");
     openArrows.clear();
     companionArrows.replaceChildren();
-    if (treeOpen.has(".git"))
-        setGitOpen(false);
 }
 // show (or hide) the companion for a given step + tense
 function setCompanion(key, phase) {

@@ -56,8 +56,9 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* on-brand text selection: a learner can grab any label to ask a chatbot,
-   and the highlight reads as intentional ink rather than default browser blue */
-::selection { background: rgba(46, 92, 158, 0.22); }
+   and the highlight reads as a warm marker swipe over the paper rather than
+   default browser blue (reuses the amber of the just-edited file flash). */
+::selection { background: rgba(176, 125, 43, 0.28); }
 
 html, body { height: 100%; }
 
@@ -810,7 +811,7 @@ body.is-learning .landing-notes {
   color: transparent;            /* real text is painted by the overlay */
   caret-color: var(--pen-red);
 }
-#cmd::selection { background: rgba(46, 92, 158, 0.18); }
+#cmd::selection { background: rgba(176, 125, 43, 0.24); }
 .cli__ink {
   position: absolute;
   left: 0;
@@ -1123,7 +1124,9 @@ body.is-learning .landing-notes {
   align-items: stretch;
   overflow: hidden;
   padding: 0 0 0 1.15rem;           /* one indent step per level */
-  transition: grid-template-rows 0.5s var(--ease-settle);
+  /* an even ease (not the front-loaded --ease-settle) so collapse/expand reads
+     as a smooth slide of the whole open subtree, not a snap. */
+  transition: grid-template-rows 0.42s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .tree__list .tree__subwrap.is-open { grid-template-rows: 1fr; }
 /* When fully open, let content bleed past the box so the LAST row's hover
