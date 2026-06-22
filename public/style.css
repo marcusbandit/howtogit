@@ -1402,6 +1402,22 @@ body.is-learning .landing-notes {
    note (note-only files) is NOT here: it stays the width driver and wraps at its
    own max-width. */
 .editor__bar, .editor__explain, .editor__later { width: 0; min-width: 100%; }
+/* the index's friendly list: a filename + its real state, coloured the same way
+   the file tree colours states (green staged, blue committed) so they read as
+   one language. The state word sits to the right and updates step to step. */
+.editor__idx {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.3rem;
+  padding: 0.16rem 1.1rem;
+  font-family: var(--mono);
+  font-size: 0.92rem;
+}
+.editor__idx-tag { font-family: var(--ui); font-size: 0.8rem; font-style: italic; opacity: 0.9; }
+.editor__idx--staged    { color: var(--pen-green); }
+.editor__idx--committed { color: var(--pen-blue); }
+.editor__idx--modified  { color: #b07d2b; }
 
 /* syntax highlighting palette (kept within the inked colour set) */
 .sx-tag     { color: var(--pen-blue); }

@@ -33,7 +33,9 @@ function savePersisted() {
     try {
         localStorage.setItem(LS_SESSION, JSON.stringify(persisted));
     }
-    catch { /* private mode / full */ }
+    catch {
+        /* private mode / full */
+    }
 }
 function loadPersisted() {
     try {
@@ -41,7 +43,10 @@ function loadPersisted() {
         if (!raw)
             return null;
         const p = JSON.parse(raw);
-        if (!p || typeof p.step !== "number" || typeof p.values !== "object" || !p.values)
+        if (!p ||
+            typeof p.step !== "number" ||
+            typeof p.values !== "object" ||
+            !p.values)
             return null;
         return { step: p.step, values: p.values };
     }
@@ -54,7 +59,9 @@ function clearPersisted() {
     try {
         localStorage.removeItem(LS_SESSION);
     }
-    catch { /* ignore */ }
+    catch {
+        /* ignore */
+    }
 }
 // The browser gives no direct "was this a hard refresh?" flag: a normal reload
 // and a Ctrl+Shift+R both report navigation type "reload". The only thing a hard
@@ -71,8 +78,7 @@ function isHardRefresh() {
     try {
         const nav = performance.getEntriesByType("navigation")[0];
         navType = nav?.type ?? "";
-        probe = performance.getEntriesByType("resource")
-            .find((e) => e.name.includes(PROBE_NAME));
+        probe = performance.getEntriesByType("resource").find((e) => e.name.includes(PROBE_NAME));
     }
     catch {
         return false;
@@ -84,13 +90,17 @@ function isHardRefresh() {
     try {
         cacheOk = localStorage.getItem(LS_CACHE_OK) === "1";
     }
-    catch { /* ignore */ }
+    catch {
+        /* ignore */
+    }
     if (fromCache && !cacheOk) {
         cacheOk = true; // self-calibrate: caching works here
         try {
             localStorage.setItem(LS_CACHE_OK, "1");
         }
-        catch { /* ignore */ }
+        catch {
+            /* ignore */
+        }
     }
     return navType === "reload" && !fromCache && cacheOk;
 }
@@ -147,7 +157,14 @@ const companionList = need("companion-list");
 const companionArrows = need("companion-arrows");
 const brandRule = needSel(".brand__rule");
 const cliRule = needSel(".cli__rule");
-const model = { nodes: [], head: null, headBranch: "main", branches: {}, tagEls: null, pending: null };
+const model = {
+    nodes: [],
+    head: null,
+    headBranch: "main",
+    branches: {},
+    tagEls: null,
+    pending: null,
+};
 const GAP = 150; // horizontal distance between commits (viewBox units)
 const LANE_GAP = 118; // vertical distance between branch lanes
 const NODE_R = 28; // base node radius (viewBox units)
@@ -197,7 +214,9 @@ function drawRule(svg, color, seed) {
     const y = vb.height * 0.55;
     const d = S.linePath(vb.width * 0.03, y, vb.width * 0.97, y, seed, 0.8);
     svg.appendChild(S.el("path", {
-        d, class: "edge-stroke", stroke: color,
+        d,
+        class: "edge-stroke",
+        stroke: color,
         "stroke-width": Math.max(1.6, vb.height * 0.18),
     }));
 }
@@ -269,7 +288,8 @@ function animateIn(node, delay = 0) {
     node.style.opacity = "0";
     node.style.transform = "translateY(6px) scale(0.9)";
     node.style.transformOrigin = "center";
-    node.style.transition = "opacity .45s ease, transform .5s cubic-bezier(.16,1,.3,1)";
+    node.style.transition =
+        "opacity .45s ease, transform .5s cubic-bezier(.16,1,.3,1)";
     requestAnimationFrame(() => setTimeout(() => {
         node.style.opacity = "1";
         node.style.transform = "translateY(0) scale(1)";
@@ -295,11 +315,16 @@ function shapePath(shape, x, y, r, seed) {
 async function drawNode(node, seed) {
     const main = S.el("path", {
         d: shapePath(node.shape, node.x, node.y, node.r, seed),
-        class: "node-stroke", stroke: node.color, "stroke-width": NODE_W,
+        class: "node-stroke",
+        stroke: node.color,
+        "stroke-width": NODE_W,
     });
     const second = S.el("path", {
         d: shapePath(node.shape, node.x, node.y, node.r * 0.97, seed + 31),
-        class: "node-stroke", stroke: node.color, "stroke-width": 1.5, opacity: 0.5,
+        class: "node-stroke",
+        stroke: node.color,
+        "stroke-width": 1.5,
+        opacity: 0.5,
     });
     gNodes.appendChild(main);
     gNodes.appendChild(second);
@@ -319,8 +344,10 @@ function connectorPath(from, to, seed) {
 }
 async function drawConnector(from, to, color, seed) {
     const p = S.el("path", {
-        d: connectorPath(from, to, seed), class: "edge-stroke",
-        stroke: color, "stroke-width": EDGE_W,
+        d: connectorPath(from, to, seed),
+        class: "edge-stroke",
+        stroke: color,
+        "stroke-width": EDGE_W,
     });
     gEdges.appendChild(p);
     if (instant)
@@ -332,10 +359,19 @@ function makePill(text, color, seed) {
     const g = S.el("g");
     const w = text.length * 12 + 22;
     g.appendChild(S.el("path", {
-        d: S.rectPath(0, 0, w, 30, seed), class: "tag-box",
-        stroke: color, "stroke-width": 1.8, fill: "#efe7d2",
+        d: S.rectPath(0, 0, w, 30, seed),
+        class: "tag-box",
+        stroke: color,
+        "stroke-width": 1.8,
+        fill: "#efe7d2",
     }));
-    const t = S.el("text", { x: 0, y: 7, "text-anchor": "middle", class: "tag", fill: color });
+    const t = S.el("text", {
+        x: 0,
+        y: 7,
+        "text-anchor": "middle",
+        class: "tag",
+        fill: color,
+    });
     t.textContent = text;
     g.appendChild(t);
     return g;
@@ -409,20 +445,29 @@ function drawRefs() {
             const st = b.staged ? LINE.staged : LINE.ghost;
             refTicks.appendChild(S.el("path", {
                 d: connectorPath(tip, { x: a.x, y: a.y, r: NODE_R }, 21),
-                class: "edge-stroke", stroke: b.color, "stroke-width": EDGE_W,
-                "stroke-dasharray": st.dash, opacity: st.opacity,
+                class: "edge-stroke",
+                stroke: b.color,
+                "stroke-width": EDGE_W,
+                "stroke-dasharray": st.dash,
+                opacity: st.opacity,
             }));
             const ghost = b.shape === "square"
                 ? S.squarePath(a.x, a.y, NODE_R * 1.7, 23)
                 : S.circlePath(a.x, a.y, NODE_R, 23);
             refTicks.appendChild(S.el("path", {
-                d: ghost, class: "node-stroke", stroke: b.color, "stroke-width": NODE_W,
-                "stroke-dasharray": st.dash, opacity: st.opacity,
+                d: ghost,
+                class: "node-stroke",
+                stroke: b.color,
+                "stroke-width": NODE_W,
+                "stroke-dasharray": st.dash,
+                opacity: st.opacity,
             }));
         }
         refTicks.appendChild(S.el("path", {
             d: S.linePath(a.x, a.y - NODE_R - 2, a.x, a.y - NODE_R - 22, 5, 0.6),
-            class: "edge-stroke", stroke: COLORS.inkSoft, "stroke-width": 1.4,
+            class: "edge-stroke",
+            stroke: COLORS.inkSoft,
+            "stroke-width": 1.4,
         }));
         wanted.add(name);
         const bp = ensurePill(name, name, b.color, 2);
@@ -446,7 +491,10 @@ function drawRefs() {
 }
 function caption(text, cx, y, delay, faint = false) {
     const t = S.el("text", {
-        x: cx, y, "text-anchor": "middle", class: "commit-msg",
+        x: cx,
+        y,
+        "text-anchor": "middle",
+        class: "commit-msg",
     });
     if (faint)
         t.setAttribute("opacity", "0.6");
@@ -474,7 +522,7 @@ function centerOnHead() {
     if (xs.length) {
         const minX = Math.min(...xs), maxX = Math.max(...xs);
         const margin = NODE_R * 2.4;
-        if ((maxX - minX) + margin * 2 <= viewW * BOX_FRAC) {
+        if (maxX - minX + margin * 2 <= viewW * BOX_FRAC) {
             targetX = (minX + maxX) / 2; // fits the box: centre the graph
         }
         else {
@@ -489,9 +537,10 @@ function centerOnHead() {
     boardPanX = panX; // the remote layer isn't panned, so it needs this to map a
     // local node's on-screen x into its own coordinate space
     for (const g of boardGroups) {
-        g.style.transition = instant || S.prefersReduced
-            ? "none"
-            : "transform .6s cubic-bezier(.16,1,.3,1)";
+        g.style.transition =
+            instant || S.prefersReduced
+                ? "none"
+                : "transform .6s cubic-bezier(.16,1,.3,1)";
         g.style.transform = `translateX(${panX}px)`;
     }
 }
@@ -500,13 +549,22 @@ let boardPanX = 0;
 async function doInit() {
     const p = nodePos(0, 0);
     const node = {
-        id: 0, col: 0, lane: 0, x: p.x, y: p.y, r: NODE_R,
-        branch: "main", color: COLORS.main, shape: "circle",
+        id: 0,
+        col: 0,
+        lane: 0,
+        x: p.x,
+        y: p.y,
+        r: NODE_R,
+        branch: "main",
+        color: COLORS.main,
+        shape: "circle",
     };
     model.nodes.push(node);
     model.head = 0;
     model.headBranch = "main";
-    model.branches = { main: { color: COLORS.main, shape: "circle", lane: 0, tip: 0 } };
+    model.branches = {
+        main: { color: COLORS.main, shape: "circle", lane: 0, tip: 0 },
+    };
     dockStage();
     await drawNode(node, 3);
     drawRefs();
@@ -540,13 +598,22 @@ async function doAdd() {
     else {
         const conn = S.el("path", {
             d: connectorPath(parent, { x: pos.x, y: pos.y, r: NODE_R }, 9),
-            class: "edge-stroke", stroke: branch.color, "stroke-width": EDGE_W,
-            "stroke-dasharray": LINE.staged.dash, opacity: 0,
+            class: "edge-stroke",
+            stroke: branch.color,
+            "stroke-width": EDGE_W,
+            "stroke-dasharray": LINE.staged.dash,
+            opacity: 0,
         });
-        const shape = branch.shape === "square" ? S.squarePath(pos.x, pos.y, NODE_R * 1.7, 9) : S.circlePath(pos.x, pos.y, NODE_R, 9);
+        const shape = branch.shape === "square"
+            ? S.squarePath(pos.x, pos.y, NODE_R * 1.7, 9)
+            : S.circlePath(pos.x, pos.y, NODE_R, 9);
         const ring = S.el("path", {
-            d: shape, class: "node-stroke",
-            stroke: branch.color, "stroke-width": NODE_W, "stroke-dasharray": LINE.staged.dash, opacity: 0,
+            d: shape,
+            class: "node-stroke",
+            stroke: branch.color,
+            "stroke-width": NODE_W,
+            "stroke-dasharray": LINE.staged.dash,
+            opacity: 0,
         });
         gEdges.appendChild(conn);
         gNodes.appendChild(ring);
@@ -556,7 +623,9 @@ async function doAdd() {
     els.push(tag);
     const stagedOpacity = String(LINE.staged.opacity); // match the branch-staged look
     if (instant) {
-        els.forEach((e) => { e.style.opacity = e === tag ? "0.6" : stagedOpacity; });
+        els.forEach((e) => {
+            e.style.opacity = e === tag ? "0.6" : stagedOpacity;
+        });
     }
     else {
         requestAnimationFrame(() => {
@@ -579,8 +648,15 @@ async function doCommit(message = "first commit") {
         model.pending = null;
     }
     const node = {
-        id: model.nodes.length, col: parent.col + 1, lane: branch.lane, x: pos.x, y: pos.y,
-        r: NODE_R, branch: model.headBranch, color: branch.color, shape: branch.shape,
+        id: model.nodes.length,
+        col: parent.col + 1,
+        lane: branch.lane,
+        x: pos.x,
+        y: pos.y,
+        r: NODE_R,
+        branch: model.headBranch,
+        color: branch.color,
+        shape: branch.shape,
     };
     await drawConnector(parent, node, branch.color, node.id * 7 + 4);
     await drawNode(node, node.id * 13 + 6);
@@ -632,8 +708,15 @@ async function doMerge(arg) {
     const col = Math.max(intoTip.col, otherTip.col) + 1;
     const pos = nodePos(col, into.lane);
     const node = {
-        id: model.nodes.length, col, lane: into.lane, x: pos.x, y: pos.y,
-        r: NODE_R, branch: model.headBranch, color: into.color, shape: into.shape,
+        id: model.nodes.length,
+        col,
+        lane: into.lane,
+        x: pos.x,
+        y: pos.y,
+        r: NODE_R,
+        branch: model.headBranch,
+        color: into.color,
+        shape: into.shape,
     };
     // two connectors converge: one from the current tip, one from the branch tip
     // (drawn in the branch's colour so you can see where the work came from)
@@ -683,7 +766,7 @@ function showEndState() {
         return;
     caption("that's the whole first loop — nothing left to do ✦", h.x, h.y + h.r + 100, 420, true);
 }
-const atomText = (a) => (typeof a.text === "function" ? a.text() : a.text);
+const atomText = (a) => typeof a.text === "function" ? a.text() : a.text;
 const atomSep = (atoms, i) => atoms[i].sep ?? (i === 0 ? "" : " ");
 const A = (text, tone, opts = {}) => ({ text, tone, ...opts });
 // a quoted message is three atoms: opening quote, the free text, closing quote,
@@ -695,7 +778,9 @@ const msgAtoms = (suggest) => [
 ];
 // what a fully-typed command looks like (for replay + width sizing)
 function canonical(step) {
-    return step.atoms.map((a, i) => atomSep(step.atoms, i) + atomText(a)).join("");
+    return step.atoms
+        .map((a, i) => atomSep(step.atoms, i) + atomText(a))
+        .join("");
 }
 const isUrl = (s) => /^https?:\/\/[^\s/]+\.[^\s/]+\/\S+$/i.test(s) || /^git@[^\s:]+:\S+$/i.test(s);
 let stepIndex = 0;
@@ -718,7 +803,7 @@ const steps = [
             pre: [
                 {
                     q: "what even is git?",
-                    a: "git keeps a history of your project: every version you save, so you can look back, undo a mistake, and try things without fear of losing your work.",
+                    a: "Git keeps a history of your project. <br>Every version you commit is saved, so you can look back, undo a mistake, and try things without fear of losing your work.<br><br>You can think of it as quicksaves in a game where you can choose wich one to go back to.",
                 },
                 {
                     q: "what's <b>git init</b> about to do?",
@@ -746,7 +831,11 @@ const steps = [
     },
     {
         key: "add",
-        atoms: [A("git", "cmd", { sep: "" }), A("add", "cmd"), A(".", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("add", "cmd"),
+            A(".", "val", { free: true }),
+        ],
         test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
         hint: "Stage everything with  git add .  (or  git add -A )",
         teach: {
@@ -754,7 +843,11 @@ const steps = [
             why: "Choose which files go in the next snapshot.",
             parts: [
                 { t: "add", tone: "cmd", why: "stage your changes" },
-                { t: ".  /  -A", tone: "val", why: "the . means everything (so does -A)" },
+                {
+                    t: ".  /  -A",
+                    tone: "val",
+                    why: "the . means everything (so does -A)",
+                },
             ],
         },
         run: doAdd,
@@ -762,7 +855,9 @@ const steps = [
     {
         key: "commit",
         atoms: [
-            A("git", "cmd", { sep: "" }), A("commit", "cmd"), A("-m", "flag"),
+            A("git", "cmd", { sep: "" }),
+            A("commit", "cmd"),
+            A("-m", "flag"),
             ...msgAtoms("first commit"),
         ],
         test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
@@ -777,7 +872,11 @@ const steps = [
             parts: [
                 { t: "commit", tone: "cmd", why: "save that snapshot to history" },
                 { t: "-m", tone: "flag", why: "attach a short message" },
-                { t: '"message"', tone: "val", why: "a short note describing what this snapshot changed" },
+                {
+                    t: '"message"',
+                    tone: "val",
+                    why: "a short note describing what this snapshot changed",
+                },
             ],
         },
         run: doCommit,
@@ -785,10 +884,14 @@ const steps = [
     {
         key: "remote",
         atoms: [
-            A("git", "cmd", { sep: "" }), A("remote", "cmd"), A("add", "cmd"),
+            A("git", "cmd", { sep: "" }),
+            A("remote", "cmd"),
+            A("add", "cmd"),
             A("origin", "val", { free: true }),
-            A("https://", "flag"), A("github.com/", "flag", { sep: "" }),
-            A("user", "flag", { sep: "", free: true }), A("/my-site.git", "flag", { sep: "" }),
+            A("https://", "flag"),
+            A("github.com/", "flag", { sep: "" }),
+            A("user", "flag", { sep: "", free: true }),
+            A("/my-site.git", "flag", { sep: "" }),
         ],
         test: (s) => {
             const m = s.match(/^git\s+remote\s+add\s+(\S+)\s+(\S+)$/i);
@@ -801,9 +904,22 @@ const steps = [
             why: "A remote is a copy of your project that lives online, so your work stays safe even if something happens to your computer. This points your repo at one.",
             note: "Optional, and easiest to set up now, before you start branching. Git works fine with no remote at all.",
             parts: [
-                { t: "remote add", tone: "cmd", span: 2, why: "save a link to a copy of your repo kept elsewhere" },
-                { t: "origin", tone: "val", why: "the nickname we give the url, so you can type it instead of the full address next time" },
-                { t: "the url", tone: "flag", why: "the address where the remote copy lives, usually in the cloud" },
+                {
+                    t: "remote add",
+                    tone: "cmd",
+                    span: 2,
+                    why: "save a link to a copy of your repo kept elsewhere",
+                },
+                {
+                    t: "origin",
+                    tone: "val",
+                    why: "the nickname we give the url, so you can type it instead of the full address next time",
+                },
+                {
+                    t: "the url",
+                    tone: "flag",
+                    why: "the address where the remote copy lives, usually in the cloud",
+                },
             ],
         },
         run: doRemoteAdd,
@@ -811,8 +927,11 @@ const steps = [
     {
         key: "push",
         atoms: [
-            A("git", "cmd", { sep: "" }), A("push", "cmd"), A("-u", "flag"),
-            A(() => remoteName, "val", { free: true }), A("main", "val"),
+            A("git", "cmd", { sep: "" }),
+            A("push", "cmd"),
+            A("-u", "flag"),
+            A(() => remoteName, "val", { free: true }),
+            A("main", "val"),
         ],
         test: (s) => /^git\s+push\s+-u\s+\S+\s+main$/i.test(s),
         hint: "Send your commit up:  git push -u origin main",
@@ -821,16 +940,32 @@ const steps = [
             why: "Upload your commit so the remote has it too. This is the first time your work leaves your computer — the remote now holds a copy of your tree.",
             parts: [
                 { t: "push", tone: "cmd", why: "upload your commits to the remote" },
-                { t: "-u", tone: "flag", why: "upstream: tie this branch to the remote so next time you can just type git push" },
-                { t: "origin", tone: "val", why: "which remote to send to (the nickname you chose)" },
-                { t: "main", tone: "val", why: "which branch to send (main is your default branch)" },
+                {
+                    t: "-u",
+                    tone: "flag",
+                    why: "upstream: tie this branch to the remote so next time you can just type git push",
+                },
+                {
+                    t: "origin",
+                    tone: "val",
+                    why: "which remote to send to (the nickname you chose)",
+                },
+                {
+                    t: "main",
+                    tone: "val",
+                    why: "which branch to send (main is your default branch)",
+                },
             ],
         },
         run: doPush,
     },
     {
         key: "branch",
-        atoms: [A("git", "cmd", { sep: "" }), A("branch", "cmd"), A("feature", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("branch", "cmd"),
+            A("feature", "val", { free: true }),
+        ],
         test: (s) => /^git\s+branch\s+\S+$/i.test(s),
         extract: (s) => s.split(/\s+/)[2] ?? "feature",
         hint: "Name a branch:  git branch feature",
@@ -838,15 +973,27 @@ const steps = [
             goal: "Start a branch",
             why: "A branch is a separate line of work, so you can try things without touching main.",
             parts: [
-                { t: "branch", tone: "cmd", why: "make a new branch at the current commit" },
-                { t: "feature", tone: "val", why: "its name, yours to choose (here: feature)" },
+                {
+                    t: "branch",
+                    tone: "cmd",
+                    why: "make a new branch at the current commit",
+                },
+                {
+                    t: "feature",
+                    tone: "val",
+                    why: "its name, yours to choose (here: feature)",
+                },
             ],
         },
         run: doBranch,
     },
     {
         key: "checkout",
-        atoms: [A("git", "cmd", { sep: "" }), A("checkout", "cmd"), A("feature", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("checkout", "cmd"),
+            A("feature", "val", { free: true }),
+        ],
         test: (s) => /^git\s+checkout\s+\S+$/i.test(s),
         extract: (s) => s.split(/\s+/)[2] ?? "feature",
         hint: "Switch to it:  git checkout feature",
@@ -862,7 +1009,11 @@ const steps = [
     },
     {
         key: "add2",
-        atoms: [A("git", "cmd", { sep: "" }), A("add", "cmd"), A(".", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("add", "cmd"),
+            A(".", "val", { free: true }),
+        ],
         test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
         hint: "Stage your change with  git add .",
         teach: {
@@ -870,7 +1021,11 @@ const steps = [
             why: "You edited index.html on the feature branch. Stage it so it goes in the next commit.",
             parts: [
                 { t: "add", tone: "cmd", why: "stage the change you just made" },
-                { t: ".  /  -A", tone: "val", why: "the . means everything you changed" },
+                {
+                    t: ".  /  -A",
+                    tone: "val",
+                    why: "the . means everything you changed",
+                },
             ],
         },
         run: doAdd,
@@ -878,7 +1033,9 @@ const steps = [
     {
         key: "commit2",
         atoms: [
-            A("git", "cmd", { sep: "" }), A("commit", "cmd"), A("-m", "flag"),
+            A("git", "cmd", { sep: "" }),
+            A("commit", "cmd"),
+            A("-m", "flag"),
             ...msgAtoms("add feature"),
         ],
         test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
@@ -893,14 +1050,22 @@ const steps = [
             parts: [
                 { t: "commit", tone: "cmd", why: "save the snapshot on feature" },
                 { t: "-m", tone: "flag", why: "attach a short message" },
-                { t: '"message"', tone: "val", why: "describe the change (here: add feature)" },
+                {
+                    t: '"message"',
+                    tone: "val",
+                    why: "describe the change (here: add feature)",
+                },
             ],
         },
         run: doCommit,
     },
     {
         key: "checkout-main",
-        atoms: [A("git", "cmd", { sep: "" }), A("checkout", "cmd"), A("main", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("checkout", "cmd"),
+            A("main", "val", { free: true }),
+        ],
         test: (s) => /^git\s+checkout\s+main$/i.test(s),
         extract: (s) => s.split(/\s+/)[2] ?? "main",
         hint: "Go back to main first:  git checkout main",
@@ -909,14 +1074,22 @@ const steps = [
             why: "You merge into the branch you're standing on, so move onto main before bringing the feature in.",
             parts: [
                 { t: "checkout", tone: "cmd", why: "move HEAD back onto main" },
-                { t: "main", tone: "val", why: "the branch you want the feature merged into" },
+                {
+                    t: "main",
+                    tone: "val",
+                    why: "the branch you want the feature merged into",
+                },
             ],
         },
         run: doCheckout,
     },
     {
         key: "merge",
-        atoms: [A("git", "cmd", { sep: "" }), A("merge", "cmd"), A("feature", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("merge", "cmd"),
+            A("feature", "val", { free: true }),
+        ],
         test: (s) => /^git\s+merge\s+\S+$/i.test(s),
         extract: (s) => s.split(/\s+/)[2] ?? "feature",
         hint: "Bring the branch in:  git merge feature",
@@ -924,8 +1097,16 @@ const steps = [
             goal: "Merge the branch back",
             why: "Combine the feature branch's commit into main, so main has all the work. The two lanes rejoin.",
             parts: [
-                { t: "merge", tone: "cmd", why: "join another branch's commits into this one" },
-                { t: "feature", tone: "val", why: "the branch whose work you're bringing in" },
+                {
+                    t: "merge",
+                    tone: "cmd",
+                    why: "join another branch's commits into this one",
+                },
+                {
+                    t: "feature",
+                    tone: "val",
+                    why: "the branch whose work you're bringing in",
+                },
             ],
         },
         run: doMerge,
@@ -939,7 +1120,11 @@ const steps = [
             goal: "Send the merge up",
             why: "You already set the upstream with -u, so a bare git push sends main — merge and all — to the remote. The remote tree catches up to yours.",
             parts: [
-                { t: "push", tone: "cmd", why: "upload the new commits to the remote you already linked" },
+                {
+                    t: "push",
+                    tone: "cmd",
+                    why: "upload the new commits to the remote you already linked",
+                },
             ],
         },
         run: doPush,
@@ -1027,7 +1212,8 @@ function renderActivePart(force = false, instant = false) {
         return;
     activePart = idx;
     // instant swap (step change) or reduced motion: no scroll
-    if (instant || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (instant ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         partsEl.replaceChildren();
         if (idx >= 0)
             partsEl.appendChild(buildPartRow(activeParts[idx]));
@@ -1092,10 +1278,12 @@ function suggestFrom(atoms, start, includeFirstSep) {
 // ghost: the rest of the command keeps previewing.
 function analyze(typed, atoms) {
     let pos = 0, html = "", ghost = "", chunk = "", invalid = false, chunkSet = false;
-    const setChunk = (s) => { if (!chunkSet) {
-        chunk = s;
-        chunkSet = true;
-    } };
+    const setChunk = (s) => {
+        if (!chunkSet) {
+            chunk = s;
+            chunkSet = true;
+        }
+    };
     const span = (tone, s) => `<span class="hl-${tone}">${esc(s)}</span>`;
     for (let a = 0; a < atoms.length; a++) {
         const sep = atomSep(atoms, a);
@@ -1132,12 +1320,15 @@ function analyze(typed, atoms) {
         }
         if (atoms[a].free) {
             const next = atoms[a + 1];
-            const stop = next ? (atomSep(atoms, a + 1) || atomText(next)[0] || " ") : " ";
+            const stop = next
+                ? atomSep(atoms, a + 1) || atomText(next)[0] || " "
+                : " ";
             const stopIdx = rem.indexOf(stop);
             if (stopIdx === -1) {
                 html += span(atoms[a].tone, rem);
                 pos = typed.length;
-                if (rem.length < text.length && text.toLowerCase().startsWith(rem.toLowerCase())) {
+                if (rem.length < text.length &&
+                    text.toLowerCase().startsWith(rem.toLowerCase())) {
                     // still completing this slot's suggestion
                     ghost = text.slice(rem.length) + suggestFrom(atoms, a + 1, true);
                     setChunk(text.slice(rem.length));
@@ -1170,7 +1361,9 @@ function analyze(typed, atoms) {
         const spaceIdx = rem.indexOf(" ");
         const word = spaceIdx === -1 ? rem : rem.slice(0, spaceIdx);
         let cp = 0;
-        while (cp < word.length && cp < text.length && word[cp].toLowerCase() === text[cp].toLowerCase())
+        while (cp < word.length &&
+            cp < text.length &&
+            word[cp].toLowerCase() === text[cp].toLowerCase())
             cp++;
         html += `<span class="hl-invalid">${cp ? span(atoms[a].tone, word.slice(0, cp)) : ""}<span class="hl-err">${esc(word.slice(cp))}</span></span>`;
         pos += word.length;
@@ -1182,7 +1375,9 @@ function analyze(typed, atoms) {
 function updateInk() {
     const typed = cmd.value;
     const atoms = currentAtoms();
-    const a = atoms ? analyze(typed, atoms) : { html: esc(typed), ghost: "", chunk: "", invalid: false };
+    const a = atoms
+        ? analyze(typed, atoms)
+        : { html: esc(typed), ghost: "", chunk: "", invalid: false };
     const ghost = a.ghost;
     suggestActive = ghost.length > 0;
     let html = a.html;
@@ -1217,7 +1412,9 @@ function syncCliRule() {
     cliRule.setAttribute("viewBox", `0 0 ${w} 12`);
     cliRule.replaceChildren(S.el("path", {
         d: S.linePath(3, 7, w - 3, 7, 4, 0.7),
-        class: "edge-stroke", stroke: COLORS.ink, "stroke-width": 2,
+        class: "edge-stroke",
+        stroke: COLORS.ink,
+        "stroke-width": 2,
     }));
 }
 // Tab completes only the next atom (one word, or one url segment)
@@ -1234,7 +1431,8 @@ function acceptNextWord() {
     updateInk();
 }
 function caretAtEnd() {
-    return cmd.selectionStart === cmd.value.length && cmd.selectionEnd === cmd.value.length;
+    return (cmd.selectionStart === cmd.value.length &&
+        cmd.selectionEnd === cmd.value.length);
 }
 // ---- command line behaviour ----------------------------------------
 function showNudge(text) {
@@ -1246,7 +1444,9 @@ function showInfo(text) {
     nudgeEl.textContent = text;
     nudgeEl.classList.add("show", "info");
 }
-function clearNudge() { nudgeEl.classList.remove("show", "info"); }
+function clearNudge() {
+    nudgeEl.classList.remove("show", "info");
+}
 function shake() {
     form.classList.remove("shake");
     void form.offsetWidth;
@@ -1343,7 +1543,10 @@ form.addEventListener("submit", async (e) => {
     if (stepIndex === stepIdx("add2"))
         void playEditSequence();
 });
-cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
+cmd.addEventListener("input", () => {
+    clearNudge();
+    updateInk();
+});
 cmd.addEventListener("keydown", (e) => {
     if (e.key === "Tab" && suggestActive) {
         e.preventDefault();
@@ -1367,15 +1570,18 @@ cmd.addEventListener("scroll", () => {
 // dismissed — it permanently eats half the screen. So there we let the user
 // tap the command line when they want to type. On desktop we keep the input
 // focused so typing always lands without clicking.
-const isPhone = window.matchMedia("(max-width: 760px)").matches
-    || ("ontouchstart" in window);
+const isPhone = window.matchMedia("(max-width: 760px)").matches || "ontouchstart" in window;
 // ...but never fight the user while they're selecting text. A learner should be
 // able to drag across a label (to copy it, or paste it into a chatbot) without
 // the input yanking focus back and collapsing the selection. So while the mouse
 // is down (a drag in progress) or any text is selected, we leave focus alone.
 let pointerDown = false;
-document.addEventListener("mousedown", () => { pointerDown = true; });
-document.addEventListener("mouseup", () => { pointerDown = false; });
+document.addEventListener("mousedown", () => {
+    pointerDown = true;
+});
+document.addEventListener("mouseup", () => {
+    pointerDown = false;
+});
 // in learn mode, a click anywhere outside the companion means "I'm done looking,
 // take me back to continuing" — let the focused question go
 document.addEventListener("click", (e) => {
@@ -1399,10 +1605,20 @@ function keepFocus() {
 cmd.addEventListener("blur", () => requestAnimationFrame(keepFocus));
 document.addEventListener("click", keepFocus);
 // ---- file tree (left) ----------------------------------------------
-const PROJECT = { root: "my-site", files: ["index.html", "style.css", "app.js"] };
+const PROJECT = {
+    root: "my-site",
+    files: ["index.html", "style.css", "app.js"],
+};
 const EDIT_FILE = PROJECT.files[0]; // the file we "edit" on the feature branch
 // one check = saved in a local commit; two checks = delivered to the remote
-const MARK = { plain: "", untracked: "·", modified: "M", staged: "+", committed: "✓", pushed: "✓✓" };
+const MARK = {
+    plain: "",
+    untracked: "·",
+    modified: "M",
+    staged: "+",
+    committed: "✓",
+    pushed: "✓✓",
+};
 // step index of a step by key (so inserting steps doesn't break thresholds)
 function stepIdx(key) {
     return steps.findIndex((s) => s.key === key);
@@ -1414,7 +1630,9 @@ function stepIdx(key) {
 function isPushed(file) {
     if (stepIndex <= stepIdx("push"))
         return false; // first push not done
-    if (file === EDIT_FILE && stepIndex > stepIdx("commit2") && stepIndex <= stepIdx("push2"))
+    if (file === EDIT_FILE &&
+        stepIndex > stepIdx("commit2") &&
+        stepIndex <= stepIdx("push2"))
         return false; // edited again, awaiting push2
     return true;
 }
@@ -1442,13 +1660,19 @@ function noteSpan(text) {
 // a folder row + its (collapsed/animatable) contents wrapper
 function buildFolder(name, path, open, cls, opts = {}) {
     const row = document.createElement("li");
-    row.className = `${cls} is-expandable is-folder` + (open ? " is-open" : "") + (opts.isNew ? " is-new" : "");
+    row.className =
+        `${cls} is-expandable is-folder` +
+            (open ? " is-open" : "") +
+            (opts.isNew ? " is-new" : "");
     row.dataset.path = path;
     row.append(open ? folderIconOpen() : folderIcon(), makeNameUnderlined(name));
     if (opts.note)
         row.appendChild(noteSpan(opts.note));
     const wrap = document.createElement("li");
-    wrap.className = "tree__subwrap" + (opts.rootWrap ? " tree__subwrap--root" : "") + (open ? " is-open" : "");
+    wrap.className =
+        "tree__subwrap" +
+            (opts.rootWrap ? " tree__subwrap--root" : "") +
+            (open ? " is-open" : "");
     const sub = document.createElement("ul");
     sub.className = "tree__sub";
     wrap.appendChild(sub);
@@ -1457,7 +1681,8 @@ function buildFolder(name, path, open, cls, opts = {}) {
 // a project/remote file row: state colour + mark + hover note, opens in the editor
 function buildFileRow(fr) {
     const li = document.createElement("li");
-    li.className = fr.state === "plain" ? "f is-openable" : `f f--${fr.state} is-openable`;
+    li.className =
+        fr.state === "plain" ? "f is-openable" : `f f--${fr.state} is-openable`;
     li.dataset.file = fr.file;
     if (fr.flash === "edited")
         li.classList.add("is-edited");
@@ -1549,8 +1774,11 @@ function localModel() {
             note = "pushed";
         else if (st === "committed" && remoteExists)
             note = "committed, not pushed";
-        const flash = (f === EDIT_FILE && st === "modified" && !wasEditing) ? "edited"
-            : (st === "pushed" && !pushedBefore.has(f)) ? "pushed" : undefined;
+        const flash = f === EDIT_FILE && st === "modified" && !wasEditing
+            ? "edited"
+            : st === "pushed" && !pushedBefore.has(f)
+                ? "pushed"
+                : undefined;
         return { name: f, file: f, state: st, note, flash };
     });
     return {
@@ -1589,14 +1817,17 @@ function makeName(text) {
 let underlineSeed = 0;
 function makeNameUnderlined(text) {
     const name = makeName(text);
-    name.appendChild(makeUnderline((underlineSeed++) * 9 + 5));
+    name.appendChild(makeUnderline(underlineSeed++ * 9 + 5));
     return name;
 }
 // ---- hand-drawn icons (same inked language as the board) ------------
 // Built from the sketch helpers so the wobble matches everything else. Each is
 // a 24x24 viewBox; colour comes from currentColor (set per type in CSS).
 function mkIcon(kind) {
-    const svg = S.el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" });
+    const svg = S.el("svg", {
+        viewBox: "0 0 24 24",
+        "aria-hidden": "true",
+    });
     svg.setAttribute("class", `ic ic--${kind}`);
     return svg;
 }
@@ -1606,15 +1837,40 @@ function icStroke(svg, d) {
 // a sheet of paper with a folded corner and a couple of text lines
 function fileIcon(file) {
     const svg = mkIcon(langOf(file)); // html / css / js -> colour
-    icStroke(svg, S.smooth([[6.4, 3.6], [13.6, 3.3], [18.6, 8.2], [18.3, 20.4], [5.8, 20.6], [6.1, 3.7]], true));
-    icStroke(svg, S.smooth([[13.4, 3.6], [13.9, 8.1], [18.4, 7.9]])); // the fold
-    icStroke(svg, S.smooth([[8.6, 12.4], [15.2, 12.0]])); // text line
-    icStroke(svg, S.smooth([[8.5, 15.4], [14.4, 15.1]])); // text line
+    icStroke(svg, S.smooth([
+        [6.4, 3.6],
+        [13.6, 3.3],
+        [18.6, 8.2],
+        [18.3, 20.4],
+        [5.8, 20.6],
+        [6.1, 3.7],
+    ], true));
+    icStroke(svg, S.smooth([
+        [13.4, 3.6],
+        [13.9, 8.1],
+        [18.4, 7.9],
+    ])); // the fold
+    icStroke(svg, S.smooth([
+        [8.6, 12.4],
+        [15.2, 12.0],
+    ])); // text line
+    icStroke(svg, S.smooth([
+        [8.5, 15.4],
+        [14.4, 15.1],
+    ])); // text line
     return svg;
 }
 function folderIcon() {
     const svg = mkIcon("folder");
-    icStroke(svg, S.smooth([[3.4, 7.2], [8.8, 7.0], [10.7, 9.0], [20.4, 9.0], [20.6, 18.6], [3.6, 18.8], [3.3, 7.3]], true));
+    icStroke(svg, S.smooth([
+        [3.4, 7.2],
+        [8.8, 7.0],
+        [10.7, 9.0],
+        [20.4, 9.0],
+        [20.6, 18.6],
+        [3.6, 18.8],
+        [3.3, 7.3],
+    ], true));
     return svg;
 }
 // the open-folder variant: the same folder with its lid swung up, so an opened
@@ -1622,24 +1878,59 @@ function folderIcon() {
 function folderIconOpen() {
     const svg = mkIcon("folder");
     // back wall of the folder
-    icStroke(svg, S.smooth([[3.4, 7.4], [8.7, 7.2], [10.6, 9.1], [20.4, 9.1], [20.5, 11.6]], false));
+    icStroke(svg, S.smooth([
+        [3.4, 7.4],
+        [8.7, 7.2],
+        [10.6, 9.1],
+        [20.4, 9.1],
+        [20.5, 11.6],
+    ], false));
     // the open front: a flap fanned out toward the viewer
-    icStroke(svg, S.smooth([[3.5, 18.7], [6.4, 12.0], [22.6, 11.8], [19.8, 18.6], [3.5, 18.7]], true));
+    icStroke(svg, S.smooth([
+        [3.5, 18.7],
+        [6.4, 12.0],
+        [22.6, 11.8],
+        [19.8, 18.6],
+        [3.5, 18.7],
+    ], true));
     return svg;
 }
 function computerIcon() {
     const svg = mkIcon("computer");
-    icStroke(svg, S.smooth([[3.3, 5.4], [20.7, 4.8], [20.4, 15.2], [3.6, 15.5], [3.4, 5.5]], true));
-    icStroke(svg, S.smooth([[11.9, 15.4], [12.1, 18.4]])); // stand
-    icStroke(svg, S.smooth([[8.4, 18.8], [15.6, 18.5]])); // base
+    icStroke(svg, S.smooth([
+        [3.3, 5.4],
+        [20.7, 4.8],
+        [20.4, 15.2],
+        [3.6, 15.5],
+        [3.4, 5.5],
+    ], true));
+    icStroke(svg, S.smooth([
+        [11.9, 15.4],
+        [12.1, 18.4],
+    ])); // stand
+    icStroke(svg, S.smooth([
+        [8.4, 18.8],
+        [15.6, 18.5],
+    ])); // base
     return svg;
 }
 function cloudIcon() {
     const svg = mkIcon("cloud");
     icStroke(svg, S.smooth([
-        [7.5, 16.4], [5.0, 16.2], [3.5, 14.0], [4.6, 11.6], [7.0, 11.2],
-        [7.8, 8.2], [11.0, 7.2], [13.8, 8.4], [14.8, 10.8],
-        [17.6, 10.6], [19.2, 13.0], [18.0, 16.0], [14.5, 16.4], [7.5, 16.4],
+        [7.5, 16.4],
+        [5.0, 16.2],
+        [3.5, 14.0],
+        [4.6, 11.6],
+        [7.0, 11.2],
+        [7.8, 8.2],
+        [11.0, 7.2],
+        [13.8, 8.4],
+        [14.8, 10.8],
+        [17.6, 10.6],
+        [19.2, 13.0],
+        [18.0, 16.0],
+        [14.5, 16.4],
+        [7.5, 16.4],
     ], true));
     return svg;
 }
@@ -1650,12 +1941,15 @@ function cloudIcon() {
 // matching the line — clipping is purely geometric, so it works at any text size.
 function makeUnderline(seed) {
     const svg = S.el("svg", {
-        class: "f__underline", viewBox: "0 0 100 8",
-        preserveAspectRatio: "none", "aria-hidden": "true",
+        class: "f__underline",
+        viewBox: "0 0 100 8",
+        preserveAspectRatio: "none",
+        "aria-hidden": "true",
     });
     svg.appendChild(S.el("path", {
         d: S.linePath(3, 5, 97, 5, seed, 1.1),
-        class: "f__underline-stroke", "stroke-width": 1.8,
+        class: "f__underline-stroke",
+        "stroke-width": 1.8,
     }));
     return svg;
 }
@@ -1693,10 +1987,10 @@ const FILE_TEXT = {
         "}",
     ],
     "app.js": [
-        "const btn = document.querySelector(\"button\");",
+        'const btn = document.querySelector("button");',
         "",
-        "btn.addEventListener(\"click\", () => {",
-        "  alert(\"hello from my site\");",
+        'btn.addEventListener("click", () => {',
+        '  alert("hello from my site");',
         "});",
     ],
 };
@@ -1714,8 +2008,9 @@ function fileLines(file, side) {
         if (hasEdit) {
             const lines = EDIT_LINES.slice();
             lines.splice(EDIT_AT, 0, EDIT_NEW);
-            const pending = side === "local"
-                && stepIndex >= stepIdx("add2") && stepIndex <= stepIdx("commit2");
+            const pending = side === "local" &&
+                stepIndex >= stepIdx("add2") &&
+                stepIndex <= stepIdx("commit2");
             return { lines, changed: pending ? [EDIT_AT] : [] };
         }
     }
@@ -1743,9 +2038,15 @@ const CSS_RULES = [
 const JS_RULES = [
     { re: /\/\/.*/y, cls: "comment" },
     { re: /"[^"]*"|'[^']*'|`[^`]*`/y, cls: "str" },
-    { re: /\b(?:const|let|var|function|return|if|else|for|while|new|import|export|from|class)\b/y, cls: "kw" },
+    {
+        re: /\b(?:const|let|var|function|return|if|else|for|while|new|import|export|from|class)\b/y,
+        cls: "kw",
+    },
     { re: /=>/y, cls: "kw" },
-    { re: /\b(?:document|window|console|alert|querySelector|addEventListener)\b/y, cls: "fn" },
+    {
+        re: /\b(?:document|window|console|alert|querySelector|addEventListener)\b/y,
+        cls: "fn",
+    },
     { re: /\b\d+\b/y, cls: "num" },
     { re: /[A-Za-z_$][\w$]*/y, cls: "val" },
 ];
@@ -1762,7 +2063,13 @@ const INI_RULES = [
     { re: /\b\d+\b/y, cls: "num" },
     { re: /https?:\/\/\S+|\S+\.git\b/y, cls: "str" }, // urls
 ];
-const RULES = { html: HTML_RULES, css: CSS_RULES, js: JS_RULES, txt: [], ini: INI_RULES };
+const RULES = {
+    html: HTML_RULES,
+    css: CSS_RULES,
+    js: JS_RULES,
+    txt: [],
+    ini: INI_RULES,
+};
 function highlight(line, lang) {
     const rules = RULES[lang];
     let out = "", i = 0;
@@ -1797,10 +2104,15 @@ let editorLang = "html";
 // turn a tiny *highlight* markup into HTML: `*word*` becomes a marker-pen swipe,
 // everything else is escaped. Used for the short .git note copy.
 function inlineHL(s) {
-    return s.split(/(\*[^*]+\*)/).map((seg) => {
+    return s
+        .split(/(\*[^*]+\*)/)
+        .map((seg) => {
         const esc = seg.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-        return /^\*[^*]+\*$/.test(seg) ? `<span class="hl">${esc.slice(1, -1)}</span>` : esc;
-    }).join("");
+        return /^\*[^*]+\*$/.test(seg)
+            ? `<span class="hl">${esc.slice(1, -1)}</span>`
+            : esc;
+    })
+        .join("");
 }
 // render the file as `lines`, syntax-highlighted for `editorLang`. `changed`
 // line indices read as a local change; `caret` parks a blinking caret on the
@@ -1846,8 +2158,8 @@ function editorAnchor() {
 // file's name (data-file) or a .git node's path (data-path).
 function fileRowRect(key, side) {
     const listEl = side === "remote" ? remoteList : treeList;
-    const li = listEl.querySelector(`li[data-file="${key}"]`)
-        ?? listEl.querySelector(`li[data-path="${key}"]`);
+    const li = listEl.querySelector(`li[data-file="${key}"]`) ??
+        listEl.querySelector(`li[data-path="${key}"]`);
     return li ? li.getBoundingClientRect() : null;
 }
 // the transform that shrinks the centred editor down onto a tree row, so
@@ -1896,7 +2208,8 @@ function growEditorFrom(row) {
         // already showing a note (e.g. switching to a same-named file in the other
         // tree): glide to the new contents with a small settle, never blink to 0.
         editorEl.style.transition = "none";
-        editorEl.style.transform = "translate(-50%, -50%) translate(0px, 0px) scale(0.96)";
+        editorEl.style.transform =
+            "translate(-50%, -50%) translate(0px, 0px) scale(0.96)";
         editorEl.getBoundingClientRect();
         requestAnimationFrame(() => {
             if (gen !== editSeqGen)
@@ -1913,8 +2226,7 @@ function growEditorFrom(row) {
     requestAnimationFrame(() => {
         if (gen !== editSeqGen)
             return;
-        editorEl.style.transition =
-            `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
+        editorEl.style.transition = `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
         editorEl.style.transform = OPEN_TRANSFORM;
         editorEl.style.opacity = "1";
         editorEl.style.pointerEvents = "auto";
@@ -1938,6 +2250,32 @@ function editorLater(text) {
     l.className = "editor__later";
     l.innerHTML = inlineHL(text);
     return l;
+}
+function prependExplain(text) {
+    if (!text)
+        return;
+    const p = document.createElement("p");
+    p.className = "editor__explain";
+    p.innerHTML = inlineHL(text);
+    editorCode.prepend(p);
+}
+// the index isn't text, so we render its real entries as a small git-status-like
+// list, each filename coloured by its actual state (staged vs committed). It
+// updates from step to step even though the file list itself doesn't change.
+function renderEditorIndexRows(rows) {
+    editorCode.replaceChildren();
+    for (const r of rows) {
+        const div = document.createElement("div");
+        div.className = `editor__idx editor__idx--${r.state}`;
+        const name = document.createElement("span");
+        name.className = "editor__idx-name";
+        name.textContent = r.name;
+        const tag = document.createElement("span");
+        tag.className = "editor__idx-tag";
+        tag.textContent = r.state;
+        div.append(name, tag);
+        editorCode.appendChild(div);
+    }
 }
 // ---- click any file to open it in the editor (view only) ------------
 function openFileViewer(file, side, row) {
@@ -1964,17 +2302,20 @@ function openGitFile(path, row, side = "local") {
     editorName.textContent = node.name;
     editorUnsaved.style.opacity = "0";
     editorSave.classList.remove("show");
-    if (node.content != null) {
+    if (node.indexRows) {
+        // the staging area: a live list of what the index holds + each file's state
+        editorLang = "txt";
+        renderEditorIndexRows(node.indexRows);
+        prependExplain(node.explain);
+        if (node.later)
+            editorCode.appendChild(editorLater(node.later));
+    }
+    else if (node.content != null) {
         // readable file: one short line, the real contents (key line highlighted),
         // then a "we'll get to it" footnote. Let the lines do most of the talking.
         editorLang = "ini"; // [sections], key = value, ref: paths — light colour
         renderEditorLines(node.content.split("\n"), { markLine: node.markLine });
-        if (node.explain) {
-            const p = document.createElement("p");
-            p.className = "editor__explain";
-            p.innerHTML = inlineHL(node.explain);
-            editorCode.prepend(p);
-        }
+        prependExplain(node.explain);
         if (node.later)
             editorCode.appendChild(editorLater(node.later));
     }
@@ -1997,8 +2338,7 @@ function closeFileViewer() {
         editorEl.style.opacity = "0";
         return;
     }
-    editorEl.style.transition =
-        `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
+    editorEl.style.transition = `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
     editorEl.style.transform = tuckedTransformFor(rect);
     editorEl.style.opacity = "0";
 }
@@ -2024,8 +2364,7 @@ async function playEditSequence() {
     requestAnimationFrame(() => {
         if (gen !== editSeqGen)
             return;
-        editorEl.style.transition =
-            `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
+        editorEl.style.transition = `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
         editorEl.style.transform = OPEN_TRANSFORM;
         editorEl.style.opacity = "1";
         editorOpen = true;
@@ -2055,8 +2394,7 @@ async function playEditSequence() {
     if (!alive())
         return; // longer hold so the save registers
     // 4) fold back into the tree line, then leave index.html marked modified
-    editorEl.style.transition =
-        `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
+    editorEl.style.transition = `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
     editorEl.style.transform = tuckedTransformFor(fileRowRect(EDIT_FILE, "local"));
     editorEl.style.opacity = "0";
     editorOpen = false;
@@ -2081,7 +2419,9 @@ function wireTree(tree) {
             setNodeOpen(tree, path, willOpen);
             // toggling .git by hand while a companion question is peeking into it makes
             // that the state the peek restores when it closes (don't undo the user)
-            if (path === ".git" && tree.side === "local" && openBtn?.dataset.points === "dotgit")
+            if (path === ".git" &&
+                tree.side === "local" &&
+                openBtn?.dataset.points === "dotgit")
                 gitOpenBeforePeek = willOpen;
             return;
         }
@@ -2139,7 +2479,12 @@ function remoteModel() {
         return null; // no remote added yet
     const pushed = stepIndex > stepIdx("push");
     const files = pushed
-        ? PROJECT.files.map((f) => ({ name: f, file: f, state: "committed", flash: lastRemotePushed ? undefined : "pushed" }))
+        ? PROJECT.files.map((f) => ({
+            name: f,
+            file: f,
+            state: "committed",
+            flash: lastRemotePushed ? undefined : "pushed",
+        }))
         : [];
     return {
         root: PROJECT.root,
@@ -2209,7 +2554,10 @@ function renderRemoteGraph(allowAnim = true) {
     const firstShow = oldCount === 0;
     // caption so it's clearly the remote, not a second local graph
     const label = S.el("text", {
-        x: cx, y: restY - 52, "text-anchor": "middle", class: "remote-graph-label",
+        x: cx,
+        y: restY - 52,
+        "text-anchor": "middle",
+        class: "remote-graph-label",
     });
     label.textContent = "the remote";
     gRemoteInner.appendChild(label);
@@ -2222,13 +2570,18 @@ function renderRemoteGraph(allowAnim = true) {
         if (i > 0) {
             conn = S.el("path", {
                 d: connectorPath({ x: -REMOTE_GAP, y: 0, r: REMOTE_NODE_R }, { x: 0, y: 0, r: REMOTE_NODE_R }, node.id * 5 + 2),
-                class: "edge-stroke", stroke: COLORS.main, "stroke-width": 2,
+                class: "edge-stroke",
+                stroke: COLORS.main,
+                "stroke-width": 2,
             });
             g.appendChild(conn);
         }
         g.appendChild(S.el("path", {
             d: shapePath(node.shape, 0, 0, REMOTE_NODE_R, node.id * 7 + 1),
-            fill: node.color, stroke: node.color, "stroke-width": 2, "stroke-linejoin": "round",
+            fill: node.color,
+            stroke: node.color,
+            "stroke-width": 2,
+            "stroke-linejoin": "round",
         }));
         gRemoteInner.appendChild(g);
         if (!animate) {
@@ -2266,7 +2619,8 @@ function renderRemoteGraph(allowAnim = true) {
     gRemoteInner.getBoundingClientRect(); // commit the start states
     requestAnimationFrame(() => {
         if (firstShow) {
-            label.style.transition = "transform 1.15s cubic-bezier(.4,0,.2,1), opacity .7s ease";
+            label.style.transition =
+                "transform 1.15s cubic-bezier(.4,0,.2,1), opacity .7s ease";
             label.style.transform = "translateY(0)";
             label.style.opacity = "1";
         }
@@ -2276,7 +2630,8 @@ function renderRemoteGraph(allowAnim = true) {
                 : "transform .8s cubic-bezier(.4,0,.2,1)"; // glide to re-centre
             p.g.style.transform = `translate(${p.finalX}px, ${restY}px)`;
             p.g.style.opacity = "1";
-            if (p.conn) { // draw the new connector in after the node arrives
+            if (p.conn) {
+                // draw the new connector in after the node arrives
                 p.conn.style.transition = "stroke-dashoffset .55s ease 1s";
                 p.conn.style.strokeDashoffset = "0";
             }
@@ -2336,7 +2691,10 @@ function buildTimeline() {
         return btn;
     };
     TIMELINE_TASKS.forEach((t, i) => {
-        const idx = t.keys.map(stepIdx).filter((s) => s >= 0).sort((a, b) => a - b);
+        const idx = t.keys
+            .map(stepIdx)
+            .filter((s) => s >= 0)
+            .sort((a, b) => a - b);
         const first = idx[0], last = idx[idx.length - 1];
         if (i > 0)
             linkInto(timelineEl);
@@ -2345,7 +2703,9 @@ function buildTimeline() {
         group.className = "tl-group";
         // clicking a stop goes TO that point (it becomes the current step), it does
         // not run the task. The milestone lands you at the start of its task.
-        const taskBtn = makeStop("tl-item", "tl-dot", t.label, () => { void seekTo(first); });
+        const taskBtn = makeStop("tl-item", "tl-dot", t.label, () => {
+            void seekTo(first);
+        });
         taskBtn.title = `Go to: ${t.label}`;
         group.appendChild(taskBtn);
         // .tl-sub is a 0fr<->1fr grid that animates to the exact content width; the
@@ -2360,7 +2720,9 @@ function buildTimeline() {
         let order = 0;
         idx.forEach((si) => {
             linkInto(inner, true, order++); // connector from the milestone / previous sub-step
-            const sBtn = makeStop("tl-substep", "tl-dot tl-dot--sub", cmdLabel(steps[si].key), () => { void seekTo(si); });
+            const sBtn = makeStop("tl-substep", "tl-dot tl-dot--sub", cmdLabel(steps[si].key), () => {
+                void seekTo(si);
+            });
             sBtn.title = `Go to: ${cmdLabel(steps[si].key)}`;
             sBtn.style.setProperty("--i", String(order++));
             inner.appendChild(sBtn);
@@ -2384,7 +2746,9 @@ function buildTimeline() {
     label.textContent = "complete";
     done.append(star, label);
     done.title = "Jump to the finished loop";
-    done.addEventListener("click", () => { void seekTo(steps.length); });
+    done.addEventListener("click", () => {
+        void seekTo(steps.length);
+    });
     timelineEl.appendChild(done);
     tlComplete = done;
     updateTimeline();
@@ -2514,8 +2878,16 @@ let gitOpenBeforePeek = false; // .git open-state before a companion question pe
 // the live snapshot from the REAL git repo (repo.ts) drives the tree + states.
 let snap = null;
 let lastCommitMsg = "first commit";
-const localTree = { el: treeList, open: new Set(["root"]), side: "local" };
-const remoteTree = { el: remoteList, open: new Set(["root"]), side: "remote" };
+const localTree = {
+    el: treeList,
+    open: new Set(["root"]),
+    side: "local",
+};
+const remoteTree = {
+    el: remoteList,
+    open: new Set(["root"]),
+    side: "remote",
+};
 // flat index of every .git *file* by path, so a click can open it in the
 // editor. The remote mirrors the local's .git after push, so one index serves
 // both. Rebuilt from each snapshot.
@@ -2537,7 +2909,10 @@ function repoCommandsFor(i) {
     if (i > stepIdx("add"))
         cmds.push({ kind: "add" });
     if (i > stepIdx("commit"))
-        cmds.push({ kind: "commit", message: persisted.values["commit"] ?? lastCommitMsg });
+        cmds.push({
+            kind: "commit",
+            message: persisted.values["commit"] ?? lastCommitMsg,
+        });
     // git remote add really runs (writes .git/config), so the config file shows it
     if (i > stepIdx("remote"))
         cmds.push({ kind: "remoteAdd", url: remoteUrl });
@@ -2578,7 +2953,9 @@ function setNodeOpen(tree, path, open) {
             revealSubtree(sub);
     }
     if (row.classList.contains("is-folder")) {
-        row.querySelector(".ic")?.replaceWith(open ? folderIconOpen() : folderIcon());
+        row
+            .querySelector(".ic")
+            ?.replaceWith(open ? folderIconOpen() : folderIcon());
     }
 }
 // collect a subwrap's currently-visible rows in top-to-bottom order, descending
@@ -2609,7 +2986,10 @@ function revealSubtree(wrap) {
     collectVisibleRows(sub, rows);
     rows.forEach((r) => r.classList.remove("is-revealing"));
     void wrap.offsetWidth; // reflow so removing + re-adding restarts the animation
-    rows.forEach((r, i) => { r.style.setProperty("--ri", String(i)); r.classList.add("is-revealing"); });
+    rows.forEach((r, i) => {
+        r.style.setProperty("--ri", String(i));
+        r.classList.add("is-revealing");
+    });
 }
 // the companion's .git/ question drives the same folder open as a manual click
 function setGitOpen(open) {
@@ -2620,10 +3000,14 @@ function setGitOpen(open) {
 // resolve a `points` key to the live board element its arrow should reach
 function companionTarget(points) {
     switch (points) {
-        case "dotgit": return treeList.querySelector(".d--git");
-        case "node:tip": return gNodes.lastElementChild;
-        case "tag:HEAD": return refPills.get("HEAD") ?? null;
-        default: return null;
+        case "dotgit":
+            return treeList.querySelector(".d--git");
+        case "node:tip":
+            return gNodes.lastElementChild;
+        case "tag:HEAD":
+            return refPills.get("HEAD") ?? null;
+        default:
+            return null;
     }
 }
 // draw a hand-drawn arrow from the open answer to its board target, in pixel
@@ -2815,7 +3199,9 @@ function syncCompanion() {
         // first load: let the area fade in in step with the rest of the intro
         if (!companionPrimed && !S.prefersReduced) {
             companionEl.style.transitionDelay = "2.4s";
-            window.setTimeout(() => { companionEl.style.transitionDelay = ""; }, 3200);
+            window.setTimeout(() => {
+                companionEl.style.transitionDelay = "";
+            }, 3200);
         }
         companionPrimed = true;
         setCompanion("init", "pre");
@@ -2836,7 +3222,9 @@ function applyStepParam() {
     }
     if (!v)
         return;
-    const target = /^\d+$/.test(v) ? parseInt(v, 10) : steps.findIndex((s) => s.key === v);
+    const target = /^\d+$/.test(v)
+        ? parseInt(v, 10)
+        : steps.findIndex((s) => s.key === v);
     if (target > 0)
         void seekTo(target);
 }
@@ -2883,6 +3271,7 @@ function wireBrand() {
             activate(e);
     });
     document.addEventListener("click", (e) => {
+        // a click elsewhere cancels it
         if (armed && !brand.contains(e.target))
             disarm();
     });

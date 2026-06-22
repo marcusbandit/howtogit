@@ -156,6 +156,7 @@ export interface GitNode {
   later?: string;        // a "we'll get to this" footnote under the contents (*word* = highlight)
   markLine?: number;     // index of the content line to highlight as the important bit
   desc?: string;         // a not-meant-to-be-read file's purpose
+  indexRows?: Array<{ name: string; state: FileBase }>;  // the index's real entries + their state
   children?: GitNode[];
 }
 export interface Snapshot { inited: boolean; files: ProjFile[]; git: GitNode[] }
@@ -190,12 +191,8 @@ function describe(name: string, rel: string, isDir: boolean): Described {
     explain: "Settings git keeps for this repo.", markToken: "url =",
     later: "This is where your remote's address gets saved.",
   };
-  if (rel === "index") return {
-    note: "what's lined up for your next save", readable: false,
-    explain: "What your next commit will include:",
-    later: "*git add* puts files here, *git commit* saves them.",
-    desc: "Empty for now. Run *git add* and your files line up here.",
-  };
+  // the index's body is built dynamically in walkGit (real entries + state)
+  if (rel === "index") return { note: "what's lined up for your next save", readable: false };
   if (rel === "objects") return { note: "every saved version of your work", readable: false };
   if (rel === "refs") return { note: "names that point at your saves", readable: false };
   if (rel === "refs/heads") return { note: "your branches", readable: false };
@@ -244,17 +241,25 @@ async function walkGit(absPath: string, rel: string): Promise<GitNode[]> {
     if (e.isDir) {
       node.children = await walkGit(`${absPath}/${e.name}`, childRel);
     } else if (childRel === "index") {
-      // the index is a binary file, so we don't show its raw bytes; instead we
-      // list what's ACTUALLY staged in it (the real index contents), so running
-      // "git add" visibly fills this in, exactly like the note promises
-      const staged = await git.listFiles({ fs, dir: DIR });
-      if (staged.length) {
-        node.content = staged.join("\n");
-        if (d.explain) node.explain = d.explain;
+      // the index is a binary file, so we don't show its raw bytes; we list what
+      // it ACTUALLY holds with each entry's real state. It never empties after a
+      // commit (it always mirrors the tracked tree); what changes is the state:
+      // a freshly added file reads "staged", and once committed it reads
+      // "committed" (matching HEAD). So the card updates step to step.
+      const rows = (await git.statusMatrix({ fs, dir: DIR }))
+        .filter((r) => r[3] > 0)                              // r[3] = stage; >0 means it's in the index
+        .map((r) => ({ name: r[0], state: baseState(r) }));
+      if (rows.length) {
+        node.indexRows = rows;
+        const pending = rows.some((r) => r.state !== "committed");
+        node.explain = pending
+          ? "Staged and waiting for your next commit:"
+          : "Matches your last commit, ready for the next:";
+        node.later = "Normally a *binary* file git reads, not text you'd open. This is a friendly peek inside.";
       } else {
-        node.desc = d.desc ?? "Nothing staged yet.";
+        node.desc = "Empty for now. Run *git add* and your files line up here.";
+        node.later = "Normally a *binary* file git reads, not text you'd open.";
       }
-      if (d.later) node.later = d.later;
     } else if (d.readable) {
       node.readable = true;
       node.content = (await fs.promises.readFile(`${absPath}/${e.name}`, "utf8") as string).replace(/\n+$/, "");
