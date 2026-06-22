@@ -1117,12 +1117,19 @@ body.is-learning .landing-notes {
 .tree__list .tree__subwrap {
   display: grid;
   grid-template-rows: 0fr;          /* collapses to zero height (no empty gap) */
+  /* `.tree__list li` forces align-items:baseline; restore the grid default so
+     the inner stretches to the 0fr track and actually clips when collapsed.
+     overflow:hidden guarantees the clip even if the inner overflows the track. */
+  align-items: stretch;
+  overflow: hidden;
   padding: 0 0 0 1.15rem;           /* one indent step per level */
   transition: grid-template-rows 0.5s var(--ease-settle);
 }
 .tree__list .tree__subwrap.is-open { grid-template-rows: 1fr; }
 .tree__list .tree__subwrap--root { padding-left: 0.9rem; }
-.tree__list .tree__sub { list-style: none; overflow: hidden; min-height: 0; margin: 0; padding: 0.1rem 0 0.2rem; }
+/* no own padding: it would keep the collapsed 0fr track ~5px open (a residual
+   gap). The rows carry their own vertical padding for spacing. */
+.tree__list .tree__sub { list-style: none; overflow: hidden; min-height: 0; margin: 0; padding: 0; }
 /* indentation comes from the subwraps, so flatten inner rows' own padding */
 .tree__list .tree__sub .f { padding-left: 0; }
 /* each item writes itself on (clip wipe + slide), staggered, the same way a new
