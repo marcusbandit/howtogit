@@ -1102,6 +1102,26 @@ body.is-learning .landing-notes {
   color: var(--ink-soft);
   font-style: italic;
 }
+/* an expandable folder is clickable; a hand-drawn caret in its indent shows it
+   opens, and swings a quarter-turn down when it's open */
+.tree__list li.is-expandable { cursor: pointer; }
+.tree__list li.is-expandable:hover { opacity: 1; }
+.tree__caret {
+  position: absolute;
+  left: 0.05rem;            /* sit in the row's indent, just left of the folder icon */
+  top: 50%;
+  width: 0.72rem;
+  height: 0.72rem;
+  overflow: visible;
+  opacity: 0.65;
+  transform: translateY(-50%) rotate(0deg);
+  transition: transform 0.3s var(--ease-settle), opacity 0.2s ease;
+}
+.tree__caret .note-stroke { stroke: var(--ink-soft); stroke-width: 2; fill: none; }
+.is-expandable:hover .tree__caret { opacity: 1; }
+.is-expandable:hover .tree__caret .note-stroke { stroke: var(--pen-red); }
+.d--git.is-open .tree__caret { transform: translateY(-50%) rotate(90deg); }
+.d--git.is-open .tree__caret .note-stroke { stroke: var(--pen-red); }
 /* the peek inside .git/: a nested list that slides open when the "what's in
    .git/?" question is in focus, showing what git actually created in there.
    Scoped under .tree__list so these beat the generic `.tree__list li` rules

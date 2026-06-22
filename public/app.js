@@ -1365,13 +1365,16 @@ function renderFileTree() {
     treeList.appendChild(root);
     if (gitPresent) {
         const git = document.createElement("li");
-        git.className = "f d--git";
+        // .git/ is a real folder you can open: clicking it toggles the peek inside
+        git.className = "f d--git is-expandable";
+        if (gitOpened)
+            git.classList.add("is-open");
         if (!lastGitPresent)
             git.classList.add("is-new");
         const note = document.createElement("span");
         note.className = "f__note";
         note.textContent = "git lives here";
-        git.append(folderIcon(), makeName(".git/"), note);
+        git.append(expandCaret(), folderIcon(), makeName(".git/"), note);
         treeList.appendChild(git);
         // a peek inside .git/ — revealed when the "what's in .git/?" question opens.
         // Always rendered (collapsed) so opening/closing it can animate via a class.
@@ -1463,6 +1466,13 @@ function fileIcon(file) {
 function folderIcon() {
     const svg = mkIcon("folder");
     icStroke(svg, S.smooth([[3.4, 7.2], [8.8, 7.0], [10.7, 9.0], [20.4, 9.0], [20.6, 18.6], [3.6, 18.8], [3.3, 7.3]], true));
+    return svg;
+}
+// a small hand-drawn disclosure caret for an expandable folder row; it swings a
+// quarter-turn down (via .is-open in CSS) when the folder is opened
+function expandCaret() {
+    const svg = S.el("svg", { viewBox: "0 0 16 16", class: "tree__caret", "aria-hidden": "true" });
+    svg.appendChild(S.el("path", { class: "note-stroke", pathLength: "1", d: "M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13" }));
     return svg;
 }
 function computerIcon() {
@@ -1818,6 +1828,15 @@ function wireFileViewer() {
     };
     onList(treeList, "local");
     onList(remoteList, "remote");
+    // clicking an expandable folder (.git/) toggles its contents open/closed.
+    // stopPropagation keeps it from also tripping the companion's outside-click
+    // dismissal, so the tree is interactive on its own terms.
+    treeList.addEventListener("click", (e) => {
+        if (!e.target.closest(".is-expandable"))
+            return;
+        e.stopPropagation();
+        setGitOpen(!gitOpened);
+    });
     editorEl.addEventListener("click", (e) => {
         if (viewerFile == null)
             return; // the auto-edit ignores clicks

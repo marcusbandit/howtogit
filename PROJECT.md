@@ -97,7 +97,8 @@ the board) is live for `git init` only. Two directions to grow it:
 2. **Make the file tree genuinely explorable (not only companion-driven).** It's
    a file-tree site, so the tree itself should be interactive:
    - Click `.git/` to expand/collapse it directly (same reveal the companion
-     triggers), independent of any question.
+     triggers), independent of any question. **[DONE]** A hand-drawn disclosure
+     caret marks it; clicking toggles the peek without touching the companion.
    - `objects/` and `refs/` expand too, shown immediately, with fake-but-plausible
      contents (e.g. a sample object hash, `refs/heads/main`). Show everything.
    - Click `HEAD` / `config` / `objects` / `refs` (and their children) to get a
