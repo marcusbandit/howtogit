@@ -543,16 +543,24 @@ body.is-learning .landing-notes {
 .companion.is-visible { opacity: 1; visibility: visible; }
 /* the "i'll explain things over here" flourish only belongs on the centred
    landing; once we've docked it has done its job and goes */
-.companion__intro { align-self: center; text-align: center; margin-bottom: 0.3rem; }
+/* the companion box is pinned to the right edge (right ~5rem, width ~31rem), so
+   its centre sits at 100vw - 20.5rem. To drag this flourish to the page centre
+   (50vw) we shift it by 50vw - (100vw - 20.5rem) = -50vw + 20.5rem. */
+.companion__intro {
+  align-self: center;
+  text-align: center;
+  margin-bottom: 0.3rem;
+  transform: translateX(calc(-50vw + 20.5rem));
+}
 .companion:not(.is-landing) .companion__intro { display: none; }
 .companion__intro-label {
   font-family: var(--hand);
   font-weight: 600;
-  font-size: clamp(1.1rem, 2.3vw, 1.5rem);
+  font-size: clamp(1.6rem, 3.6vw, 2.6rem);
   line-height: 1.12;
   color: var(--ink-soft);
 }
-.companion__intro-arrow { display: block; margin: 0.05rem auto 0; width: 2.3rem; height: 1.9rem; overflow: visible; }
+.companion__intro-arrow { display: block; margin: 0.1rem auto 0; width: 2.3rem; height: 3rem; overflow: visible; }
 
 .companion__qa + .companion__qa { margin-top: 0.4rem; }
 /* a question is a bare, tappable line: hand-drawn caret + the words */
@@ -722,7 +730,7 @@ body.is-learning .landing-notes {
   .companion__caret,
   .tree__subwrap { transition: none; }
   .tree__list .tree__subitem { opacity: 1; }
-  .tree__list .tree__subwrap.is-open .tree__subitem { animation: none; }
+  .tree__list li.is-revealing { animation: none; }
   .companion-arrows path.is-drawing { animation: none; stroke-dashoffset: 0; }
   .companion-arrows path.is-erasing { animation: none; }
 }
@@ -1141,16 +1149,16 @@ body.is-learning .landing-notes {
 .tree__list .tree__sub { list-style: none; overflow: hidden; min-height: 0; margin: 0; padding: 0; }
 /* indentation comes from the subwraps, so flatten inner rows' own padding */
 .tree__list .tree__sub .f { padding-left: 0; }
-/* each item writes itself on (clip wipe + slide), staggered, the same way a new
-   file appears, so a folder's contents feel like they're being created. Direct
-   children only, so each level animates when ITS folder opens. */
-/* base opacity 1 so reverting to base after the animation leaves it visible;
-   `backwards` holds the hidden `from` state during the stagger delay, then the
-   row reverts to this plain base (no held transform/clip-path stacking context). */
+/* base opacity 1 so a row that isn't animating is simply visible. */
 .tree__list .tree__subitem { padding: 0.1rem 0; opacity: 1; }
-.tree__list .tree__subwrap.is-open > .tree__sub > .tree__subitem {
+/* opening a folder writes its contents on, staggered and RECURSIVE: app.ts adds
+   .is-revealing to every row the open reveals (nested folders included), in
+   visual order via --ri, so the whole subtree cascades in rather than blinking.
+   `backwards` holds the hidden `from` state through the stagger delay, then the
+   row reverts to its plain base (no held transform/clip-path stacking context). */
+.tree__list li.is-revealing {
   animation: git-write 0.5s var(--ease-settle) backwards;
-  animation-delay: calc(var(--i, 0) * 0.08s);
+  animation-delay: calc(var(--ri, 0) * 0.045s);
 }
 .tree__list .tree__subitem .f__name { color: var(--ink-soft); font-weight: 600; font-style: normal; }
 .tree__list .tree__subitem .ic { opacity: 0.7; }

@@ -2448,10 +2448,43 @@ function setNodeOpen(path: string, open: boolean): void {
   if (!row) return;
   row.classList.toggle("is-open", open);
   const sub = row.nextElementSibling;
-  if (sub && sub.classList.contains("tree__subwrap")) sub.classList.toggle("is-open", open);
+  if (sub && sub.classList.contains("tree__subwrap")) {
+    sub.classList.toggle("is-open", open);
+    // opening a folder cascades a staggered write-on over EVERYTHING it reveals,
+    // recursively (nested open folders included) — nothing just blinks in.
+    if (open) revealSubtree(sub as HTMLElement);
+  }
   if (row.classList.contains("is-folder")) {
     row.querySelector(".ic")?.replaceWith(open ? folderIconOpen() : folderIcon());
   }
+}
+
+// collect a subwrap's currently-visible rows in top-to-bottom order, descending
+// only into nested folders that are themselves open (so hidden rows don't count)
+function collectVisibleRows(sub: Element, acc: HTMLElement[]): void {
+  for (const child of Array.from(sub.children)) {
+    if (child.classList.contains("tree__subwrap")) {
+      if (child.classList.contains("is-open")) {
+        const inner = child.querySelector(":scope > .tree__sub");
+        if (inner) collectVisibleRows(inner, acc);
+      }
+    } else {
+      acc.push(child as HTMLElement);   // a file/folder/placeholder row
+    }
+  }
+}
+
+// re-run the write-on entrance on every row a just-opened folder reveals,
+// staggered by visual order, so the whole subtree animates in (not a blink)
+function revealSubtree(wrap: HTMLElement): void {
+  if (S.prefersReduced) return;
+  const sub = wrap.querySelector(":scope > .tree__sub");
+  if (!sub) return;
+  const rows: HTMLElement[] = [];
+  collectVisibleRows(sub, rows);
+  rows.forEach((r) => r.classList.remove("is-revealing"));
+  void wrap.offsetWidth;   // reflow so removing + re-adding restarts the animation
+  rows.forEach((r, i) => { r.style.setProperty("--ri", String(i)); r.classList.add("is-revealing"); });
 }
 // the companion's .git/ question drives the same folder open as a manual click
 function setGitOpen(open: boolean): void {
