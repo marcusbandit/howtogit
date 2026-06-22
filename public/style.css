@@ -1102,44 +1102,34 @@ body.is-learning .landing-notes {
   color: var(--ink-soft);
   font-style: italic;
 }
-/* an expandable folder is clickable; a hand-drawn caret in its indent shows it
-   opens, and swings a quarter-turn down when it's open */
+/* every folder is clickable to open/close; the cursor + a hover lift say so, and
+   the folder icon itself swaps closed->open (no chevron) */
 .tree__list li.is-expandable { cursor: pointer; }
 .tree__list li.is-expandable:hover { opacity: 1; }
-.tree__caret {
-  position: absolute;
-  left: 0.05rem;            /* sit in the row's indent, just left of the folder icon */
-  top: 50%;
-  width: 0.72rem;
-  height: 0.72rem;
-  overflow: visible;
-  opacity: 0.65;
-  transform: translateY(-50%) rotate(0deg);
-  transition: transform 0.3s var(--ease-settle), opacity 0.2s ease;
-}
-.tree__caret .note-stroke { stroke: var(--ink-soft); stroke-width: 2; fill: none; }
-.is-expandable:hover .tree__caret { opacity: 1; }
-.is-expandable:hover .tree__caret .note-stroke { stroke: var(--pen-red); }
-.d--git.is-open .tree__caret { transform: translateY(-50%) rotate(90deg); }
-.d--git.is-open .tree__caret .note-stroke { stroke: var(--pen-red); }
-/* the peek inside .git/: a nested list that slides open when the "what's in
-   .git/?" question is in focus, showing what git actually created in there.
-   Scoped under .tree__list so these beat the generic `.tree__list li` rules
-   (which would otherwise force display:flex and kill the collapse + indent). */
+.tree__list li.is-folder.is-open > .f__name,
+.tree__list li.d.is-open > .f__name { /* keep the open folder's name colour as-is */ }
+
+/* nested, openable contents. Scoped under .tree__list so these beat the generic
+   `.tree__list li` rules (which would otherwise force display:flex and kill the
+   collapse). Each subwrap adds one indent step; nesting compounds naturally. */
 .tree__list .tree__subwrap {
   display: grid;
   grid-template-rows: 0fr;          /* collapses to zero height (no empty gap) */
-  padding: 0 0 0 1.9rem;            /* indent the contents in under .git/ */
+  padding: 0 0 0 1.15rem;           /* one indent step per level */
   transition: grid-template-rows 0.5s var(--ease-settle);
 }
 .tree__list .tree__subwrap.is-open { grid-template-rows: 1fr; }
-.tree__list .tree__sub { list-style: none; overflow: hidden; min-height: 0; margin: 0; padding: 0.1rem 0 0.25rem; }
+.tree__list .tree__subwrap--root { padding-left: 0.9rem; }
+.tree__list .tree__sub { list-style: none; overflow: hidden; min-height: 0; margin: 0; padding: 0.1rem 0 0.2rem; }
+/* indentation comes from the subwraps, so flatten inner rows' own padding */
+.tree__list .tree__sub .f { padding-left: 0; }
 /* each item writes itself on (clip wipe + slide), staggered, the same way a new
-   file appears in the tree, so .git/'s contents feel like they're being created */
+   file appears, so a folder's contents feel like they're being created. Direct
+   children only, so each level animates when ITS folder opens. */
 .tree__list .tree__subitem { padding: 0.1rem 0; opacity: 0; }
-.tree__list .tree__subwrap.is-open .tree__subitem {
-  animation: git-write 0.55s var(--ease-settle) both;
-  animation-delay: calc(var(--i, 0) * 0.09s);
+.tree__list .tree__subwrap.is-open > .tree__sub > .tree__subitem {
+  animation: git-write 0.5s var(--ease-settle) both;
+  animation-delay: calc(var(--i, 0) * 0.08s);
 }
 .tree__list .tree__subitem .f__name { color: var(--ink-soft); font-weight: 600; font-style: normal; }
 .tree__list .tree__subitem .ic { opacity: 0.7; }
@@ -1150,6 +1140,27 @@ body.is-learning .landing-notes {
   color: var(--ink-soft);
   opacity: 0.8;
 }
+/* a file's revealed explanation: either its (fake) contents in mono, or a plain
+   note describing what a not-meant-to-be-read file is for */
+.tree__list .tree__descrow { display: block; padding: 0.1rem 0 0.3rem; }
+.tree__desc {
+  font-family: var(--ui);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  max-width: 17rem;
+}
+.tree__desc--code {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--ink);
+  background: rgba(122, 112, 96, 0.1);
+  border-radius: 5px;
+  padding: 0.4rem 0.55rem;
+}
+.tree__empty .f__note { font-style: italic; opacity: 0.65; }
 /* the .git/ line writes itself on, left to right, then slides into place */
 .tree__list li.is-new { animation: git-write 0.7s var(--ease-settle) both; }
 @keyframes git-write {

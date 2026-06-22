@@ -94,20 +94,22 @@ the board) is live for `git init` only. Two directions to grow it:
    targets. No new mechanism, just data. Goal: the explanation walks with the
    user the entire way, so they never feel pushed forward without knowing why.
 
-2. **Make the file tree genuinely explorable (not only companion-driven).** It's
-   a file-tree site, so the tree itself should be interactive:
-   - Click `.git/` to expand/collapse it directly (same reveal the companion
-     triggers), independent of any question. **[DONE]** A hand-drawn disclosure
-     caret marks it; clicking toggles the peek without touching the companion.
-   - `objects/` and `refs/` expand too, shown immediately, with fake-but-plausible
-     contents (e.g. a sample object hash, `refs/heads/main`). Show everything.
-   - Click `HEAD` / `config` / `objects` / `refs` (and their children) to get a
-     short explanation of what each is.
-   - For files that are encrypted / not meant for human reading (packed objects,
-     the index), show a description of what they do instead of raw bytes.
+2. **Make the file tree genuinely explorable (not only companion-driven). [DONE]**
+   The tree is now a recursive, expandable structure (`GIT_TREE` data + a
+   recursive renderer in `app.ts`):
+   - Every folder opens/closes on click, indicated by a closed→open folder icon
+     swap (no chevron). `my-site/`, `.git/`, `objects/`, `refs/`, and their
+     subfolders all expand; nesting indents one step per level.
+   - `objects/` and `refs/` carry fake-but-plausible contents (a sample object
+     under `e2/`, `refs/heads/main`, `tags/`).
+   - Clicking a `.git` file reveals, beneath it, either its (fake) contents in
+     mono (`HEAD`, `config`, `description`) or a plain description of what it's
+     for when it's not meant to be read by hand (packed objects).
+   - The companion's `.git/` question and a direct folder click drive the same
+     open state, so they stay in sync.
 
-   All fake data, but present it as real so beginners can poke around and build a
-   mental model of what git actually keeps.
+   Still open here: per-step curiosity content for the rest of the flow (item 1),
+   and richer fake contents as new commands add real objects/refs.
 
 ### Simplified timeline (by task, not by command)
 

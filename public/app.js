@@ -1359,42 +1359,43 @@ function renderFileTree() {
     const remoteExists = stepIndex > stepIdx("remote"); // is there anywhere to push to yet?
     const pushedNow = new Set();
     treeList.replaceChildren();
+    // my-site/ is the (collapsible) project root; everything else lives inside it
     const root = document.createElement("li");
-    root.className = "d";
-    root.append(folderIcon(), makeName(`${PROJECT.root}/`));
+    root.className = "d is-expandable is-folder";
+    root.dataset.path = "root";
+    const rootOpen = treeOpen.has("root");
+    if (rootOpen)
+        root.classList.add("is-open");
+    root.append(rootOpen ? folderIconOpen() : folderIcon(), makeName(`${PROJECT.root}/`));
     treeList.appendChild(root);
+    const rootWrap = document.createElement("li");
+    rootWrap.className = "tree__subwrap tree__subwrap--root" + (rootOpen ? " is-open" : "");
+    const rootSub = document.createElement("ul");
+    rootSub.className = "tree__sub";
+    rootWrap.appendChild(rootSub);
+    treeList.appendChild(rootWrap);
     if (gitPresent) {
+        // .git/ is a real, openable folder; its contents come from GIT_TREE
         const git = document.createElement("li");
-        // .git/ is a real folder you can open: clicking it toggles the peek inside
-        git.className = "f d--git is-expandable";
-        if (gitOpened)
+        git.className = "f d--git is-expandable is-folder";
+        git.dataset.path = ".git";
+        const gitOpen = treeOpen.has(".git");
+        if (gitOpen)
             git.classList.add("is-open");
         if (!lastGitPresent)
             git.classList.add("is-new");
         const note = document.createElement("span");
         note.className = "f__note";
         note.textContent = "git lives here";
-        git.append(expandCaret(), folderIcon(), makeName(".git/"), note);
-        treeList.appendChild(git);
-        // a peek inside .git/ — revealed when the "what's in .git/?" question opens.
-        // Always rendered (collapsed) so opening/closing it can animate via a class.
-        const subWrap = document.createElement("li");
-        subWrap.className = "tree__subwrap" + (gitOpened ? " is-open" : "");
-        const sub = document.createElement("ul");
-        sub.className = "tree__sub";
-        GIT_CONTENTS.forEach((item, i) => {
-            const li = document.createElement("li");
-            li.className = "tree__subitem";
-            li.style.setProperty("--i", String(i)); // stagger its wipe-in when .git/ opens
-            const ic = item.name.endsWith("/") ? folderIcon() : fileIcon(item.name);
-            const n = document.createElement("span");
-            n.className = "f__note";
-            n.textContent = item.note;
-            li.append(ic, makeName(item.name), n);
-            sub.appendChild(li);
-        });
-        subWrap.appendChild(sub);
-        treeList.appendChild(subWrap);
+        git.append(gitOpen ? folderIconOpen() : folderIcon(), makeName(".git/"), note);
+        rootSub.appendChild(git);
+        const gitWrap = document.createElement("li");
+        gitWrap.className = "tree__subwrap" + (gitOpen ? " is-open" : "");
+        const gitSub = document.createElement("ul");
+        gitSub.className = "tree__sub";
+        GIT_TREE.forEach((n, i) => appendGitNode(gitSub, n, ".git", i));
+        gitWrap.appendChild(gitSub);
+        rootSub.appendChild(gitWrap);
     }
     PROJECT.files.forEach((f, fi) => {
         const st = fileState(f);
@@ -1431,11 +1432,77 @@ function renderFileTree() {
             n.textContent = note;
             li.appendChild(n);
         }
-        treeList.appendChild(li);
+        rootSub.appendChild(li);
     });
     lastGitPresent = gitPresent;
     wasEditing = editing;
     pushedBefore = pushedNow;
+}
+// render one .git node (and its always-present, collapsed subwrap) into a list.
+// Folders nest recursively; files carry an explanation that opens beneath them.
+function appendGitNode(ul, node, parentPath, idx) {
+    const path = `${parentPath}/${node.name}`;
+    const open = treeOpen.has(path);
+    const row = document.createElement("li");
+    row.className = "tree__subitem";
+    row.dataset.path = path;
+    row.style.setProperty("--i", String(idx));
+    if (open)
+        row.classList.add("is-open");
+    const noteEl = document.createElement("span");
+    noteEl.className = "f__note";
+    noteEl.textContent = node.note ?? "";
+    if (isFolder(node)) {
+        row.classList.add("is-expandable", "is-folder");
+        row.append(open ? folderIconOpen() : folderIcon(), makeName(node.name), noteEl);
+        ul.appendChild(row);
+        const wrap = document.createElement("li");
+        wrap.className = "tree__subwrap" + (open ? " is-open" : "");
+        const sub = document.createElement("ul");
+        sub.className = "tree__sub";
+        const kids = node.children ?? [];
+        if (kids.length)
+            kids.forEach((c, i) => appendGitNode(sub, c, path, i));
+        else
+            sub.appendChild(emptyRow()); // an opened-but-empty folder still says so
+        wrap.appendChild(sub);
+        ul.appendChild(wrap);
+    }
+    else {
+        // a file: clicking reveals either its contents or a description of its job
+        row.classList.add("is-expandable", "is-gitfile");
+        row.append(fileIcon(node.name), makeName(node.name), noteEl);
+        ul.appendChild(row);
+        const wrap = document.createElement("li");
+        wrap.className = "tree__subwrap tree__explain" + (open ? " is-open" : "");
+        const sub = document.createElement("ul");
+        sub.className = "tree__sub";
+        const descRow = document.createElement("li");
+        descRow.className = "tree__subitem tree__descrow";
+        const p = document.createElement("p");
+        if (node.content != null) {
+            p.className = "tree__desc tree__desc--code";
+            p.textContent = node.content;
+        }
+        else {
+            p.className = "tree__desc";
+            p.textContent = node.desc ?? "";
+        }
+        descRow.appendChild(p);
+        sub.appendChild(descRow);
+        wrap.appendChild(sub);
+        ul.appendChild(wrap);
+    }
+}
+function emptyRow() {
+    const li = document.createElement("li");
+    li.className = "tree__subitem tree__empty";
+    li.style.setProperty("--i", "0");
+    const n = document.createElement("span");
+    n.className = "f__note";
+    n.textContent = "(empty for now)";
+    li.appendChild(n);
+    return li;
 }
 function makeName(text) {
     const s = document.createElement("span");
@@ -1468,11 +1535,14 @@ function folderIcon() {
     icStroke(svg, S.smooth([[3.4, 7.2], [8.8, 7.0], [10.7, 9.0], [20.4, 9.0], [20.6, 18.6], [3.6, 18.8], [3.3, 7.3]], true));
     return svg;
 }
-// a small hand-drawn disclosure caret for an expandable folder row; it swings a
-// quarter-turn down (via .is-open in CSS) when the folder is opened
-function expandCaret() {
-    const svg = S.el("svg", { viewBox: "0 0 16 16", class: "tree__caret", "aria-hidden": "true" });
-    svg.appendChild(S.el("path", { class: "note-stroke", pathLength: "1", d: "M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13" }));
+// the open-folder variant: the same folder with its lid swung up, so an opened
+// folder reads differently from a closed one (no chevron needed)
+function folderIconOpen() {
+    const svg = mkIcon("folder");
+    // back wall of the folder
+    icStroke(svg, S.smooth([[3.4, 7.4], [8.7, 7.2], [10.6, 9.1], [20.4, 9.1], [20.5, 11.6]], false));
+    // the open front: a flap fanned out toward the viewer
+    icStroke(svg, S.smooth([[3.5, 18.7], [6.4, 12.0], [22.6, 11.8], [19.8, 18.6], [3.5, 18.7]], true));
     return svg;
 }
 function computerIcon() {
@@ -1828,14 +1898,16 @@ function wireFileViewer() {
     };
     onList(treeList, "local");
     onList(remoteList, "remote");
-    // clicking an expandable folder (.git/) toggles its contents open/closed.
-    // stopPropagation keeps it from also tripping the companion's outside-click
+    // clicking any expandable row (a folder, or a .git file) toggles what's under
+    // it. stopPropagation keeps it from also tripping the companion's outside-click
     // dismissal, so the tree is interactive on its own terms.
     treeList.addEventListener("click", (e) => {
-        if (!e.target.closest(".is-expandable"))
+        const row = e.target.closest(".is-expandable");
+        if (!row || !row.dataset.path)
             return;
         e.stopPropagation();
-        setGitOpen(!gitOpened);
+        const path = row.dataset.path;
+        setNodeOpen(path, !treeOpen.has(path));
     });
     editorEl.addEventListener("click", (e) => {
         if (viewerFile == null)
@@ -2237,21 +2309,78 @@ const CARET_PATH = "M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13"; // the hand-draw
 const openArrows = new Map();
 // the one question currently in focus (only one is ever open at a time)
 let openBtn = null;
-// a beginner's peek inside .git/: a curated, hand-drawn subset of what git
-// actually creates, each with a one-line note. Revealed when the .git/ question
-// opens, so "what's in here?" is answered by showing it, not just describing it.
-const GIT_CONTENTS = [
-    { name: "HEAD", note: "points at where you are" },
-    { name: "config", note: "this repo's settings" },
-    { name: "objects/", note: "every snapshot, stored here" },
-    { name: "refs/", note: "your branches and tags" },
+const GIT_TREE = [
+    {
+        name: "HEAD", note: "points at where you are",
+        content: "ref: refs/heads/main",
+        desc: "A tiny file naming the branch you're on. Right now it just says: you're on main.",
+    },
+    {
+        name: "config", note: "this repo's settings",
+        content: "[core]\n    repositoryformatversion = 0\n    bare = false\n[remote \"origin\"]\n    url = https://github.com/you/my-site.git",
+    },
+    {
+        name: "description", note: "names the repo (rarely used)",
+        content: "Unnamed repository; edit this file to name it.",
+    },
+    {
+        name: "objects/", note: "every snapshot, stored here",
+        children: [
+            {
+                name: "e2/", note: "grouped by the first 2 letters of their id",
+                children: [
+                    {
+                        name: "9f1c8a4b2d…",
+                        note: "a stored snapshot",
+                        desc: "A compressed, checksummed snapshot of your files. Git reads it for you, it's not meant to be opened by hand.",
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        name: "refs/", note: "your branches and tags",
+        children: [
+            {
+                name: "heads/", note: "your branches",
+                children: [
+                    {
+                        name: "main", note: "your main branch",
+                        desc: "After your first commit this will hold that commit's id, that's how git remembers where main points.",
+                    },
+                ],
+            },
+            { name: "tags/", note: "your tags" },
+        ],
+    },
 ];
-let gitOpened = false;
-// open or close the .git/ peek in the sidebar by toggling the live subwrap's
-// class (so it animates), and remember the state for future tree re-renders
+// which tree folders/files are open, by path. The project root starts open.
+const treeOpen = new Set(["root"]);
+const isFolder = (n) => Array.isArray(n.children);
+// open/close a tree node by path: flips its row + the subwrap that follows it,
+// and (for folders) swaps the closed folder icon for an open one. Animations
+// ride the class change, so we never re-render to toggle.
+function setNodeOpen(path, open) {
+    if (open)
+        treeOpen.add(path);
+    else
+        treeOpen.delete(path);
+    const row = treeList.querySelector(`[data-path="${path}"]`);
+    if (!row)
+        return;
+    row.classList.toggle("is-open", open);
+    const sub = row.nextElementSibling;
+    if (sub && sub.classList.contains("tree__subwrap"))
+        sub.classList.toggle("is-open", open);
+    if (row.classList.contains("is-folder")) {
+        row.querySelector(".ic")?.replaceWith(open ? folderIconOpen() : folderIcon());
+    }
+}
+// the companion's .git/ question drives the same folder open as a manual click
 function setGitOpen(open) {
-    gitOpened = open;
-    treeList.querySelector(".tree__subwrap")?.classList.toggle("is-open", open);
+    if (open)
+        setNodeOpen("root", true); // make sure the root is open so .git/ is visible
+    setNodeOpen(".git", open);
 }
 // resolve a `points` key to the live board element its arrow should reach
 function companionTarget(points) {
@@ -2421,7 +2550,7 @@ function resetCompanion() {
     document.body.classList.remove("is-learning");
     openArrows.clear();
     companionArrows.replaceChildren();
-    if (gitOpened)
+    if (treeOpen.has(".git"))
         setGitOpen(false);
 }
 // show (or hide) the companion for a given step + tense
