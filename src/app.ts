@@ -2166,6 +2166,19 @@ function typeLandingCallout(): void {
   window.setTimeout(step, 800);
 }
 
+// landing explainer: each question is a button that toggles its own answer
+// open (animated by CSS via aria-expanded). Answers start closed so nothing is
+// revealed until the reader taps the question they care about.
+function wireExplainer(): void {
+  const qs = document.querySelectorAll<HTMLButtonElement>(".explainer__q");
+  qs.forEach((q) => {
+    q.addEventListener("click", () => {
+      const open = q.getAttribute("aria-expanded") === "true";
+      q.setAttribute("aria-expanded", open ? "false" : "true");
+    });
+  });
+}
+
 // dev helper: ?step=N (index) or ?step=<key> seeks straight to that state on
 // load, so any screen can be screenshotted without typing the whole sequence.
 function applyStepParam(): void {
@@ -2195,6 +2208,7 @@ function boot(): void {
   needSel<HTMLElement>("#remotetree .tree__title").prepend(cloudIcon());
   wireFileViewer();   // click any file in either tree to open it
   typeLandingCallout();   // landing intro: type the file-tree callout in
+  wireExplainer();        // landing: tap a question to reveal its answer
   if (!isPhone) cmd.focus();
   applyStepParam();   // dev: ?step=N jumps straight to a state for screenshots
 }

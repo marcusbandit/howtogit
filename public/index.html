@@ -47,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=landing7" />
+  <link rel="stylesheet" href="style.css?v=landing8" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -199,16 +199,24 @@ this will be useful if you wanna come back later</p>
       </svg>
       <div class="explainer-box">
         <p class="explainer__cmd">git init</p>
-        <p class="explainer__q">What does it do?</p>
-        <p class="explainer__a">Turns this plain folder into a git repository. It adds a hidden <b>.git/</b> folder to keep track of your work, and changes nothing else, your files stay exactly as they are.</p>
-        <details class="explainer__more">
-          <summary><span>What's in that <b>.git/</b> folder?</span><span class="explainer__chev">expand ⌄</span></summary>
-          <p class="explainer__a">Everything git needs to remember your project: every snapshot you save, the branches you make, and a pointer called HEAD that marks where you are. Delete <b>.git/</b> and it's an ordinary folder again.</p>
-        </details>
+        <div class="explainer__qa">
+          <button type="button" class="explainer__q" aria-expanded="false">
+            <svg class="explainer__caret" viewBox="0 0 16 16" aria-hidden="true"><path class="note-stroke" pathLength="1" d="M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13" /></svg>
+            <span>What does it do?</span>
+          </button>
+          <div class="explainer__a-wrap"><p class="explainer__a">Turns this plain folder into a git repository. It adds a hidden <b>.git/</b> folder to keep track of your work, and changes nothing else, your files stay exactly as they are.</p></div>
+        </div>
+        <div class="explainer__qa">
+          <button type="button" class="explainer__q" aria-expanded="false">
+            <svg class="explainer__caret" viewBox="0 0 16 16" aria-hidden="true"><path class="note-stroke" pathLength="1" d="M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13" /></svg>
+            <span>What's in <b>.git/</b>?</span>
+          </button>
+          <div class="explainer__a-wrap"><p class="explainer__a">Everything git needs to remember your project: every snapshot you save, the branches you make, and a pointer called HEAD that marks where you are. Delete <b>.git/</b> and it's an ordinary folder again.</p></div>
+        </div>
       </div>
     </div>
   </div>
 
-  <script type="module" src="app.js?v=landing7"></script>
+  <script type="module" src="app.js?v=landing8"></script>
 </body>
 </html>

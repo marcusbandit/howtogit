@@ -518,64 +518,81 @@ body {
 }
 .note__label--explainer { text-align: center; margin-bottom: 0.05rem; }
 .note--explainer .note__arrow { width: 2.3rem; height: 1.9rem; margin-bottom: 0.25rem; }
+/* no box: free text, the command name on top and a stack of questions you
+   tap open one at a time */
 .explainer-box {
   width: 100%;
-  border: 2.5px dashed var(--ink-soft);
-  /* an uneven, hand-drawn box */
-  border-radius: 20px 11px 22px 13px / 13px 22px 11px 20px;
-  padding: 1rem 1.25rem 1.1rem;
   text-align: left;
-  pointer-events: auto;     /* the expander inside is interactive */
+  pointer-events: auto;     /* the questions inside are interactive */
 }
 .explainer__cmd {
   font-family: var(--mono);
   font-weight: 700;
   font-size: 1.08rem;
   color: var(--pen-blue);
-  margin-bottom: 0.55rem;
+  margin-bottom: 0.6rem;
 }
+.explainer__qa + .explainer__qa { margin-top: 0.35rem; }
+/* a question is a bare, tappable line: hand-drawn caret + the words */
 .explainer__q {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.1rem 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
   font-family: var(--hand);
   font-weight: 700;
-  font-size: 1.42rem;
-  line-height: 1.1;
-  color: var(--ink);
-  margin-bottom: 0.25rem;
+  font-size: 1.34rem;
+  line-height: 1.15;
+  color: var(--ink-soft);
+  transition: color 0.2s ease;
+}
+.explainer__q:hover,
+.explainer__q[aria-expanded="true"] { color: var(--ink); }
+.explainer__q b { color: var(--pen-red); font-weight: 700; }
+/* the caret inks red and swings down a quarter-turn when its answer is open */
+.explainer__caret {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  transform: rotate(0deg);
+  transition: transform 0.4s var(--ease-settle);
+}
+.explainer__caret .note-stroke { stroke: var(--pen-red); stroke-width: 2; fill: none; }
+.explainer__q[aria-expanded="true"] .explainer__caret { transform: rotate(90deg); }
+/* the answer slides open by animating its grid row from 0fr to 1fr, then
+   the text drifts up into place */
+.explainer__a-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.45s var(--ease-settle), opacity 0.3s ease 0.05s;
+}
+.explainer__a-wrap > .explainer__a {
+  overflow: hidden;
+  min-height: 0;
+  transform: translateY(-4px);
+  transition: transform 0.45s var(--ease-settle);
+}
+.explainer__q[aria-expanded="true"] + .explainer__a-wrap {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.explainer__q[aria-expanded="true"] + .explainer__a-wrap > .explainer__a {
+  transform: none;
 }
 .explainer__a {
   font-family: var(--ui);
   font-size: 0.95rem;
   line-height: 1.45;
   color: var(--ink-soft);
+  padding: 0.25rem 0 0.4rem 1.3rem;   /* indent under the caret */
 }
 .explainer__a b { color: var(--ink); font-weight: 600; }
-.explainer__more { margin-top: 0.75rem; border-top: 1.5px dashed rgba(122, 112, 96, 0.4); padding-top: 0.7rem; }
-.explainer__more summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.5rem;
-  list-style: none;
-  cursor: pointer;
-  font-family: var(--hand);
-  font-weight: 700;
-  font-size: 1.32rem;
-  line-height: 1.1;
-  color: var(--ink);
-}
-.explainer__more summary::-webkit-details-marker { display: none; }
-.explainer__more summary b { color: var(--pen-red); font-weight: 700; }
-.explainer__chev {
-  font-family: var(--ui);
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--pen-red);
-  white-space: nowrap;
-}
-.explainer__more[open] summary { margin-bottom: 0.35rem; }
-.explainer__more[open] .explainer__chev { visibility: hidden; }
-.explainer__more[open] .explainer__a { animation: explainer-open 0.3s ease both; }
-@keyframes explainer-open { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 
 /* ---- landing intro: the first screen draws itself in ----------------- */
 /* the file tree fades in ~0.5s after load. Opacity only: its is-focus state
@@ -608,7 +625,7 @@ body {
   to   { clip-path: inset(0 -4% 0 0); }
 }
 
-/* the explainer draws itself in last: the dashed box wipes on, then its arrow inks */
+/* the explainer draws itself in last: the label fades, the arrow inks, then the text wipes on */
 #stage.is-centered ~ .landing-notes .note__label--explainer { animation: landing-fade 0.5s ease 1.8s both; }
 .note--explainer .note__arrow path:nth-of-type(1) { animation: landing-draw 0.5s ease 2.05s both; }
 .note--explainer .note__arrow path:nth-of-type(2) { animation: landing-draw 0.3s ease 2.4s both; }
@@ -621,7 +638,6 @@ body {
   .note__arrow path,
   #stage.is-centered ~ .landing-notes .note__label--explainer,
   #stage.is-centered ~ .landing-notes .explainer-box,
-  .explainer__more[open] .explainer__a,
   #stage.is-centered .landing__clone,
   #stage.is-centered .landing__road { animation: none; }
 }
