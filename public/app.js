@@ -803,7 +803,7 @@ const steps = [
             pre: [
                 {
                     q: "what even is git?",
-                    a: "Git keeps a history of your project. <br>Every version you commit is saved, so you can look back, undo a mistake, and try things without fear of losing your work.<br><br>You can think of it as quicksaves in a game where you can choose wich one to go back to.",
+                    a: "Git keeps a history of your project. <br>Every version you commit is saved, so you can look back, undo a mistake, and try things without fear of losing your work.<br><br>You can think of it as quicksaves in a game where you can choose which one to go back to.",
                 },
                 {
                     q: "what's <b>git init</b> about to do?",
