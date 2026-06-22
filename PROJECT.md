@@ -83,6 +83,31 @@ This is how we'll illustrate multiple machines: right now there's just this
 desktop, but later there's a laptop and a desktop, and the remote sits above
 both as the common copy everyone syncs through.
 
+### Curiosity companion + an explorable file tree (the next depth pass)
+
+The bottom-right curiosity companion (per-step `pre`/`post` questions, tap one to
+pull it into focus while the rest dims, answers that ink an arrow to the thing on
+the board) is live for `git init` only. Two directions to grow it:
+
+1. **Carry it through the whole flow.** Each later step (`add`, `commit`,
+   `remote`, `branch`, ...) gets its own `pre`/`post` curiosity data + arrow
+   targets. No new mechanism, just data. Goal: the explanation walks with the
+   user the entire way, so they never feel pushed forward without knowing why.
+
+2. **Make the file tree genuinely explorable (not only companion-driven).** It's
+   a file-tree site, so the tree itself should be interactive:
+   - Click `.git/` to expand/collapse it directly (same reveal the companion
+     triggers), independent of any question.
+   - `objects/` and `refs/` expand too, shown immediately, with fake-but-plausible
+     contents (e.g. a sample object hash, `refs/heads/main`). Show everything.
+   - Click `HEAD` / `config` / `objects` / `refs` (and their children) to get a
+     short explanation of what each is.
+   - For files that are encrypted / not meant for human reading (packed objects,
+     the index), show a description of what they do instead of raw bytes.
+
+   All fake data, but present it as real so beginners can poke around and build a
+   mental model of what git actually keeps.
+
 ### Simplified timeline (by task, not by command)
 
 Separate task. Today the bottom timeline has one stop per command. That won't

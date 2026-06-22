@@ -1426,9 +1426,10 @@ function renderFileTree(): void {
     subWrap.className = "tree__subwrap" + (gitOpened ? " is-open" : "");
     const sub = document.createElement("ul");
     sub.className = "tree__sub";
-    GIT_CONTENTS.forEach((item) => {
+    GIT_CONTENTS.forEach((item, i) => {
       const li = document.createElement("li");
       li.className = "tree__subitem";
+      li.style.setProperty("--i", String(i));   // stagger its wipe-in when .git/ opens
       const ic = item.name.endsWith("/") ? folderIcon() : fileIcon(item.name);
       const n = document.createElement("span");
       n.className = "f__note";
@@ -2294,11 +2295,11 @@ function drawCompanionArrow(fromEl: Element, points: string): SVGGElement | null
   // start just left of the answer's first line, end just right of the target
   const x1 = a.left - 6, y1 = a.top + Math.min(16, a.height / 2);
   const x2 = b.right + 8, y2 = b.top + b.height / 2;
-  // bow the curve so it arcs like a drawn line rather than a straight ruler
-  const my = (y1 + y2) / 2;
-  const bow = Math.max(24, Math.abs(x1 - x2) * 0.18);
-  const cx1 = x1 - bow, cy1 = y1 + bow * 0.3;
-  const cx2 = x2 + bow * 0.5, cy2 = my - bow;
+  // a curve that LEAVES the answer heading left and ARRIVES at .git/ travelling
+  // horizontally, so the arrowhead points straight at it rather than tipping up
+  const dx = x2 - x1;
+  const cx1 = x1 + dx * 0.4, cy1 = y1 + (y2 - y1) * 0.1;
+  const cx2 = x2 + Math.max(70, Math.abs(dx) * 0.32), cy2 = y2;  // control sits level, to the right
   const ns = "http://www.w3.org/2000/svg";
   const g = document.createElementNS(ns, "g");
   const shaft = document.createElementNS(ns, "path");

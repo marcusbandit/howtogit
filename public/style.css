@@ -527,7 +527,9 @@ body.is-learning .landing-notes {
   position: fixed;
   right: clamp(2.5rem, 5vw, 5rem);   /* sit in from the edge for breathing room */
   bottom: clamp(2rem, 7vh, 5rem);
-  width: clamp(19rem, 31vw, 28rem);
+  /* one fixed width for both states: focusing grows the type, not the box, so
+     the wrap width never changes and the answer text doesn't reflow/jump */
+  width: clamp(20rem, 34vw, 31rem);
   z-index: 7;
   display: flex;
   flex-direction: column;
@@ -535,8 +537,7 @@ body.is-learning .landing-notes {
   pointer-events: none;     /* only the questions opt back in */
   opacity: 0;
   visibility: hidden;
-  /* width is animated so focusing a question grows the box smoothly, not in a snap */
-  transition: opacity 0.45s ease, visibility 0.45s, width 0.5s var(--ease-settle);
+  transition: opacity 0.45s ease, visibility 0.45s;
 }
 .companion.is-visible { opacity: 1; visibility: visible; }
 /* the "i'll explain things over here" flourish only belongs on the centred
@@ -618,9 +619,9 @@ body.is-learning .landing-notes {
 .companion__a b { color: var(--ink); font-weight: 600; }
 
 /* ---- focus / learn mode --------------------------------------------- */
-/* clicking a question pulls it into focus: the companion widens, the chosen
-   question grows and brightens, and the others step back so it stands alone */
-.companion.is-focus { width: clamp(23rem, 42vw, 38rem); }
+/* clicking a question pulls it into focus: the chosen question grows and
+   brightens, and the others step back so it stands alone (the box itself does
+   NOT resize, so wrapping stays put) */
 .companion.is-focus .companion__qa:not(.is-open) {
   opacity: 0.22;
   transition: opacity 0.35s ease;
@@ -719,6 +720,8 @@ body.is-learning .landing-notes {
   .companion__a-wrap > .companion__a,
   .companion__caret,
   .tree__subwrap { transition: none; }
+  .tree__list .tree__subitem { opacity: 1; }
+  .tree__list .tree__subwrap.is-open .tree__subitem { animation: none; }
   .companion-arrows path.is-drawing { animation: none; stroke-dashoffset: 0; }
   .companion-arrows path.is-erasing { animation: none; }
 }
@@ -1106,13 +1109,18 @@ body.is-learning .landing-notes {
 .tree__list .tree__subwrap {
   display: grid;
   grid-template-rows: 0fr;          /* collapses to zero height (no empty gap) */
-  opacity: 0;
   padding: 0 0 0 1.9rem;            /* indent the contents in under .git/ */
-  transition: grid-template-rows 0.42s var(--ease-settle), opacity 0.3s ease;
+  transition: grid-template-rows 0.5s var(--ease-settle);
 }
-.tree__list .tree__subwrap.is-open { grid-template-rows: 1fr; opacity: 1; }
+.tree__list .tree__subwrap.is-open { grid-template-rows: 1fr; }
 .tree__list .tree__sub { list-style: none; overflow: hidden; min-height: 0; margin: 0; padding: 0.1rem 0 0.25rem; }
-.tree__list .tree__subitem { padding: 0.1rem 0; }
+/* each item writes itself on (clip wipe + slide), staggered, the same way a new
+   file appears in the tree, so .git/'s contents feel like they're being created */
+.tree__list .tree__subitem { padding: 0.1rem 0; opacity: 0; }
+.tree__list .tree__subwrap.is-open .tree__subitem {
+  animation: git-write 0.55s var(--ease-settle) both;
+  animation-delay: calc(var(--i, 0) * 0.09s);
+}
 .tree__list .tree__subitem .f__name { color: var(--ink-soft); font-weight: 600; font-style: normal; }
 .tree__list .tree__subitem .ic { opacity: 0.7; }
 .tree__list .tree__subitem .f__note {
