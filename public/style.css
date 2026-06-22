@@ -1135,9 +1135,12 @@ body.is-learning .landing-notes {
 /* each item writes itself on (clip wipe + slide), staggered, the same way a new
    file appears, so a folder's contents feel like they're being created. Direct
    children only, so each level animates when ITS folder opens. */
-.tree__list .tree__subitem { padding: 0.1rem 0; opacity: 0; }
+/* base opacity 1 so reverting to base after the animation leaves it visible;
+   `backwards` holds the hidden `from` state during the stagger delay, then the
+   row reverts to this plain base (no held transform/clip-path stacking context). */
+.tree__list .tree__subitem { padding: 0.1rem 0; opacity: 1; }
 .tree__list .tree__subwrap.is-open > .tree__sub > .tree__subitem {
-  animation: git-write 0.5s var(--ease-settle) both;
+  animation: git-write 0.5s var(--ease-settle) backwards;
   animation-delay: calc(var(--i, 0) * 0.08s);
 }
 .tree__list .tree__subitem .f__name { color: var(--ink-soft); font-weight: 600; font-style: normal; }
@@ -1150,8 +1153,13 @@ body.is-learning .landing-notes {
   opacity: 0.8;
 }
 .tree__empty .f__note { font-style: italic; opacity: 0.65; }
-/* the .git/ line writes itself on, left to right, then slides into place */
-.tree__list li.is-new { animation: git-write 0.7s var(--ease-settle) both; }
+/* the .git/ line writes itself on, left to right, then slides into place.
+   `backwards` (not `both`): the row reverts to its plain base after animating,
+   so it holds NO transform/clip-path — both would persist as a stacking context
+   (a held transform computes to a matrix, clip-path stays non-none) and stop the
+   hover underline from layering over the next row. Base opacity is 1 (below), so
+   reverting to base leaves the row fully visible. */
+.tree__list li.is-new { animation: git-write 0.7s var(--ease-settle) backwards; }
 @keyframes git-write {
   from { clip-path: inset(0 100% 0 0); opacity: 0; transform: translateX(-14px); }
   55%  { opacity: 1; }
