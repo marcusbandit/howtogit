@@ -1322,6 +1322,48 @@ body.is-learning .landing-notes {
 }
 .editor__line.is-changed .editor__num { color: var(--pen-green); opacity: 0.9; }
 
+/* the one content line worth looking at in a .git note: a warm marker band +
+   gutter, reusing the on-brand amber (same hue as the just-edited flash) */
+.editor__line.is-key {
+  background: rgba(176, 125, 43, 0.16);
+  box-shadow: inset 3px 0 0 rgba(176, 125, 43, 0.7);
+}
+:root[data-theme="dark"] .editor__line.is-key {
+  background: rgba(214, 168, 92, 0.15);
+  box-shadow: inset 3px 0 0 rgba(214, 168, 92, 0.65);
+}
+/* a hand-drawn marker-pen swipe over the important word(s) of a note */
+.hl {
+  background: linear-gradient(101deg,
+    rgba(176, 125, 43, 0) 1.5%, rgba(176, 125, 43, 0.38) 5%,
+    rgba(176, 125, 43, 0.34) 95%, rgba(176, 125, 43, 0) 98.5%);
+  padding: 0.04em 0.2em;
+  border-radius: 0.6em 0.8em 0.55em 0.7em;
+  color: var(--ink);
+  font-weight: 600;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+:root[data-theme="dark"] .hl {
+  background: linear-gradient(101deg,
+    rgba(214, 168, 92, 0) 1.5%, rgba(214, 168, 92, 0.34) 5%,
+    rgba(214, 168, 92, 0.3) 95%, rgba(214, 168, 92, 0) 98.5%);
+}
+/* the muted "we'll get to this later" footnote under a note's body/contents */
+.editor__later {
+  font-family: var(--ui);
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  opacity: 0.92;
+  padding: 0.55rem 1.1rem 0.2rem;
+  margin-top: 0.45rem;
+  border-top: 1.5px dashed rgba(122, 112, 96, 0.3);
+  max-width: 32rem;
+}
+.editor__later::before { content: "↳ "; font-style: normal; opacity: 0.6; }
+
 /* syntax highlighting palette (kept within the inked colour set) */
 .sx-tag     { color: var(--pen-blue); }
 .sx-attr    { color: #b07d2b; }

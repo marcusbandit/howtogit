@@ -169,17 +169,19 @@ function describe(name, rel, isDir) {
     if (rel === "HEAD")
         return {
             note: "where you are right now", readable: true,
-            explain: "This says you're on main, so that's where your saves go. HEAD is how git tracks where you are; you'll watch it move once you start switching branches with checkout.",
+            explain: "You're on *main*, so that's where saves go.", markLine: 0,
+            later: "We'll get into HEAD when you *checkout*.",
         };
     if (rel === "config")
         return {
             note: "your project's settings", readable: true,
-            explain: "Settings for this one repo: the defaults git wrote to get you started, plus things like your name and the remote's address later on.",
+            explain: "Settings git wrote for this repo.",
+            later: "Your name and the remote get added here as you go.",
         };
     if (rel === "index")
         return {
             note: "what's lined up for your next save", readable: false,
-            desc: "The changes you've staged with git add, lined up for your next commit. git keeps this list for itself; you don't open it by hand.",
+            desc: "Whatever you *git add* waits here for the next commit. git keeps the list; you don't open it by hand.",
         };
     if (rel === "objects")
         return { note: "every saved version of your work", readable: false };
@@ -194,17 +196,19 @@ function describe(name, rel, isDir) {
     if (/^objects\/[0-9a-f]{2}\/[0-9a-f]+$/.test(rel))
         return {
             note: "one saved snapshot", readable: false,
-            desc: "One saved version of your project, compressed and frozen so it can never change. git reads these back for you; you never open them by hand.",
+            desc: "A frozen *snapshot* of your project, stored for git to read back. Never opened by hand.",
         };
     if (/^refs\/heads\//.test(rel))
         return {
             note: "this branch → its latest save", readable: true,
-            explain: "A branch is just a name that points at one save. main points at your latest commit, and git nudges it forward every time you save.",
+            explain: `*${name}* points at this save:`, markLine: 0,
+            later: "It moves forward each time you *commit*.",
         };
     if (/^refs\/tags\//.test(rel))
         return {
             note: "a tag → a fixed save", readable: true,
-            explain: "A tag is a name pinned to one exact save that never moves, handy for marking something like a release. A branch keeps moving; a tag stays put.",
+            explain: `*${name}* is pinned to this save:`, markLine: 0,
+            later: "Unlike a branch, a tag never moves.",
         };
     return { note: "", readable: !isDir && READABLE.has(name) };
 }
@@ -241,9 +245,15 @@ async function walkGit(absPath, rel) {
             node.content = (await fs.promises.readFile(`${absPath}/${e.name}`, "utf8")).replace(/\n+$/, "");
             if (d.explain)
                 node.explain = d.explain;
+            if (d.later)
+                node.later = d.later;
+            if (d.markLine != null)
+                node.markLine = d.markLine;
         }
         else {
             node.desc = d.desc ?? "This file isn't meant to be read by hand.";
+            if (d.later)
+                node.later = d.later;
         }
         nodes.push(node);
     }

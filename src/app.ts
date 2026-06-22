@@ -1797,7 +1797,16 @@ function langOf(file: string): Lang {
 // the language the editor is currently showing (drives highlighting)
 let editorLang: Lang = "html";
 
-interface LineOpts { changed?: number[]; caret?: number; }
+// turn a tiny *highlight* markup into HTML: `*word*` becomes a marker-pen swipe,
+// everything else is escaped. Used for the short .git note copy.
+function inlineHL(s: string): string {
+  return s.split(/(\*[^*]+\*)/).map((seg) => {
+    const esc = seg.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
+    return /^\*[^*]+\*$/.test(seg) ? `<span class="hl">${esc.slice(1, -1)}</span>` : esc;
+  }).join("");
+}
+
+interface LineOpts { changed?: number[]; caret?: number; markLine?: number; }
 // render the file as `lines`, syntax-highlighted for `editorLang`. `changed`
 // line indices read as a local change; `caret` parks a blinking caret on the
 // line being typed (-1 = none).
@@ -1810,6 +1819,7 @@ function renderEditorLines(lines: string[], opts: LineOpts = {}): void {
     row.className = "editor__line";
     if (changed.has(i)) row.classList.add("is-changed");
     if (i === caret) row.classList.add("is-active");
+    if (i === opts.markLine) row.classList.add("is-key");   // the line worth looking at
     const num = document.createElement("span");
     num.className = "editor__num";
     num.textContent = String(i + 1);
@@ -1918,12 +1928,21 @@ function growEditorFrom(row: HTMLElement): void {
 
 // render a plain explanatory note in the editor body (for files that aren't
 // meant to be read by hand, e.g. packed objects), instead of code lines
-function renderEditorNote(text: string): void {
+function renderEditorNote(text: string, later?: string): void {
   editorCode.replaceChildren();
   const p = document.createElement("p");
   p.className = "editor__note";
-  p.textContent = text;
+  p.innerHTML = inlineHL(text);
   editorCode.appendChild(p);
+  if (later) editorCode.appendChild(editorLater(later));
+}
+
+// the muted "we'll get to this later" footnote under a .git note's body
+function editorLater(text: string): HTMLElement {
+  const l = document.createElement("p");
+  l.className = "editor__later";
+  l.innerHTML = inlineHL(text);
+  return l;
 }
 
 // ---- click any file to open it in the editor (view only) ------------
@@ -1952,18 +1971,20 @@ function openGitFile(path: string, row: HTMLElement, side: "local" | "remote" = 
   editorUnsaved.style.opacity = "0";
   editorSave.classList.remove("show");
   if (node.content != null) {
-    // readable file: explain what it does + why, then show its real contents
+    // readable file: one short line, the real contents (key line highlighted),
+    // then a "we'll get to it" footnote. Let the lines do most of the talking.
     editorLang = "ini";   // [sections], key = value, ref: paths — light colour
-    renderEditorLines(node.content.split("\n"));
+    renderEditorLines(node.content.split("\n"), { markLine: node.markLine });
     if (node.explain) {
       const p = document.createElement("p");
       p.className = "editor__explain";
-      p.textContent = node.explain;
+      p.innerHTML = inlineHL(node.explain);
       editorCode.prepend(p);
     }
+    if (node.later) editorCode.appendChild(editorLater(node.later));
   } else {
-    // not meant to be read: just describe what it's for
-    renderEditorNote(node.desc ?? "This file isn't meant to be read by hand.");
+    // not meant to be read: a short note about what it's for
+    renderEditorNote(node.desc ?? "This file isn't meant to be read by hand.", node.later);
   }
   growEditorFrom(row);
 }
