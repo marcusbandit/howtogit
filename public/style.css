@@ -243,8 +243,20 @@ body {
   align-items: center;
   gap: 1.1rem;
   padding: 0 1.2rem;
-  transition: top 0.95s var(--ease-settle);
+  transition: top 0.95s var(--ease-settle), opacity 0.4s ease;
   pointer-events: none;
+}
+
+/* learn mode: the user chose to understand rather than continue, so everything
+   that competes for "continue" recedes. The board and file tree stay lit, since
+   they're the very thing being explained (and where the arrow points). */
+body.is-learning #stage,
+body.is-learning .tl-zone,
+body.is-learning #remotetree,
+body.is-learning .landing-notes {
+  opacity: 0.12 !important;
+  pointer-events: none !important;
+  transition: opacity 0.4s ease;
 }
 #stage > * { pointer-events: auto; }
 
@@ -513,7 +525,7 @@ body {
    say "what just happened", not only "what's about to". */
 .companion {
   position: fixed;
-  right: clamp(1.5rem, 3vw, 3rem);
+  right: clamp(2.5rem, 5vw, 5rem);   /* sit in from the edge for breathing room */
   bottom: clamp(2rem, 7vh, 5rem);
   width: clamp(19rem, 31vw, 28rem);
   z-index: 7;
@@ -523,7 +535,8 @@ body {
   pointer-events: none;     /* only the questions opt back in */
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.45s ease, visibility 0.45s;
+  /* width is animated so focusing a question grows the box smoothly, not in a snap */
+  transition: opacity 0.45s ease, visibility 0.45s, width 0.5s var(--ease-settle);
 }
 .companion.is-visible { opacity: 1; visibility: visible; }
 /* the "i'll explain things over here" flourish only belongs on the centred
@@ -539,16 +552,7 @@ body {
 }
 .companion__intro-arrow { display: block; margin: 0.05rem auto 0; width: 2.3rem; height: 1.9rem; overflow: visible; }
 
-.companion__cmd {
-  font-family: var(--mono);
-  font-weight: 700;
-  font-size: 1.08rem;
-  color: var(--pen-blue);
-  margin-bottom: 0.6rem;
-}
-.companion__cmd:empty { display: none; }
-
-.companion__qa + .companion__qa { margin-top: 0.35rem; }
+.companion__qa + .companion__qa { margin-top: 0.4rem; }
 /* a question is a bare, tappable line: hand-drawn caret + the words */
 .companion__q {
   display: flex;
@@ -564,12 +568,13 @@ body {
   font-family: var(--hand);
   font-weight: 700;
   font-size: 1.34rem;
-  line-height: 1.15;
+  line-height: 1.18;
   color: var(--ink-soft);
-  transition: color 0.2s ease;
+  /* the felt motion on click is the question GROWING, not a menu dropping */
+  transition: color 0.25s ease, font-size 0.4s var(--ease-settle), transform 0.4s var(--ease-settle);
+  transform-origin: left center;
 }
-.companion__q:hover,
-.companion__q[aria-expanded="true"] { color: var(--ink); }
+.companion__q:hover { color: var(--ink); }
 .companion__q b { color: var(--pen-red); font-weight: 700; }
 /* the caret inks red and swings down a quarter-turn when its answer is open */
 .companion__caret {
@@ -612,6 +617,24 @@ body {
 }
 .companion__a b { color: var(--ink); font-weight: 600; }
 
+/* ---- focus / learn mode --------------------------------------------- */
+/* clicking a question pulls it into focus: the companion widens, the chosen
+   question grows and brightens, and the others step back so it stands alone */
+.companion.is-focus { width: clamp(23rem, 42vw, 38rem); }
+.companion.is-focus .companion__qa:not(.is-open) {
+  opacity: 0.22;
+  transition: opacity 0.35s ease;
+}
+.companion__qa.is-open .companion__q {
+  font-size: 1.95rem;
+  color: var(--ink);
+}
+.companion__qa.is-open .companion__a {
+  font-size: 1.2rem;
+  line-height: 1.5;
+  padding-left: 1.7rem;
+}
+
 /* the ink layer for answer arrows: full-viewport, pixel-space, see-through */
 .companion-arrows {
   position: fixed;
@@ -636,6 +659,14 @@ body {
   animation: companion-draw 0.55s var(--ease-settle) forwards;
 }
 @keyframes companion-draw { to { stroke-dashoffset: 0; } }
+/* retract by continuing the SAME direction the pen travelled (offset 0 -> -1),
+   so the line erases from its tail toward the target rather than rewinding */
+.companion-arrows path.is-erasing {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: companion-erase 0.5s var(--ease-settle) forwards;
+}
+@keyframes companion-erase { to { stroke-dashoffset: -1; } }
 
 /* ---- landing intro: the first screen draws itself in ----------------- */
 /* the file tree fades in ~0.5s after load. Opacity only: its is-focus state
@@ -683,10 +714,13 @@ body {
   #stage.is-centered .landing__clone,
   #stage.is-centered .landing__road { animation: none; }
   .companion { transition: none; }
+  .companion__q,
   .companion__a-wrap,
   .companion__a-wrap > .companion__a,
-  .companion__caret { transition: none; }
+  .companion__caret,
+  .tree__subwrap { transition: none; }
   .companion-arrows path.is-drawing { animation: none; stroke-dashoffset: 0; }
+  .companion-arrows path.is-erasing { animation: none; }
 }
 
 /* ---- landing timeline: hidden until you hover its strip --------------- */
@@ -1064,6 +1098,29 @@ body {
   font-size: 0.78rem;
   color: var(--ink-soft);
   font-style: italic;
+}
+/* the peek inside .git/: a nested list that slides open when the "what's in
+   .git/?" question is in focus, showing what git actually created in there.
+   Scoped under .tree__list so these beat the generic `.tree__list li` rules
+   (which would otherwise force display:flex and kill the collapse + indent). */
+.tree__list .tree__subwrap {
+  display: grid;
+  grid-template-rows: 0fr;          /* collapses to zero height (no empty gap) */
+  opacity: 0;
+  padding: 0 0 0 1.9rem;            /* indent the contents in under .git/ */
+  transition: grid-template-rows 0.42s var(--ease-settle), opacity 0.3s ease;
+}
+.tree__list .tree__subwrap.is-open { grid-template-rows: 1fr; opacity: 1; }
+.tree__list .tree__sub { list-style: none; overflow: hidden; min-height: 0; margin: 0; padding: 0.1rem 0 0.25rem; }
+.tree__list .tree__subitem { padding: 0.1rem 0; }
+.tree__list .tree__subitem .f__name { color: var(--ink-soft); font-weight: 600; font-style: normal; }
+.tree__list .tree__subitem .ic { opacity: 0.7; }
+.tree__list .tree__subitem .f__note {
+  font-family: var(--ui);
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--ink-soft);
+  opacity: 0.8;
 }
 /* the .git/ line writes itself on, left to right, then slides into place */
 .tree__list li.is-new { animation: git-write 0.7s var(--ease-settle) both; }

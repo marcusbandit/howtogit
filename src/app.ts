@@ -67,7 +67,6 @@ const remoteTreeEl = need<HTMLElement>("remotetree");
 const remoteList = need<HTMLElement>("remote-list");
 const timelineEl = need<HTMLElement>("timeline");
 const companionEl = need<HTMLElement>("companion");
-const companionCmd = need<HTMLElement>("companion-cmd");
 const companionList = need<HTMLElement>("companion-list");
 const companionArrows = need<SVGSVGElement>("companion-arrows");
 const brandRule = needSel<SVGSVGElement>(".brand__rule");
@@ -1340,6 +1339,12 @@ const isPhone = window.matchMedia("(max-width: 760px)").matches
 let pointerDown = false;
 document.addEventListener("mousedown", () => { pointerDown = true; });
 document.addEventListener("mouseup", () => { pointerDown = false; });
+// in learn mode, a click anywhere outside the companion means "I'm done looking,
+// take me back to continuing" — let the focused question go
+document.addEventListener("click", (e) => {
+  if (!openBtn) return;
+  if (!companionEl.contains(e.target as Node)) closeCurio(openBtn);
+});
 function hasSelection(): boolean {
   const sel = window.getSelection();
   return !!sel && !sel.isCollapsed && sel.toString().length > 0;
@@ -1415,6 +1420,24 @@ function renderFileTree(): void {
     note.textContent = "git lives here";
     git.append(folderIcon(), makeName(".git/"), note);
     treeList.appendChild(git);
+    // a peek inside .git/ — revealed when the "what's in .git/?" question opens.
+    // Always rendered (collapsed) so opening/closing it can animate via a class.
+    const subWrap = document.createElement("li");
+    subWrap.className = "tree__subwrap" + (gitOpened ? " is-open" : "");
+    const sub = document.createElement("ul");
+    sub.className = "tree__sub";
+    GIT_CONTENTS.forEach((item) => {
+      const li = document.createElement("li");
+      li.className = "tree__subitem";
+      const ic = item.name.endsWith("/") ? folderIcon() : fileIcon(item.name);
+      const n = document.createElement("span");
+      n.className = "f__note";
+      n.textContent = item.note;
+      li.append(ic, makeName(item.name), n);
+      sub.appendChild(li);
+    });
+    subWrap.appendChild(sub);
+    treeList.appendChild(subWrap);
   }
 
   PROJECT.files.forEach((f, fi) => {
@@ -2230,6 +2253,25 @@ const CARET_PATH = "M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13";   // the hand-dr
 // arrows currently drawn, keyed by the question button that opened them, so we
 // can retract one on close and redraw them all on resize
 const openArrows = new Map<HTMLButtonElement, SVGGElement>();
+// the one question currently in focus (only one is ever open at a time)
+let openBtn: HTMLButtonElement | null = null;
+
+// a beginner's peek inside .git/: a curated, hand-drawn subset of what git
+// actually creates, each with a one-line note. Revealed when the .git/ question
+// opens, so "what's in here?" is answered by showing it, not just describing it.
+const GIT_CONTENTS = [
+  { name: "HEAD", note: "points at where you are" },
+  { name: "config", note: "this repo's settings" },
+  { name: "objects/", note: "every snapshot, stored here" },
+  { name: "refs/", note: "your branches and tags" },
+];
+let gitOpened = false;
+// open or close the .git/ peek in the sidebar by toggling the live subwrap's
+// class (so it animates), and remember the state for future tree re-renders
+function setGitOpen(open: boolean): void {
+  gitOpened = open;
+  treeList.querySelector(".tree__subwrap")?.classList.toggle("is-open", open);
+}
 
 // resolve a `points` key to the live board element its arrow should reach
 function companionTarget(points: string): Element | null {
@@ -2280,9 +2322,19 @@ function drawCompanionArrow(fromEl: Element, points: string): SVGGElement | null
   return g;
 }
 
+// retract an arrow by un-drawing it in the SAME direction it was drawn (the
+// stroke keeps travelling toward the target, erasing from the tail), then drop it
 function removeCompanionArrow(q: HTMLButtonElement): void {
   const g = openArrows.get(q);
-  if (g) { g.remove(); openArrows.delete(q); }
+  if (!g) return;
+  openArrows.delete(q);
+  if (S.prefersReduced) { g.remove(); return; }
+  g.querySelectorAll<SVGPathElement>("path").forEach((p, i) => {
+    p.classList.remove("is-drawing");
+    p.style.animationDelay = i === 1 ? "0.3s" : "";   // the head erases just after the shaft
+    p.classList.add("is-erasing");
+  });
+  window.setTimeout(() => g.remove(), 850);
 }
 
 // re-aim every open arrow (after a resize or relayout moved its endpoints)
@@ -2300,7 +2352,51 @@ function redrawCompanionArrows(): void {
   });
 }
 
-// build one question + answer block; clicking toggles its answer (and arrow)
+// entering "learn mode": the user has decided that understanding, not
+// continuing, is what matters now, so the command line and its scaffolding
+// recede. You're either continuing or learning, never both at once.
+function enterLearnMode(): void {
+  document.body.classList.add("is-learning");
+  companionEl.classList.add("is-focus");
+  if (!isPhone) cmd.blur();
+}
+function exitLearnMode(): void {
+  document.body.classList.remove("is-learning");
+  companionEl.classList.remove("is-focus");
+  if (!isPhone && !pointerDown) cmd.focus();
+}
+
+// bring a question into focus: it grows, the others step back, the page dims,
+// and (if it points somewhere) an arrow inks out to the real thing
+function openCurio(btn: HTMLButtonElement, ans: HTMLElement, points?: string): void {
+  if (openBtn && openBtn !== btn) closeCurio(openBtn);
+  btn.setAttribute("aria-expanded", "true");
+  btn.parentElement?.classList.add("is-open");
+  openBtn = btn;
+  enterLearnMode();
+  if (points === "dotgit") setGitOpen(true);   // also show what's inside .git/
+  if (points) {
+    // let the answer enlarge first, so the arrow leaves from its settled spot
+    window.setTimeout(() => {
+      if (btn.getAttribute("aria-expanded") !== "true") return;
+      const g = drawCompanionArrow(ans, points);
+      if (g) openArrows.set(btn, g);
+    }, S.prefersReduced ? 0 : 380);
+  }
+}
+
+// let a question go: retract its arrow + .git/ peek, and if it was the focused
+// one, hand attention back to continuing
+function closeCurio(btn: HTMLButtonElement): void {
+  btn.setAttribute("aria-expanded", "false");
+  btn.parentElement?.classList.remove("is-open");
+  removeCompanionArrow(btn);
+  if (btn.dataset.points === "dotgit") setGitOpen(false);
+  if (openBtn === btn) { openBtn = null; exitLearnMode(); }
+}
+
+// build one question + answer block; clicking it pulls it into focus (or, if
+// it's already the focused one, lets it go)
 function curioBlock(c: Curio): HTMLElement {
   const qa = document.createElement("div");
   qa.className = "companion__qa";
@@ -2322,39 +2418,34 @@ function curioBlock(c: Curio): HTMLElement {
   wrap.appendChild(ans);
 
   btn.addEventListener("click", () => {
-    const open = btn.getAttribute("aria-expanded") === "true";
-    btn.setAttribute("aria-expanded", open ? "false" : "true");
-    if (open) {
-      removeCompanionArrow(btn);
-    } else if (c.points) {
-      // wait for the answer to start expanding so the arrow starts from its real spot
-      window.setTimeout(() => {
-        if (btn.getAttribute("aria-expanded") !== "true") return;
-        const g = drawCompanionArrow(ans, c.points!);
-        if (g) openArrows.set(btn, g);
-      }, S.prefersReduced ? 0 : 320);
-    }
+    if (btn.getAttribute("aria-expanded") === "true") closeCurio(btn);
+    else openCurio(btn, ans, c.points);
   });
 
   qa.append(btn, wrap);
   return qa;
 }
 
-// show (or hide) the companion for a given step + tense
-function setCompanion(key: string | null, phase: "pre" | "post"): void {
-  // any open arrows belong to the outgoing list; clear them
+// tear down any focus state + arrows when the question set is about to change
+function resetCompanion(): void {
+  openBtn = null;
+  companionEl.classList.remove("is-focus");
+  document.body.classList.remove("is-learning");
   openArrows.clear();
   companionArrows.replaceChildren();
+  if (gitOpened) setGitOpen(false);
+}
 
+// show (or hide) the companion for a given step + tense
+function setCompanion(key: string | null, phase: "pre" | "post"): void {
+  resetCompanion();
   const step = key ? steps.find((s) => s.key === key) : null;
   const list = step?.curiosity?.[phase] ?? [];
   if (!step || !list.length) {
     companionEl.classList.remove("is-visible");
     companionList.replaceChildren();
-    companionCmd.textContent = "";
     return;
   }
-  companionCmd.textContent = step.curiosity?.cmd ?? canonical(step).trim();
   companionList.replaceChildren(...list.map(curioBlock));
   companionEl.classList.add("is-visible");
 }
