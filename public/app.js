@@ -9,6 +9,7 @@
  * Built so far: init, add, commit.
  */
 import * as S from "./sketch.js";
+import { replayTo, snapshot, } from "./repo.js";
 const COLORS = {
     ink: "#2a2521",
     inkSoft: "#7a7060",
@@ -17,6 +18,92 @@ const COLORS = {
     green: "#3f7a4e",
     remote: "#6b5ca5",
 };
+// ---- session memory (survives a normal reload) ----------------------
+// A session is two things: which step you're on, and every value you typed on
+// the way there (commit messages, the remote's name + url, branch names), kept
+// keyed by step. Replaying / seeking reuses YOUR words instead of the canned
+// defaults, and a normal reload drops you back exactly where you left off.
+// A hard refresh (Ctrl+Shift+R) is treated as "start me clean" — see
+// isHardRefresh, which is the only reliable way to tell the two reloads apart.
+const LS_SESSION = "htg-session-v1";
+const LS_CACHE_OK = "htg-cache-ok"; // have we ever seen the probe served from cache?
+const PROBE_NAME = "reload-probe.js";
+let persisted = { step: 0, values: {} };
+function savePersisted() {
+    try {
+        localStorage.setItem(LS_SESSION, JSON.stringify(persisted));
+    }
+    catch {
+        /* private mode / full */
+    }
+}
+function loadPersisted() {
+    try {
+        const raw = localStorage.getItem(LS_SESSION);
+        if (!raw)
+            return null;
+        const p = JSON.parse(raw);
+        if (!p ||
+            typeof p.step !== "number" ||
+            typeof p.values !== "object" ||
+            !p.values)
+            return null;
+        return { step: p.step, values: p.values };
+    }
+    catch {
+        return null;
+    }
+}
+function clearPersisted() {
+    persisted = { step: 0, values: {} };
+    try {
+        localStorage.removeItem(LS_SESSION);
+    }
+    catch {
+        /* ignore */
+    }
+}
+// The browser gives no direct "was this a hard refresh?" flag: a normal reload
+// and a Ctrl+Shift+R both report navigation type "reload". The only thing a hard
+// refresh changes is the HTTP cache — it re-downloads everything. So we watch a
+// tiny cached-forever probe (reload-probe.js): on a normal reload it comes from
+// cache (resource-timing transferSize === 0); a hard refresh re-fetches it (> 0).
+// We only act on this once we've actually seen the probe cached at least once
+// (LS_CACHE_OK), so a no-cache dev server, proxy, or misconfigured host can
+// never make us forget by mistake — it just keeps remembering. And only a real
+// reload counts (a fresh navigation with an evicted cache must NOT wipe state).
+function isHardRefresh() {
+    let navType = "";
+    let probe;
+    try {
+        const nav = performance.getEntriesByType("navigation")[0];
+        navType = nav?.type ?? "";
+        probe = performance.getEntriesByType("resource").find((e) => e.name.includes(PROBE_NAME));
+    }
+    catch {
+        return false;
+    }
+    if (!probe)
+        return false; // can't tell -> keep remembering
+    const fromCache = probe.transferSize === 0;
+    let cacheOk = false;
+    try {
+        cacheOk = localStorage.getItem(LS_CACHE_OK) === "1";
+    }
+    catch {
+        /* ignore */
+    }
+    if (fromCache && !cacheOk) {
+        cacheOk = true; // self-calibrate: caching works here
+        try {
+            localStorage.setItem(LS_CACHE_OK, "1");
+        }
+        catch {
+            /* ignore */
+        }
+    }
+    return navType === "reload" && !fromCache && cacheOk;
+}
 // the board is drawn ~20% larger than 1:1 by shrinking the viewBox under the
 // full-size <svg>. One knob zooms every node, label and stroke together.
 // On a narrow phone we zoom OUT (smaller ZOOM = more board per screen) so the
@@ -65,9 +152,19 @@ const treeList = need("tree-list");
 const remoteTreeEl = need("remotetree");
 const remoteList = need("remote-list");
 const timelineEl = need("timeline");
+const companionEl = need("companion");
+const companionList = need("companion-list");
+const companionArrows = need("companion-arrows");
 const brandRule = needSel(".brand__rule");
 const cliRule = needSel(".cli__rule");
-const model = { nodes: [], head: null, headBranch: "main", branches: {}, tagEls: null, pending: null };
+const model = {
+    nodes: [],
+    head: null,
+    headBranch: "main",
+    branches: {},
+    tagEls: null,
+    pending: null,
+};
 const GAP = 150; // horizontal distance between commits (viewBox units)
 const LANE_GAP = 118; // vertical distance between branch lanes
 const NODE_R = 28; // base node radius (viewBox units)
@@ -117,7 +214,9 @@ function drawRule(svg, color, seed) {
     const y = vb.height * 0.55;
     const d = S.linePath(vb.width * 0.03, y, vb.width * 0.97, y, seed, 0.8);
     svg.appendChild(S.el("path", {
-        d, class: "edge-stroke", stroke: color,
+        d,
+        class: "edge-stroke",
+        stroke: color,
         "stroke-width": Math.max(1.6, vb.height * 0.18),
     }));
 }
@@ -189,7 +288,8 @@ function animateIn(node, delay = 0) {
     node.style.opacity = "0";
     node.style.transform = "translateY(6px) scale(0.9)";
     node.style.transformOrigin = "center";
-    node.style.transition = "opacity .45s ease, transform .5s cubic-bezier(.16,1,.3,1)";
+    node.style.transition =
+        "opacity .45s ease, transform .5s cubic-bezier(.16,1,.3,1)";
     requestAnimationFrame(() => setTimeout(() => {
         node.style.opacity = "1";
         node.style.transform = "translateY(0) scale(1)";
@@ -215,11 +315,16 @@ function shapePath(shape, x, y, r, seed) {
 async function drawNode(node, seed) {
     const main = S.el("path", {
         d: shapePath(node.shape, node.x, node.y, node.r, seed),
-        class: "node-stroke", stroke: node.color, "stroke-width": NODE_W,
+        class: "node-stroke",
+        stroke: node.color,
+        "stroke-width": NODE_W,
     });
     const second = S.el("path", {
         d: shapePath(node.shape, node.x, node.y, node.r * 0.97, seed + 31),
-        class: "node-stroke", stroke: node.color, "stroke-width": 1.5, opacity: 0.5,
+        class: "node-stroke",
+        stroke: node.color,
+        "stroke-width": 1.5,
+        opacity: 0.5,
     });
     gNodes.appendChild(main);
     gNodes.appendChild(second);
@@ -239,8 +344,10 @@ function connectorPath(from, to, seed) {
 }
 async function drawConnector(from, to, color, seed) {
     const p = S.el("path", {
-        d: connectorPath(from, to, seed), class: "edge-stroke",
-        stroke: color, "stroke-width": EDGE_W,
+        d: connectorPath(from, to, seed),
+        class: "edge-stroke",
+        stroke: color,
+        "stroke-width": EDGE_W,
     });
     gEdges.appendChild(p);
     if (instant)
@@ -252,10 +359,19 @@ function makePill(text, color, seed) {
     const g = S.el("g");
     const w = text.length * 12 + 22;
     g.appendChild(S.el("path", {
-        d: S.rectPath(0, 0, w, 30, seed), class: "tag-box",
-        stroke: color, "stroke-width": 1.8, fill: "#efe7d2",
+        d: S.rectPath(0, 0, w, 30, seed),
+        class: "tag-box",
+        stroke: color,
+        "stroke-width": 1.8,
+        fill: "#efe7d2",
     }));
-    const t = S.el("text", { x: 0, y: 7, "text-anchor": "middle", class: "tag", fill: color });
+    const t = S.el("text", {
+        x: 0,
+        y: 7,
+        "text-anchor": "middle",
+        class: "tag",
+        fill: color,
+    });
     t.textContent = text;
     g.appendChild(t);
     return g;
@@ -329,20 +445,29 @@ function drawRefs() {
             const st = b.staged ? LINE.staged : LINE.ghost;
             refTicks.appendChild(S.el("path", {
                 d: connectorPath(tip, { x: a.x, y: a.y, r: NODE_R }, 21),
-                class: "edge-stroke", stroke: b.color, "stroke-width": EDGE_W,
-                "stroke-dasharray": st.dash, opacity: st.opacity,
+                class: "edge-stroke",
+                stroke: b.color,
+                "stroke-width": EDGE_W,
+                "stroke-dasharray": st.dash,
+                opacity: st.opacity,
             }));
             const ghost = b.shape === "square"
                 ? S.squarePath(a.x, a.y, NODE_R * 1.7, 23)
                 : S.circlePath(a.x, a.y, NODE_R, 23);
             refTicks.appendChild(S.el("path", {
-                d: ghost, class: "node-stroke", stroke: b.color, "stroke-width": NODE_W,
-                "stroke-dasharray": st.dash, opacity: st.opacity,
+                d: ghost,
+                class: "node-stroke",
+                stroke: b.color,
+                "stroke-width": NODE_W,
+                "stroke-dasharray": st.dash,
+                opacity: st.opacity,
             }));
         }
         refTicks.appendChild(S.el("path", {
             d: S.linePath(a.x, a.y - NODE_R - 2, a.x, a.y - NODE_R - 22, 5, 0.6),
-            class: "edge-stroke", stroke: COLORS.inkSoft, "stroke-width": 1.4,
+            class: "edge-stroke",
+            stroke: COLORS.inkSoft,
+            "stroke-width": 1.4,
         }));
         wanted.add(name);
         const bp = ensurePill(name, name, b.color, 2);
@@ -366,7 +491,10 @@ function drawRefs() {
 }
 function caption(text, cx, y, delay, faint = false) {
     const t = S.el("text", {
-        x: cx, y, "text-anchor": "middle", class: "commit-msg",
+        x: cx,
+        y,
+        "text-anchor": "middle",
+        class: "commit-msg",
     });
     if (faint)
         t.setAttribute("opacity", "0.6");
@@ -394,7 +522,7 @@ function centerOnHead() {
     if (xs.length) {
         const minX = Math.min(...xs), maxX = Math.max(...xs);
         const margin = NODE_R * 2.4;
-        if ((maxX - minX) + margin * 2 <= viewW * BOX_FRAC) {
+        if (maxX - minX + margin * 2 <= viewW * BOX_FRAC) {
             targetX = (minX + maxX) / 2; // fits the box: centre the graph
         }
         else {
@@ -409,9 +537,10 @@ function centerOnHead() {
     boardPanX = panX; // the remote layer isn't panned, so it needs this to map a
     // local node's on-screen x into its own coordinate space
     for (const g of boardGroups) {
-        g.style.transition = instant || S.prefersReduced
-            ? "none"
-            : "transform .6s cubic-bezier(.16,1,.3,1)";
+        g.style.transition =
+            instant || S.prefersReduced
+                ? "none"
+                : "transform .6s cubic-bezier(.16,1,.3,1)";
         g.style.transform = `translateX(${panX}px)`;
     }
 }
@@ -420,13 +549,22 @@ let boardPanX = 0;
 async function doInit() {
     const p = nodePos(0, 0);
     const node = {
-        id: 0, col: 0, lane: 0, x: p.x, y: p.y, r: NODE_R,
-        branch: "main", color: COLORS.main, shape: "circle",
+        id: 0,
+        col: 0,
+        lane: 0,
+        x: p.x,
+        y: p.y,
+        r: NODE_R,
+        branch: "main",
+        color: COLORS.main,
+        shape: "circle",
     };
     model.nodes.push(node);
     model.head = 0;
     model.headBranch = "main";
-    model.branches = { main: { color: COLORS.main, shape: "circle", lane: 0, tip: 0 } };
+    model.branches = {
+        main: { color: COLORS.main, shape: "circle", lane: 0, tip: 0 },
+    };
     dockStage();
     await drawNode(node, 3);
     drawRefs();
@@ -460,13 +598,22 @@ async function doAdd() {
     else {
         const conn = S.el("path", {
             d: connectorPath(parent, { x: pos.x, y: pos.y, r: NODE_R }, 9),
-            class: "edge-stroke", stroke: branch.color, "stroke-width": EDGE_W,
-            "stroke-dasharray": LINE.staged.dash, opacity: 0,
+            class: "edge-stroke",
+            stroke: branch.color,
+            "stroke-width": EDGE_W,
+            "stroke-dasharray": LINE.staged.dash,
+            opacity: 0,
         });
-        const shape = branch.shape === "square" ? S.squarePath(pos.x, pos.y, NODE_R * 1.7, 9) : S.circlePath(pos.x, pos.y, NODE_R, 9);
+        const shape = branch.shape === "square"
+            ? S.squarePath(pos.x, pos.y, NODE_R * 1.7, 9)
+            : S.circlePath(pos.x, pos.y, NODE_R, 9);
         const ring = S.el("path", {
-            d: shape, class: "node-stroke",
-            stroke: branch.color, "stroke-width": NODE_W, "stroke-dasharray": LINE.staged.dash, opacity: 0,
+            d: shape,
+            class: "node-stroke",
+            stroke: branch.color,
+            "stroke-width": NODE_W,
+            "stroke-dasharray": LINE.staged.dash,
+            opacity: 0,
         });
         gEdges.appendChild(conn);
         gNodes.appendChild(ring);
@@ -476,7 +623,9 @@ async function doAdd() {
     els.push(tag);
     const stagedOpacity = String(LINE.staged.opacity); // match the branch-staged look
     if (instant) {
-        els.forEach((e) => { e.style.opacity = e === tag ? "0.6" : stagedOpacity; });
+        els.forEach((e) => {
+            e.style.opacity = e === tag ? "0.6" : stagedOpacity;
+        });
     }
     else {
         requestAnimationFrame(() => {
@@ -499,8 +648,15 @@ async function doCommit(message = "first commit") {
         model.pending = null;
     }
     const node = {
-        id: model.nodes.length, col: parent.col + 1, lane: branch.lane, x: pos.x, y: pos.y,
-        r: NODE_R, branch: model.headBranch, color: branch.color, shape: branch.shape,
+        id: model.nodes.length,
+        col: parent.col + 1,
+        lane: branch.lane,
+        x: pos.x,
+        y: pos.y,
+        r: NODE_R,
+        branch: model.headBranch,
+        color: branch.color,
+        shape: branch.shape,
     };
     await drawConnector(parent, node, branch.color, node.id * 7 + 4);
     await drawNode(node, node.id * 13 + 6);
@@ -552,8 +708,15 @@ async function doMerge(arg) {
     const col = Math.max(intoTip.col, otherTip.col) + 1;
     const pos = nodePos(col, into.lane);
     const node = {
-        id: model.nodes.length, col, lane: into.lane, x: pos.x, y: pos.y,
-        r: NODE_R, branch: model.headBranch, color: into.color, shape: into.shape,
+        id: model.nodes.length,
+        col,
+        lane: into.lane,
+        x: pos.x,
+        y: pos.y,
+        r: NODE_R,
+        branch: model.headBranch,
+        color: into.color,
+        shape: into.shape,
     };
     // two connectors converge: one from the current tip, one from the branch tip
     // (drawn in the branch's colour so you can see where the work came from)
@@ -603,7 +766,7 @@ function showEndState() {
         return;
     caption("that's the whole first loop — nothing left to do ✦", h.x, h.y + h.r + 100, 420, true);
 }
-const atomText = (a) => (typeof a.text === "function" ? a.text() : a.text);
+const atomText = (a) => typeof a.text === "function" ? a.text() : a.text;
 const atomSep = (atoms, i) => atoms[i].sep ?? (i === 0 ? "" : " ");
 const A = (text, tone, opts = {}) => ({ text, tone, ...opts });
 // a quoted message is three atoms: opening quote, the free text, closing quote,
@@ -615,7 +778,9 @@ const msgAtoms = (suggest) => [
 ];
 // what a fully-typed command looks like (for replay + width sizing)
 function canonical(step) {
-    return step.atoms.map((a, i) => atomSep(step.atoms, i) + atomText(a)).join("");
+    return step.atoms
+        .map((a, i) => atomSep(step.atoms, i) + atomText(a))
+        .join("");
 }
 const isUrl = (s) => /^https?:\/\/[^\s/]+\.[^\s/]+\/\S+$/i.test(s) || /^git@[^\s:]+:\S+$/i.test(s);
 let stepIndex = 0;
@@ -626,17 +791,51 @@ const steps = [
         test: (s) => /^git\s+init$/i.test(s),
         hint: "Type  git init  to begin.",
         teach: {
-            goal: "Start your repository",
-            why: "Sets up a new, empty repository in the folder where it runs.",
-            parts: [
-                { t: "init", tone: "cmd", why: "create the empty repo (the .git folder)" },
+            // the landing's lesson is just the hook; why/parts stay empty so the swap
+            // into "git add" grows the lesson cleanly instead of flashing stale copy
+            goal: "Your first repository starts here.",
+            why: "",
+            parts: [],
+        },
+        curiosity: {
+            cmd: "git init",
+            // before you run it: nothing exists yet, so the questions look forward
+            pre: [
+                {
+                    q: "what even is git?",
+                    a: "Git keeps a history of your project. <br>Every version you commit is saved, so you can look back, undo a mistake, and try things without fear of losing your work.<br><br>You can think of it as quicksaves in a game where you can choose which one to go back to.",
+                },
+                {
+                    q: "what's <b>git init</b> about to do?",
+                    a: "it turns this plain folder into a git repository, so git can start keeping track of it. you only ever do this once per project.",
+                },
+            ],
+            // after it runs: .git/ now exists, so the questions look back at what happened
+            post: [
+                {
+                    q: "wait, what just happened?",
+                    a: "your folder is now a git repository. nothing about your own files changed, git just added a place to keep track of them.",
+                },
+                {
+                    q: "what's this <b>.git/</b> that showed up?",
+                    a: "that's where git stores everything it remembers: every snapshot you save, the branches you make, and a pointer called HEAD that marks where you are. delete <b>.git/</b> and it's an ordinary folder again.",
+                    points: "dotgit",
+                },
+                {
+                    q: "why do we even need it?",
+                    a: "without it, your files are just files. with it, you get history, undo, branches, and a way to share, everything the rest of this page teaches.",
+                },
             ],
         },
         run: doInit,
     },
     {
         key: "add",
-        atoms: [A("git", "cmd", { sep: "" }), A("add", "cmd"), A(".", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("add", "cmd"),
+            A(".", "val", { free: true }),
+        ],
         test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
         hint: "Stage everything with  git add .  (or  git add -A )",
         teach: {
@@ -644,7 +843,11 @@ const steps = [
             why: "Choose which files go in the next snapshot.",
             parts: [
                 { t: "add", tone: "cmd", why: "stage your changes" },
-                { t: ".  /  -A", tone: "val", why: "the . means everything (so does -A)" },
+                {
+                    t: ".  /  -A",
+                    tone: "val",
+                    why: "the . means everything (so does -A)",
+                },
             ],
         },
         run: doAdd,
@@ -652,7 +855,9 @@ const steps = [
     {
         key: "commit",
         atoms: [
-            A("git", "cmd", { sep: "" }), A("commit", "cmd"), A("-m", "flag"),
+            A("git", "cmd", { sep: "" }),
+            A("commit", "cmd"),
+            A("-m", "flag"),
             ...msgAtoms("first commit"),
         ],
         test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
@@ -667,7 +872,11 @@ const steps = [
             parts: [
                 { t: "commit", tone: "cmd", why: "save that snapshot to history" },
                 { t: "-m", tone: "flag", why: "attach a short message" },
-                { t: '"message"', tone: "val", why: "a short note describing what this snapshot changed" },
+                {
+                    t: '"message"',
+                    tone: "val",
+                    why: "a short note describing what this snapshot changed",
+                },
             ],
         },
         run: doCommit,
@@ -675,10 +884,14 @@ const steps = [
     {
         key: "remote",
         atoms: [
-            A("git", "cmd", { sep: "" }), A("remote", "cmd"), A("add", "cmd"),
+            A("git", "cmd", { sep: "" }),
+            A("remote", "cmd"),
+            A("add", "cmd"),
             A("origin", "val", { free: true }),
-            A("https://", "flag"), A("github.com/", "flag", { sep: "" }),
-            A("user", "flag", { sep: "", free: true }), A("/my-site.git", "flag", { sep: "" }),
+            A("https://", "flag"),
+            A("github.com/", "flag", { sep: "" }),
+            A("user", "flag", { sep: "", free: true }),
+            A("/my-site.git", "flag", { sep: "" }),
         ],
         test: (s) => {
             const m = s.match(/^git\s+remote\s+add\s+(\S+)\s+(\S+)$/i);
@@ -691,9 +904,22 @@ const steps = [
             why: "A remote is a copy of your project that lives online, so your work stays safe even if something happens to your computer. This points your repo at one.",
             note: "Optional, and easiest to set up now, before you start branching. Git works fine with no remote at all.",
             parts: [
-                { t: "remote add", tone: "cmd", span: 2, why: "save a link to a copy of your repo kept elsewhere" },
-                { t: "origin", tone: "val", why: "the nickname we give the url, so you can type it instead of the full address next time" },
-                { t: "the url", tone: "flag", why: "the address where the remote copy lives, usually in the cloud" },
+                {
+                    t: "remote add",
+                    tone: "cmd",
+                    span: 2,
+                    why: "save a link to a copy of your repo kept elsewhere",
+                },
+                {
+                    t: "origin",
+                    tone: "val",
+                    why: "the nickname we give the url, so you can type it instead of the full address next time",
+                },
+                {
+                    t: "the url",
+                    tone: "flag",
+                    why: "the address where the remote copy lives, usually in the cloud",
+                },
             ],
         },
         run: doRemoteAdd,
@@ -701,8 +927,11 @@ const steps = [
     {
         key: "push",
         atoms: [
-            A("git", "cmd", { sep: "" }), A("push", "cmd"), A("-u", "flag"),
-            A(() => remoteName, "val", { free: true }), A("main", "val"),
+            A("git", "cmd", { sep: "" }),
+            A("push", "cmd"),
+            A("-u", "flag"),
+            A(() => remoteName, "val", { free: true }),
+            A("main", "val"),
         ],
         test: (s) => /^git\s+push\s+-u\s+\S+\s+main$/i.test(s),
         hint: "Send your commit up:  git push -u origin main",
@@ -711,16 +940,32 @@ const steps = [
             why: "Upload your commit so the remote has it too. This is the first time your work leaves your computer — the remote now holds a copy of your tree.",
             parts: [
                 { t: "push", tone: "cmd", why: "upload your commits to the remote" },
-                { t: "-u", tone: "flag", why: "upstream: tie this branch to the remote so next time you can just type git push" },
-                { t: "origin", tone: "val", why: "which remote to send to (the nickname you chose)" },
-                { t: "main", tone: "val", why: "which branch to send (main is your default branch)" },
+                {
+                    t: "-u",
+                    tone: "flag",
+                    why: "upstream: tie this branch to the remote so next time you can just type git push",
+                },
+                {
+                    t: "origin",
+                    tone: "val",
+                    why: "which remote to send to (the nickname you chose)",
+                },
+                {
+                    t: "main",
+                    tone: "val",
+                    why: "which branch to send (main is your default branch)",
+                },
             ],
         },
         run: doPush,
     },
     {
         key: "branch",
-        atoms: [A("git", "cmd", { sep: "" }), A("branch", "cmd"), A("feature", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("branch", "cmd"),
+            A("feature", "val", { free: true }),
+        ],
         test: (s) => /^git\s+branch\s+\S+$/i.test(s),
         extract: (s) => s.split(/\s+/)[2] ?? "feature",
         hint: "Name a branch:  git branch feature",
@@ -728,15 +973,27 @@ const steps = [
             goal: "Start a branch",
             why: "A branch is a separate line of work, so you can try things without touching main.",
             parts: [
-                { t: "branch", tone: "cmd", why: "make a new branch at the current commit" },
-                { t: "feature", tone: "val", why: "its name, yours to choose (here: feature)" },
+                {
+                    t: "branch",
+                    tone: "cmd",
+                    why: "make a new branch at the current commit",
+                },
+                {
+                    t: "feature",
+                    tone: "val",
+                    why: "its name, yours to choose (here: feature)",
+                },
             ],
         },
         run: doBranch,
     },
     {
         key: "checkout",
-        atoms: [A("git", "cmd", { sep: "" }), A("checkout", "cmd"), A("feature", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("checkout", "cmd"),
+            A("feature", "val", { free: true }),
+        ],
         test: (s) => /^git\s+checkout\s+\S+$/i.test(s),
         extract: (s) => s.split(/\s+/)[2] ?? "feature",
         hint: "Switch to it:  git checkout feature",
@@ -752,7 +1009,11 @@ const steps = [
     },
     {
         key: "add2",
-        atoms: [A("git", "cmd", { sep: "" }), A("add", "cmd"), A(".", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("add", "cmd"),
+            A(".", "val", { free: true }),
+        ],
         test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
         hint: "Stage your change with  git add .",
         teach: {
@@ -760,7 +1021,11 @@ const steps = [
             why: "You edited index.html on the feature branch. Stage it so it goes in the next commit.",
             parts: [
                 { t: "add", tone: "cmd", why: "stage the change you just made" },
-                { t: ".  /  -A", tone: "val", why: "the . means everything you changed" },
+                {
+                    t: ".  /  -A",
+                    tone: "val",
+                    why: "the . means everything you changed",
+                },
             ],
         },
         run: doAdd,
@@ -768,7 +1033,9 @@ const steps = [
     {
         key: "commit2",
         atoms: [
-            A("git", "cmd", { sep: "" }), A("commit", "cmd"), A("-m", "flag"),
+            A("git", "cmd", { sep: "" }),
+            A("commit", "cmd"),
+            A("-m", "flag"),
             ...msgAtoms("add feature"),
         ],
         test: (s) => /^git\s+commit\s+-m\s+(["']).+?\1\s*$/i.test(s),
@@ -783,14 +1050,22 @@ const steps = [
             parts: [
                 { t: "commit", tone: "cmd", why: "save the snapshot on feature" },
                 { t: "-m", tone: "flag", why: "attach a short message" },
-                { t: '"message"', tone: "val", why: "describe the change (here: add feature)" },
+                {
+                    t: '"message"',
+                    tone: "val",
+                    why: "describe the change (here: add feature)",
+                },
             ],
         },
         run: doCommit,
     },
     {
         key: "checkout-main",
-        atoms: [A("git", "cmd", { sep: "" }), A("checkout", "cmd"), A("main", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("checkout", "cmd"),
+            A("main", "val", { free: true }),
+        ],
         test: (s) => /^git\s+checkout\s+main$/i.test(s),
         extract: (s) => s.split(/\s+/)[2] ?? "main",
         hint: "Go back to main first:  git checkout main",
@@ -799,14 +1074,22 @@ const steps = [
             why: "You merge into the branch you're standing on, so move onto main before bringing the feature in.",
             parts: [
                 { t: "checkout", tone: "cmd", why: "move HEAD back onto main" },
-                { t: "main", tone: "val", why: "the branch you want the feature merged into" },
+                {
+                    t: "main",
+                    tone: "val",
+                    why: "the branch you want the feature merged into",
+                },
             ],
         },
         run: doCheckout,
     },
     {
         key: "merge",
-        atoms: [A("git", "cmd", { sep: "" }), A("merge", "cmd"), A("feature", "val", { free: true })],
+        atoms: [
+            A("git", "cmd", { sep: "" }),
+            A("merge", "cmd"),
+            A("feature", "val", { free: true }),
+        ],
         test: (s) => /^git\s+merge\s+\S+$/i.test(s),
         extract: (s) => s.split(/\s+/)[2] ?? "feature",
         hint: "Bring the branch in:  git merge feature",
@@ -814,8 +1097,16 @@ const steps = [
             goal: "Merge the branch back",
             why: "Combine the feature branch's commit into main, so main has all the work. The two lanes rejoin.",
             parts: [
-                { t: "merge", tone: "cmd", why: "join another branch's commits into this one" },
-                { t: "feature", tone: "val", why: "the branch whose work you're bringing in" },
+                {
+                    t: "merge",
+                    tone: "cmd",
+                    why: "join another branch's commits into this one",
+                },
+                {
+                    t: "feature",
+                    tone: "val",
+                    why: "the branch whose work you're bringing in",
+                },
             ],
         },
         run: doMerge,
@@ -829,7 +1120,11 @@ const steps = [
             goal: "Send the merge up",
             why: "You already set the upstream with -u, so a bare git push sends main — merge and all — to the remote. The remote tree catches up to yours.",
             parts: [
-                { t: "push", tone: "cmd", why: "upload the new commits to the remote you already linked" },
+                {
+                    t: "push",
+                    tone: "cmd",
+                    why: "upload the new commits to the remote you already linked",
+                },
             ],
         },
         run: doPush,
@@ -858,6 +1153,7 @@ let lessonSwapping = false;
 function renderTeach(teach) {
     goalEl.textContent = teach.goal;
     whyEl.textContent = teach.why;
+    whyEl.hidden = !teach.why;
     noteEl.textContent = teach.note ?? "";
     noteEl.hidden = !teach.note;
     activeParts = teach.parts;
@@ -916,7 +1212,8 @@ function renderActivePart(force = false, instant = false) {
         return;
     activePart = idx;
     // instant swap (step change) or reduced motion: no scroll
-    if (instant || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (instant ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         partsEl.replaceChildren();
         if (idx >= 0)
             partsEl.appendChild(buildPartRow(activeParts[idx]));
@@ -948,7 +1245,10 @@ function showStep(i) {
         setTimeout(() => {
             renderTeach(teach);
             lesson.style.opacity = "";
-            positionStage(false);
+            // glide while docking off the landing (so the command line rides the dock
+            // smoothly); snap for in-place lesson swaps between docked steps
+            positionStage(docking);
+            docking = false;
             lessonSwapping = false;
         }, 200);
     }
@@ -978,10 +1278,12 @@ function suggestFrom(atoms, start, includeFirstSep) {
 // ghost: the rest of the command keeps previewing.
 function analyze(typed, atoms) {
     let pos = 0, html = "", ghost = "", chunk = "", invalid = false, chunkSet = false;
-    const setChunk = (s) => { if (!chunkSet) {
-        chunk = s;
-        chunkSet = true;
-    } };
+    const setChunk = (s) => {
+        if (!chunkSet) {
+            chunk = s;
+            chunkSet = true;
+        }
+    };
     const span = (tone, s) => `<span class="hl-${tone}">${esc(s)}</span>`;
     for (let a = 0; a < atoms.length; a++) {
         const sep = atomSep(atoms, a);
@@ -1018,12 +1320,15 @@ function analyze(typed, atoms) {
         }
         if (atoms[a].free) {
             const next = atoms[a + 1];
-            const stop = next ? (atomSep(atoms, a + 1) || atomText(next)[0] || " ") : " ";
+            const stop = next
+                ? atomSep(atoms, a + 1) || atomText(next)[0] || " "
+                : " ";
             const stopIdx = rem.indexOf(stop);
             if (stopIdx === -1) {
                 html += span(atoms[a].tone, rem);
                 pos = typed.length;
-                if (rem.length < text.length && text.toLowerCase().startsWith(rem.toLowerCase())) {
+                if (rem.length < text.length &&
+                    text.toLowerCase().startsWith(rem.toLowerCase())) {
                     // still completing this slot's suggestion
                     ghost = text.slice(rem.length) + suggestFrom(atoms, a + 1, true);
                     setChunk(text.slice(rem.length));
@@ -1056,7 +1361,9 @@ function analyze(typed, atoms) {
         const spaceIdx = rem.indexOf(" ");
         const word = spaceIdx === -1 ? rem : rem.slice(0, spaceIdx);
         let cp = 0;
-        while (cp < word.length && cp < text.length && word[cp].toLowerCase() === text[cp].toLowerCase())
+        while (cp < word.length &&
+            cp < text.length &&
+            word[cp].toLowerCase() === text[cp].toLowerCase())
             cp++;
         html += `<span class="hl-invalid">${cp ? span(atoms[a].tone, word.slice(0, cp)) : ""}<span class="hl-err">${esc(word.slice(cp))}</span></span>`;
         pos += word.length;
@@ -1068,7 +1375,9 @@ function analyze(typed, atoms) {
 function updateInk() {
     const typed = cmd.value;
     const atoms = currentAtoms();
-    const a = atoms ? analyze(typed, atoms) : { html: esc(typed), ghost: "", chunk: "", invalid: false };
+    const a = atoms
+        ? analyze(typed, atoms)
+        : { html: esc(typed), ghost: "", chunk: "", invalid: false };
     const ghost = a.ghost;
     suggestActive = ghost.length > 0;
     let html = a.html;
@@ -1103,7 +1412,9 @@ function syncCliRule() {
     cliRule.setAttribute("viewBox", `0 0 ${w} 12`);
     cliRule.replaceChildren(S.el("path", {
         d: S.linePath(3, 7, w - 3, 7, 4, 0.7),
-        class: "edge-stroke", stroke: COLORS.ink, "stroke-width": 2,
+        class: "edge-stroke",
+        stroke: COLORS.ink,
+        "stroke-width": 2,
     }));
 }
 // Tab completes only the next atom (one word, or one url segment)
@@ -1120,7 +1431,8 @@ function acceptNextWord() {
     updateInk();
 }
 function caretAtEnd() {
-    return cmd.selectionStart === cmd.value.length && cmd.selectionEnd === cmd.value.length;
+    return (cmd.selectionStart === cmd.value.length &&
+        cmd.selectionEnd === cmd.value.length);
 }
 // ---- command line behaviour ----------------------------------------
 function showNudge(text) {
@@ -1132,15 +1444,22 @@ function showInfo(text) {
     nudgeEl.textContent = text;
     nudgeEl.classList.add("show", "info");
 }
-function clearNudge() { nudgeEl.classList.remove("show", "info"); }
+function clearNudge() {
+    nudgeEl.classList.remove("show", "info");
+}
 function shake() {
     form.classList.remove("shake");
     void form.offsetWidth;
     form.classList.add("shake");
 }
+// true only while the stage is gliding off the landing into its docked spot, so
+// the lesson-height re-measure at the end of the swap glides too, instead of
+// snapping mid-glide and making the command line jump.
+let docking = false;
 function dockStage() {
     stage.classList.remove("is-centered");
     stage.classList.add("is-docked");
+    docking = true;
     positionStage(true);
 }
 // Bottom-align the docked stage: pin its lower edge a fixed gap above the
@@ -1187,26 +1506,47 @@ form.addEventListener("submit", async (e) => {
     clearNudge();
     closeFileViewer(); // a new command changes the board: dismiss any open file
     const arg = step.extract ? step.extract(input) : undefined;
+    if (arg !== undefined)
+        persisted.values[step.key] = arg; // remember YOUR value for this step
     cmd.value = "";
     stepIndex++;
+    persisted.step = stepIndex;
+    savePersisted(); // a normal reload resumes right here, with your words
     // advance the lesson + ghost immediately, before the drawing animates
     showStep(stepIndex);
     updateTimeline();
+    // the companion steps back while the action happens, then returns to explain
+    // what just appeared (its "post" set points at the now-real thing)
+    setCompanion(null, "post");
+    // hold `busy` across the WHOLE step — drawing AND the real-git replay — so a
+    // second Enter or a timeline click can't run a concurrent replay on the
+    // shared in-memory fs. finally guarantees the lock is released even if the
+    // replay throws (otherwise the UI would freeze).
     busy = true;
-    await step.run(arg);
-    busy = false;
-    centerOnHead();
-    if (stepIndex >= steps.length)
-        showEndState();
-    renderFileTree();
-    renderRemoteTree();
-    renderRemoteGraph();
-    updateLayout();
+    try {
+        await step.run(arg);
+        centerOnHead();
+        if (stepIndex >= steps.length)
+            showEndState();
+        if (step.key === "commit")
+            lastCommitMsg = arg ?? lastCommitMsg; // replay with the real message
+        await refreshRepo(); // real git -> tree + states
+        renderRemoteTree();
+        renderRemoteGraph();
+        updateLayout();
+        syncCompanion();
+    }
+    finally {
+        busy = false;
+    }
     // landing on the feature branch means "you edited index.html": play it out
     if (stepIndex === stepIdx("add2"))
         void playEditSequence();
 });
-cmd.addEventListener("input", () => { clearNudge(); updateInk(); });
+cmd.addEventListener("input", () => {
+    clearNudge();
+    updateInk();
+});
 cmd.addEventListener("keydown", (e) => {
     if (e.key === "Tab" && suggestActive) {
         e.preventDefault();
@@ -1230,105 +1570,203 @@ cmd.addEventListener("scroll", () => {
 // dismissed — it permanently eats half the screen. So there we let the user
 // tap the command line when they want to type. On desktop we keep the input
 // focused so typing always lands without clicking.
-const isPhone = window.matchMedia("(max-width: 760px)").matches
-    || ("ontouchstart" in window);
+const isPhone = window.matchMedia("(max-width: 760px)").matches || "ontouchstart" in window;
+// ...but never fight the user while they're selecting text. A learner should be
+// able to drag across a label (to copy it, or paste it into a chatbot) without
+// the input yanking focus back and collapsing the selection. So while the mouse
+// is down (a drag in progress) or any text is selected, we leave focus alone.
+let pointerDown = false;
+document.addEventListener("mousedown", () => {
+    pointerDown = true;
+});
+document.addEventListener("mouseup", () => {
+    pointerDown = false;
+});
+// in learn mode, a click anywhere outside the companion means "I'm done looking,
+// take me back to continuing" — let the focused question go
+document.addEventListener("click", (e) => {
+    if (!openBtn)
+        return;
+    if (!companionEl.contains(e.target))
+        closeCurio(openBtn);
+});
+function hasSelection() {
+    const sel = window.getSelection();
+    return !!sel && !sel.isCollapsed && sel.toString().length > 0;
+}
 function keepFocus() {
     if (isPhone)
         return;
+    if (pointerDown || hasSelection())
+        return; // mid-drag or text selected: leave it be
     if (!document.hidden)
         cmd.focus();
 }
 cmd.addEventListener("blur", () => requestAnimationFrame(keepFocus));
 document.addEventListener("click", keepFocus);
 // ---- file tree (left) ----------------------------------------------
-const PROJECT = { root: "my-site", files: ["index.html", "style.css", "app.js"] };
+const PROJECT = {
+    root: "my-site",
+    files: ["index.html", "style.css", "app.js"],
+};
 const EDIT_FILE = PROJECT.files[0]; // the file we "edit" on the feature branch
 // one check = saved in a local commit; two checks = delivered to the remote
-const MARK = { plain: "", untracked: "·", modified: "M", staged: "+", committed: "✓", pushed: "✓✓" };
+const MARK = {
+    plain: "",
+    untracked: "·",
+    modified: "M",
+    staged: "+",
+    committed: "✓",
+    pushed: "✓✓",
+};
 // step index of a step by key (so inserting steps doesn't break thresholds)
 function stepIdx(key) {
     return steps.findIndex((s) => s.key === key);
 }
-// the baseline disk state for the project (stepIndex is the next step to do)
-function fileStateForStep(i) {
-    if (i <= stepIdx("init"))
-        return "plain";
-    if (i <= stepIdx("add"))
-        return "untracked";
-    if (i <= stepIdx("commit"))
-        return "staged";
-    return "committed";
-}
 // has this committed file actually reached the remote? The first push sends
 // every file; index.html is re-committed on the branch (commit2), so it falls
 // behind the remote again until that work is pushed with the merge (push2).
+// (The remote is still simulated; this overlays "pushed" on top of real state.)
 function isPushed(file) {
     if (stepIndex <= stepIdx("push"))
         return false; // first push not done
-    if (file === EDIT_FILE && stepIndex > stepIdx("commit2") && stepIndex <= stepIdx("push2"))
+    if (file === EDIT_FILE &&
+        stepIndex > stepIdx("commit2") &&
+        stepIndex <= stepIdx("push2"))
         return false; // edited again, awaiting push2
     return true;
-}
-// per-file state: index.html gets edited on the branch, so it diverges from the
-// baseline between checkout and the feature commit
-function fileState(file) {
-    if (file === EDIT_FILE) {
-        if (stepIndex === stepIdx("add2"))
-            return "modified"; // edited, not staged
-        if (stepIndex === stepIdx("commit2"))
-            return "staged"; // staged the edit
-    }
-    const base = fileStateForStep(stepIndex);
-    if (base === "committed" && isPushed(file))
-        return "pushed";
-    return base;
 }
 let lastGitPresent = false;
 let wasEditing = false;
 let pushedBefore = new Set(); // files already on the remote last render
-function renderFileTree() {
-    const gitPresent = stepIndex > stepIdx("init");
-    const editing = stepIndex === stepIdx("add2");
-    const remoteExists = stepIndex > stepIdx("remote"); // is there anywhere to push to yet?
-    const pushedNow = new Set();
-    treeList.replaceChildren();
-    const root = document.createElement("li");
-    root.className = "d";
-    root.append(folderIcon(), makeName(`${PROJECT.root}/`));
-    treeList.appendChild(root);
-    if (gitPresent) {
-        const git = document.createElement("li");
-        git.className = "f d--git";
-        if (!lastGitPresent)
-            git.classList.add("is-new");
-        const note = document.createElement("span");
-        note.className = "f__note";
-        note.textContent = "git lives here";
-        git.append(folderIcon(), makeName(".git/"), note);
-        treeList.appendChild(git);
+// the file's state: the BASE (untracked/modified/staged/committed) comes from
+// real git via the snapshot; the still-simulated branch edit + remote add the
+// "modified on the branch" / "pushed" overlays on top, until those are real too.
+function overlaidState(file, base) {
+    if (file === EDIT_FILE && stepIndex === stepIdx("add2"))
+        return "modified";
+    if (file === EDIT_FILE && stepIndex === stepIdx("commit2"))
+        return "staged";
+    if (base === "committed" && isPushed(file))
+        return "pushed";
+    return base;
+}
+function noteSpan(text) {
+    const n = document.createElement("span");
+    n.className = "f__note";
+    n.textContent = text;
+    return n;
+}
+// a folder row + its (collapsed/animatable) contents wrapper
+function buildFolder(name, path, open, cls, opts = {}) {
+    const row = document.createElement("li");
+    row.className =
+        `${cls} is-expandable is-folder` +
+            (open ? " is-open" : "") +
+            (opts.isNew ? " is-new" : "");
+    row.dataset.path = path;
+    row.append(open ? folderIconOpen() : folderIcon(), makeNameUnderlined(name));
+    if (opts.note)
+        row.appendChild(noteSpan(opts.note));
+    const wrap = document.createElement("li");
+    wrap.className =
+        "tree__subwrap" +
+            (opts.rootWrap ? " tree__subwrap--root" : "") +
+            (open ? " is-open" : "");
+    const sub = document.createElement("ul");
+    sub.className = "tree__sub";
+    wrap.appendChild(sub);
+    return { row, sub, wrap };
+}
+// a project/remote file row: state colour + mark + hover note, opens in the editor
+function buildFileRow(fr) {
+    const li = document.createElement("li");
+    li.className =
+        fr.state === "plain" ? "f is-openable" : `f f--${fr.state} is-openable`;
+    li.dataset.file = fr.file;
+    if (fr.flash === "edited")
+        li.classList.add("is-edited");
+    if (fr.flash === "pushed")
+        li.classList.add("is-pushed-now");
+    li.append(fileIcon(fr.file), makeNameUnderlined(fr.name));
+    if (MARK[fr.state]) {
+        const m = document.createElement("span");
+        m.className = "f__mark";
+        m.textContent = MARK[fr.state];
+        li.appendChild(m);
     }
-    PROJECT.files.forEach((f, fi) => {
-        const st = fileState(f);
-        const li = document.createElement("li");
-        li.className = st === "plain" ? "f is-openable" : `f f--${st} is-openable`;
-        li.dataset.file = f; // click to open it in the editor
-        if (f === EDIT_FILE && st === "modified" && !wasEditing)
-            li.classList.add("is-edited");
-        if (st === "pushed")
-            pushedNow.add(f);
-        // the moment a file lands on the remote, give it a quick purple flash
-        if (st === "pushed" && !pushedBefore.has(f))
-            li.classList.add("is-pushed-now");
-        const name = makeName(f);
-        name.appendChild(makeUnderline(fi * 9 + 5)); // sketched hover underline
-        li.append(fileIcon(f), name);
-        if (MARK[st]) {
-            const m = document.createElement("span");
-            m.className = "f__mark";
-            m.textContent = MARK[st];
-            li.appendChild(m);
-        }
-        // spell out the commit-vs-push distinction next to the file
+    if (fr.note)
+        li.appendChild(noteSpan(fr.note));
+    return li;
+}
+// render a whole repo (local or remote) into its tree container
+function renderTree(tree, model) {
+    tree.el.replaceChildren();
+    underlineSeed = 0;
+    if (model.url) {
+        const u = document.createElement("li");
+        u.className = "remote-url";
+        u.textContent = model.url;
+        tree.el.appendChild(u);
+    }
+    // <root>/ is the collapsible project folder; everything lives inside it
+    const rootF = buildFolder(`${model.root}/`, "root", tree.open.has("root"), "d", { rootWrap: true });
+    tree.el.append(rootF.row, rootF.wrap);
+    if (model.git) {
+        const gitF = buildFolder(".git/", ".git", tree.open.has(".git"), "f d--git", { note: model.gitNote, isNew: model.gitNew });
+        rootF.sub.append(gitF.row, gitF.wrap);
+        if (model.git.length)
+            model.git.forEach((n, i) => appendGitNode(tree, gitF.sub, n, i));
+        else
+            gitF.sub.appendChild(emptyRow());
+    }
+    for (const fr of model.files)
+        rootF.sub.appendChild(buildFileRow(fr));
+    if (!model.files.length && model.emptyMsg) {
+        const e = document.createElement("li");
+        e.className = "remote-empty";
+        e.textContent = model.emptyMsg;
+        rootF.sub.appendChild(e);
+    }
+}
+// render one real .git node into a tree. Folders nest recursively (a subwrap
+// that opens); files are openable rows that show their contents in the editor.
+function appendGitNode(tree, ul, node, idx) {
+    const open = tree.open.has(node.path);
+    const row = document.createElement("li");
+    row.className = "tree__subitem";
+    row.dataset.path = node.path;
+    row.style.setProperty("--i", String(idx));
+    if (node.isDir) {
+        row.classList.add("is-expandable", "is-folder");
+        if (open)
+            row.classList.add("is-open");
+        row.append(open ? folderIconOpen() : folderIcon(), makeNameUnderlined(node.name), noteSpan(node.note));
+        ul.appendChild(row);
+        const wrap = document.createElement("li");
+        wrap.className = "tree__subwrap" + (open ? " is-open" : "");
+        const sub = document.createElement("ul");
+        sub.className = "tree__sub";
+        const kids = node.children ?? [];
+        if (kids.length)
+            kids.forEach((c, i) => appendGitNode(tree, sub, c, i));
+        else
+            sub.appendChild(emptyRow()); // an opened-but-empty folder still says so
+        wrap.appendChild(sub);
+        ul.appendChild(wrap);
+    }
+    else {
+        row.classList.add("is-openable", "is-gitfile");
+        row.append(fileIcon(node.name), makeNameUnderlined(node.name), noteSpan(node.note));
+        ul.appendChild(row);
+    }
+}
+// ---- the local working tree's model + render ------------------------
+function localModel() {
+    const remoteExists = stepIndex > stepIdx("remote");
+    const states = new Map((snap?.files ?? []).map((f) => [f.name, f.state]));
+    const files = PROJECT.files.map((f) => {
+        const st = overlaidState(f, states.get(f) ?? "plain");
         let note = "";
         if (f === EDIT_FILE && st === "modified")
             note = "just edited";
@@ -1336,17 +1774,37 @@ function renderFileTree() {
             note = "pushed";
         else if (st === "committed" && remoteExists)
             note = "committed, not pushed";
-        if (note) {
-            const n = document.createElement("span");
-            n.className = "f__note";
-            n.textContent = note;
-            li.appendChild(n);
-        }
-        treeList.appendChild(li);
+        const flash = f === EDIT_FILE && st === "modified" && !wasEditing
+            ? "edited"
+            : st === "pushed" && !pushedBefore.has(f)
+                ? "pushed"
+                : undefined;
+        return { name: f, file: f, state: st, note, flash };
     });
-    lastGitPresent = gitPresent;
-    wasEditing = editing;
-    pushedBefore = pushedNow;
+    return {
+        root: PROJECT.root,
+        git: snap?.inited ? snap.git : null,
+        gitNote: "git lives here",
+        gitNew: !!snap?.inited && !lastGitPresent,
+        files,
+    };
+}
+function renderFileTree() {
+    const model = localModel();
+    renderTree(localTree, model);
+    lastGitPresent = !!snap?.inited;
+    wasEditing = stepIndex === stepIdx("add2");
+    pushedBefore = new Set(model.files.filter((f) => f.state === "pushed").map((f) => f.name));
+}
+function emptyRow() {
+    const li = document.createElement("li");
+    li.className = "tree__subitem tree__empty";
+    li.style.setProperty("--i", "0");
+    const n = document.createElement("span");
+    n.className = "f__note";
+    n.textContent = "(empty for now)";
+    li.appendChild(n);
+    return li;
 }
 function makeName(text) {
     const s = document.createElement("span");
@@ -1354,11 +1812,22 @@ function makeName(text) {
     s.textContent = text;
     return s;
 }
+// a name that grows the sketched hover underline, the shared "this row is
+// interactive" cue used on every clickable row (folder or file)
+let underlineSeed = 0;
+function makeNameUnderlined(text) {
+    const name = makeName(text);
+    name.appendChild(makeUnderline(underlineSeed++ * 9 + 5));
+    return name;
+}
 // ---- hand-drawn icons (same inked language as the board) ------------
 // Built from the sketch helpers so the wobble matches everything else. Each is
 // a 24x24 viewBox; colour comes from currentColor (set per type in CSS).
 function mkIcon(kind) {
-    const svg = S.el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" });
+    const svg = S.el("svg", {
+        viewBox: "0 0 24 24",
+        "aria-hidden": "true",
+    });
     svg.setAttribute("class", `ic ic--${kind}`);
     return svg;
 }
@@ -1368,30 +1837,100 @@ function icStroke(svg, d) {
 // a sheet of paper with a folded corner and a couple of text lines
 function fileIcon(file) {
     const svg = mkIcon(langOf(file)); // html / css / js -> colour
-    icStroke(svg, S.smooth([[6.4, 3.6], [13.6, 3.3], [18.6, 8.2], [18.3, 20.4], [5.8, 20.6], [6.1, 3.7]], true));
-    icStroke(svg, S.smooth([[13.4, 3.6], [13.9, 8.1], [18.4, 7.9]])); // the fold
-    icStroke(svg, S.smooth([[8.6, 12.4], [15.2, 12.0]])); // text line
-    icStroke(svg, S.smooth([[8.5, 15.4], [14.4, 15.1]])); // text line
+    icStroke(svg, S.smooth([
+        [6.4, 3.6],
+        [13.6, 3.3],
+        [18.6, 8.2],
+        [18.3, 20.4],
+        [5.8, 20.6],
+        [6.1, 3.7],
+    ], true));
+    icStroke(svg, S.smooth([
+        [13.4, 3.6],
+        [13.9, 8.1],
+        [18.4, 7.9],
+    ])); // the fold
+    icStroke(svg, S.smooth([
+        [8.6, 12.4],
+        [15.2, 12.0],
+    ])); // text line
+    icStroke(svg, S.smooth([
+        [8.5, 15.4],
+        [14.4, 15.1],
+    ])); // text line
     return svg;
 }
 function folderIcon() {
     const svg = mkIcon("folder");
-    icStroke(svg, S.smooth([[3.4, 7.2], [8.8, 7.0], [10.7, 9.0], [20.4, 9.0], [20.6, 18.6], [3.6, 18.8], [3.3, 7.3]], true));
+    icStroke(svg, S.smooth([
+        [3.4, 7.2],
+        [8.8, 7.0],
+        [10.7, 9.0],
+        [20.4, 9.0],
+        [20.6, 18.6],
+        [3.6, 18.8],
+        [3.3, 7.3],
+    ], true));
+    return svg;
+}
+// the open-folder variant: the same folder with its lid swung up, so an opened
+// folder reads differently from a closed one (no chevron needed)
+function folderIconOpen() {
+    const svg = mkIcon("folder");
+    // back wall of the folder
+    icStroke(svg, S.smooth([
+        [3.4, 7.4],
+        [8.7, 7.2],
+        [10.6, 9.1],
+        [20.4, 9.1],
+        [20.5, 11.6],
+    ], false));
+    // the open front: a flap fanned out toward the viewer
+    icStroke(svg, S.smooth([
+        [3.5, 18.7],
+        [6.4, 12.0],
+        [22.6, 11.8],
+        [19.8, 18.6],
+        [3.5, 18.7],
+    ], true));
     return svg;
 }
 function computerIcon() {
     const svg = mkIcon("computer");
-    icStroke(svg, S.smooth([[3.3, 5.4], [20.7, 4.8], [20.4, 15.2], [3.6, 15.5], [3.4, 5.5]], true));
-    icStroke(svg, S.smooth([[11.9, 15.4], [12.1, 18.4]])); // stand
-    icStroke(svg, S.smooth([[8.4, 18.8], [15.6, 18.5]])); // base
+    icStroke(svg, S.smooth([
+        [3.3, 5.4],
+        [20.7, 4.8],
+        [20.4, 15.2],
+        [3.6, 15.5],
+        [3.4, 5.5],
+    ], true));
+    icStroke(svg, S.smooth([
+        [11.9, 15.4],
+        [12.1, 18.4],
+    ])); // stand
+    icStroke(svg, S.smooth([
+        [8.4, 18.8],
+        [15.6, 18.5],
+    ])); // base
     return svg;
 }
 function cloudIcon() {
     const svg = mkIcon("cloud");
     icStroke(svg, S.smooth([
-        [7.5, 16.4], [5.0, 16.2], [3.5, 14.0], [4.6, 11.6], [7.0, 11.2],
-        [7.8, 8.2], [11.0, 7.2], [13.8, 8.4], [14.8, 10.8],
-        [17.6, 10.6], [19.2, 13.0], [18.0, 16.0], [14.5, 16.4], [7.5, 16.4],
+        [7.5, 16.4],
+        [5.0, 16.2],
+        [3.5, 14.0],
+        [4.6, 11.6],
+        [7.0, 11.2],
+        [7.8, 8.2],
+        [11.0, 7.2],
+        [13.8, 8.4],
+        [14.8, 10.8],
+        [17.6, 10.6],
+        [19.2, 13.0],
+        [18.0, 16.0],
+        [14.5, 16.4],
+        [7.5, 16.4],
     ], true));
     return svg;
 }
@@ -1402,12 +1941,15 @@ function cloudIcon() {
 // matching the line — clipping is purely geometric, so it works at any text size.
 function makeUnderline(seed) {
     const svg = S.el("svg", {
-        class: "f__underline", viewBox: "0 0 100 8",
-        preserveAspectRatio: "none", "aria-hidden": "true",
+        class: "f__underline",
+        viewBox: "0 0 100 8",
+        preserveAspectRatio: "none",
+        "aria-hidden": "true",
     });
     svg.appendChild(S.el("path", {
         d: S.linePath(3, 5, 97, 5, seed, 1.1),
-        class: "f__underline-stroke", "stroke-width": 1.8,
+        class: "f__underline-stroke",
+        "stroke-width": 1.8,
     }));
     return svg;
 }
@@ -1445,10 +1987,10 @@ const FILE_TEXT = {
         "}",
     ],
     "app.js": [
-        "const btn = document.querySelector(\"button\");",
+        'const btn = document.querySelector("button");',
         "",
-        "btn.addEventListener(\"click\", () => {",
-        "  alert(\"hello from my site\");",
+        'btn.addEventListener("click", () => {',
+        '  alert("hello from my site");',
         "});",
     ],
 };
@@ -1466,8 +2008,9 @@ function fileLines(file, side) {
         if (hasEdit) {
             const lines = EDIT_LINES.slice();
             lines.splice(EDIT_AT, 0, EDIT_NEW);
-            const pending = side === "local"
-                && stepIndex >= stepIdx("add2") && stepIndex <= stepIdx("commit2");
+            const pending = side === "local" &&
+                stepIndex >= stepIdx("add2") &&
+                stepIndex <= stepIdx("commit2");
             return { lines, changed: pending ? [EDIT_AT] : [] };
         }
     }
@@ -1495,13 +2038,38 @@ const CSS_RULES = [
 const JS_RULES = [
     { re: /\/\/.*/y, cls: "comment" },
     { re: /"[^"]*"|'[^']*'|`[^`]*`/y, cls: "str" },
-    { re: /\b(?:const|let|var|function|return|if|else|for|while|new|import|export|from|class)\b/y, cls: "kw" },
+    {
+        re: /\b(?:const|let|var|function|return|if|else|for|while|new|import|export|from|class)\b/y,
+        cls: "kw",
+    },
     { re: /=>/y, cls: "kw" },
-    { re: /\b(?:document|window|console|alert|querySelector|addEventListener)\b/y, cls: "fn" },
+    {
+        re: /\b(?:document|window|console|alert|querySelector|addEventListener)\b/y,
+        cls: "fn",
+    },
     { re: /\b\d+\b/y, cls: "num" },
     { re: /[A-Za-z_$][\w$]*/y, cls: "val" },
 ];
-const RULES = { html: HTML_RULES, css: CSS_RULES, js: JS_RULES };
+// git's config / HEAD / refs are INI-ish: [sections], key = value, the odd
+// ref: path. Light colour so it reads as structured, not a wall of grey.
+const INI_RULES = [
+    { re: /[#;].*/y, cls: "comment" },
+    { re: /\[[^\]]*\]/y, cls: "tag" }, // [core], [remote "origin"]
+    { re: /"[^"]*"/y, cls: "str" }, // quoted values / subsection names
+    { re: /\bref\b/y, cls: "kw" }, // HEAD's "ref:"
+    { re: /[\w-]+(?=\s*=)/y, cls: "attr" }, // key before =
+    { re: /[=:]/y, cls: "punct" },
+    { re: /\b(?:true|false)\b/y, cls: "kw" },
+    { re: /\b\d+\b/y, cls: "num" },
+    { re: /https?:\/\/\S+|\S+\.git\b/y, cls: "str" }, // urls
+];
+const RULES = {
+    html: HTML_RULES,
+    css: CSS_RULES,
+    js: JS_RULES,
+    txt: [],
+    ini: INI_RULES,
+};
 function highlight(line, lang) {
     const rules = RULES[lang];
     let out = "", i = 0;
@@ -1533,6 +2101,19 @@ function langOf(file) {
 }
 // the language the editor is currently showing (drives highlighting)
 let editorLang = "html";
+// turn a tiny *highlight* markup into HTML: `*word*` becomes a marker-pen swipe,
+// everything else is escaped. Used for the short .git note copy.
+function inlineHL(s) {
+    return s
+        .split(/(\*[^*]+\*)/)
+        .map((seg) => {
+        const esc = seg.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+        return /^\*[^*]+\*$/.test(seg)
+            ? `<span class="hl">${esc.slice(1, -1)}</span>`
+            : esc;
+    })
+        .join("");
+}
 // render the file as `lines`, syntax-highlighted for `editorLang`. `changed`
 // line indices read as a local change; `caret` parks a blinking caret on the
 // line being typed (-1 = none).
@@ -1547,6 +2128,8 @@ function renderEditorLines(lines, opts = {}) {
             row.classList.add("is-changed");
         if (i === caret)
             row.classList.add("is-active");
+        if (i === opts.markLine)
+            row.classList.add("is-key"); // the line worth looking at
         const num = document.createElement("span");
         num.className = "editor__num";
         num.textContent = String(i + 1);
@@ -1571,10 +2154,12 @@ const SHRINK_MS = 560; // full size -> back into the tree row
 function editorAnchor() {
     return { x: window.innerWidth * 0.5, y: window.innerHeight * 0.4 };
 }
-// the on-screen box of a file's row in a tree, if it's there
-function fileRowRect(file, side) {
+// the on-screen box of a row in a tree, if it's there. `key` is a project
+// file's name (data-file) or a .git node's path (data-path).
+function fileRowRect(key, side) {
     const listEl = side === "remote" ? remoteList : treeList;
-    const li = listEl.querySelector(`li[data-file="${file}"]`);
+    const li = listEl.querySelector(`li[data-file="${key}"]`) ??
+        listEl.querySelector(`li[data-path="${key}"]`);
     return li ? li.getBoundingClientRect() : null;
 }
 // the transform that shrinks the centred editor down onto a tree row, so
@@ -1597,30 +2182,41 @@ let editSeqGen = 0;
 // which file (if any) is currently held open by a click-to-view
 let viewerFile = null;
 let viewerSide = "local";
+let editorOpen = false; // is the note currently shown (vs hidden)?
 function closeEditor() {
     editSeqGen++;
     viewerFile = null;
+    editorOpen = false;
     editorEl.style.transition = "none";
     editorEl.style.opacity = "0";
     editorEl.style.pointerEvents = "none";
     editorSave.classList.remove("show");
 }
-// ---- click any file to open it (view only, no editing yet) ----------
-function openFileViewer(file, side, row) {
-    const gen = ++editSeqGen; // cancel the auto-edit or a prior view
-    viewerFile = file;
-    viewerSide = side;
-    editorLang = langOf(file);
-    const { lines, changed } = fileLines(file, side);
-    editorName.textContent = file;
-    editorUnsaved.style.opacity = "0"; // viewing, nothing unsaved
-    editorSave.classList.remove("show");
-    renderEditorLines(lines, { changed });
+// grow the editor out of `row`, so the popup reads as coming from that file.
+// The caller has already set the content and bumped editSeqGen.
+function growEditorFrom(row) {
+    const gen = editSeqGen;
     if (S.prefersReduced) {
         editorEl.style.transition = "none";
         editorEl.style.transform = OPEN_TRANSFORM;
         editorEl.style.opacity = "1";
         editorEl.style.pointerEvents = "auto";
+        editorOpen = true;
+        return;
+    }
+    if (editorOpen) {
+        // already showing a note (e.g. switching to a same-named file in the other
+        // tree): glide to the new contents with a small settle, never blink to 0.
+        editorEl.style.transition = "none";
+        editorEl.style.transform =
+            "translate(-50%, -50%) translate(0px, 0px) scale(0.96)";
+        editorEl.getBoundingClientRect();
+        requestAnimationFrame(() => {
+            if (gen !== editSeqGen)
+                return;
+            editorEl.style.transition = `transform ${GROW_MS}ms var(--ease-settle)`;
+            editorEl.style.transform = OPEN_TRANSFORM;
+        });
         return;
     }
     editorEl.style.transition = "none";
@@ -1630,12 +2226,104 @@ function openFileViewer(file, side, row) {
     requestAnimationFrame(() => {
         if (gen !== editSeqGen)
             return;
-        editorEl.style.transition =
-            `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
+        editorEl.style.transition = `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
         editorEl.style.transform = OPEN_TRANSFORM;
         editorEl.style.opacity = "1";
         editorEl.style.pointerEvents = "auto";
+        editorOpen = true;
     });
+}
+// render a plain explanatory note in the editor body (for files that aren't
+// meant to be read by hand, e.g. packed objects), instead of code lines
+function renderEditorNote(text, later) {
+    editorCode.replaceChildren();
+    const p = document.createElement("p");
+    p.className = "editor__note";
+    p.innerHTML = inlineHL(text);
+    editorCode.appendChild(p);
+    if (later)
+        editorCode.appendChild(editorLater(later));
+}
+// the muted "we'll get to this later" footnote under a .git note's body
+function editorLater(text) {
+    const l = document.createElement("p");
+    l.className = "editor__later";
+    l.innerHTML = inlineHL(text);
+    return l;
+}
+function prependExplain(text) {
+    if (!text)
+        return;
+    const p = document.createElement("p");
+    p.className = "editor__explain";
+    p.innerHTML = inlineHL(text);
+    editorCode.prepend(p);
+}
+// the index isn't text, so we render its real entries as a small git-status-like
+// list, each filename coloured by its actual state (staged vs committed). It
+// updates from step to step even though the file list itself doesn't change.
+function renderEditorIndexRows(rows) {
+    editorCode.replaceChildren();
+    for (const r of rows) {
+        const div = document.createElement("div");
+        div.className = `editor__idx editor__idx--${r.state}`;
+        const name = document.createElement("span");
+        name.className = "editor__idx-name";
+        name.textContent = r.name;
+        const tag = document.createElement("span");
+        tag.className = "editor__idx-tag";
+        tag.textContent = r.state;
+        div.append(name, tag);
+        editorCode.appendChild(div);
+    }
+}
+// ---- click any file to open it in the editor (view only) ------------
+function openFileViewer(file, side, row) {
+    ++editSeqGen; // cancel the auto-edit or a prior view
+    viewerFile = file;
+    viewerSide = side;
+    editorLang = langOf(file);
+    const { lines, changed } = fileLines(file, side);
+    editorName.textContent = file;
+    editorUnsaved.style.opacity = "0"; // viewing, nothing unsaved
+    editorSave.classList.remove("show");
+    renderEditorLines(lines, { changed });
+    growEditorFrom(row);
+}
+// open a .git internal file in the same editor: readable ones (HEAD, config)
+// show their contents; the rest show a note describing what they're for
+function openGitFile(path, row, side = "local") {
+    const node = gitNodeByPath.get(path);
+    if (!node)
+        return;
+    ++editSeqGen;
+    viewerFile = path;
+    viewerSide = side;
+    editorName.textContent = node.name;
+    editorUnsaved.style.opacity = "0";
+    editorSave.classList.remove("show");
+    if (node.indexRows) {
+        // the staging area: a live list of what the index holds + each file's state
+        editorLang = "txt";
+        renderEditorIndexRows(node.indexRows);
+        prependExplain(node.explain);
+        if (node.later)
+            editorCode.appendChild(editorLater(node.later));
+    }
+    else if (node.content != null) {
+        // readable file: one short line, the real contents (key line highlighted),
+        // then a "we'll get to it" footnote. Let the lines do most of the talking.
+        editorLang = "ini"; // [sections], key = value, ref: paths — light colour
+        renderEditorLines(node.content.split("\n"), { markLine: node.markLine });
+        prependExplain(node.explain);
+        if (node.later)
+            editorCode.appendChild(editorLater(node.later));
+    }
+    else {
+        // not meant to be read: a short note about what it's for
+        renderEditorNote(node.desc ?? "This file isn't meant to be read by hand.", node.later);
+    }
+    growEditorFrom(row);
 }
 // fold the open viewer back into its file row
 function closeFileViewer() {
@@ -1643,14 +2331,14 @@ function closeFileViewer() {
         return;
     const rect = fileRowRect(viewerFile, viewerSide);
     viewerFile = null;
+    editorOpen = false;
     editSeqGen++;
     editorEl.style.pointerEvents = "none";
     if (S.prefersReduced) {
         editorEl.style.opacity = "0";
         return;
     }
-    editorEl.style.transition =
-        `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
+    editorEl.style.transition = `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
     editorEl.style.transform = tuckedTransformFor(rect);
     editorEl.style.opacity = "0";
 }
@@ -1676,10 +2364,10 @@ async function playEditSequence() {
     requestAnimationFrame(() => {
         if (gen !== editSeqGen)
             return;
-        editorEl.style.transition =
-            `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
+        editorEl.style.transition = `opacity ${GROW_MS}ms var(--ease-settle), transform ${GROW_MS}ms var(--ease-settle)`;
         editorEl.style.transform = OPEN_TRANSFORM;
         editorEl.style.opacity = "1";
+        editorOpen = true;
     });
     await sleep(GROW_MS + 320);
     if (!alive())
@@ -1706,10 +2394,10 @@ async function playEditSequence() {
     if (!alive())
         return; // longer hold so the save registers
     // 4) fold back into the tree line, then leave index.html marked modified
-    editorEl.style.transition =
-        `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
+    editorEl.style.transition = `opacity ${SHRINK_MS}ms var(--ease-settle), transform ${SHRINK_MS}ms var(--ease-settle)`;
     editorEl.style.transform = tuckedTransformFor(fileRowRect(EDIT_FILE, "local"));
     editorEl.style.opacity = "0";
+    editorOpen = false;
     await sleep(SHRINK_MS + 60);
     if (!alive())
         return;
@@ -1717,21 +2405,50 @@ async function playEditSequence() {
 }
 // clicking a file row opens it; clicking the open file again, its bar, outside,
 // or Escape folds it away. Delegated so re-rendered rows keep working.
-function wireFileViewer() {
-    const onList = (listEl, side) => {
-        listEl.addEventListener("click", (e) => {
-            const li = e.target.closest("li[data-file]");
-            const file = li?.dataset.file;
-            if (!file || !li)
-                return;
-            if (viewerFile === file && viewerSide === side)
+// one click handler for ANY tree (local or remote): a folder toggles open, a
+// .git file or a project file opens in the note editor. stopPropagation keeps a
+// tree click from also tripping the companion's outside-click dismissal.
+function wireTree(tree) {
+    tree.el.addEventListener("click", (e) => {
+        const t = e.target;
+        const folder = t.closest(".is-folder[data-path]");
+        if (folder) {
+            e.stopPropagation();
+            const path = folder.dataset.path;
+            const willOpen = !tree.open.has(path);
+            setNodeOpen(tree, path, willOpen);
+            // toggling .git by hand while a companion question is peeking into it makes
+            // that the state the peek restores when it closes (don't undo the user)
+            if (path === ".git" &&
+                tree.side === "local" &&
+                openBtn?.dataset.points === "dotgit")
+                gitOpenBeforePeek = willOpen;
+            return;
+        }
+        const gitFile = t.closest(".is-gitfile[data-path]");
+        if (gitFile) {
+            e.stopPropagation();
+            const path = gitFile.dataset.path;
+            if (viewerFile === path && viewerSide === tree.side)
                 closeFileViewer();
             else
-                openFileViewer(file, side, li);
-        });
-    };
-    onList(treeList, "local");
-    onList(remoteList, "remote");
+                openGitFile(path, gitFile, tree.side);
+            return;
+        }
+        const projFile = t.closest("li[data-file]");
+        if (projFile) {
+            e.stopPropagation();
+            const file = projFile.dataset.file;
+            if (viewerFile === file && viewerSide === tree.side)
+                closeFileViewer();
+            else
+                openFileViewer(file, tree.side, projFile);
+        }
+    });
+}
+function wireFileViewer() {
+    wireTree(localTree);
+    wireTree(remoteTree);
     editorEl.addEventListener("click", (e) => {
         if (viewerFile == null)
             return; // the auto-edit ignores clicks
@@ -1751,61 +2468,46 @@ function wireFileViewer() {
             closeFileViewer();
     });
 }
-// ---- remote tree (right) -------------------------------------------
+// ---- the remote panel: the SAME tree, fed a remote model ------------
+// The remote is a copy of your repo online. Once pushed, its .git mirrors the
+// local one exactly (same objects/refs/HEAD), so we reuse the local snapshot's
+// .git for it — clicking the remote's HEAD shows the same real file.
 let lastRemoteShown = false;
 let lastRemotePushed = false;
+function remoteModel() {
+    if (stepIndex <= stepIdx("remote"))
+        return null; // no remote added yet
+    const pushed = stepIndex > stepIdx("push");
+    const files = pushed
+        ? PROJECT.files.map((f) => ({
+            name: f,
+            file: f,
+            state: "committed",
+            flash: lastRemotePushed ? undefined : "pushed",
+        }))
+        : [];
+    return {
+        root: PROJECT.root,
+        url: remoteUrl.replace(/^https?:\/\//, "").replace(/\.git$/, ""),
+        git: pushed && snap?.inited ? snap.git : null, // no .git until something is actually pushed
+        gitNote: "the remote repo",
+        gitNew: !lastRemoteShown,
+        files,
+        emptyMsg: pushed ? undefined : "nothing pushed yet",
+    };
+}
 function renderRemoteTree() {
-    const shown = stepIndex > stepIdx("remote"); // git remote add done
-    const pushed = stepIndex > stepIdx("push"); // git push done
-    remoteTreeEl.classList.toggle("is-shown", shown);
-    remoteList.replaceChildren();
-    if (!shown) {
+    const model = remoteModel();
+    remoteTreeEl.classList.toggle("is-shown", !!model);
+    if (!model) {
+        remoteList.replaceChildren();
         lastRemoteShown = false;
         lastRemotePushed = false;
         return;
     }
-    const url = document.createElement("li");
-    url.className = "remote-url";
-    url.textContent = remoteUrl.replace(/^https?:\/\//, "").replace(/\.git$/, "");
-    remoteList.appendChild(url);
-    const root = document.createElement("li");
-    root.className = "d";
-    root.append(folderIcon(), makeName(`${PROJECT.root}/`));
-    remoteList.appendChild(root);
-    const git = document.createElement("li");
-    git.className = "f d--git";
-    if (!lastRemoteShown)
-        git.classList.add("is-new");
-    const note = document.createElement("span");
-    note.className = "f__note";
-    note.textContent = "the remote repo";
-    git.append(folderIcon(), makeName(".git/"), note);
-    remoteList.appendChild(git);
-    if (pushed) {
-        PROJECT.files.forEach((f, fi) => {
-            const li = document.createElement("li");
-            li.className = "f f--committed is-openable";
-            li.dataset.file = f; // remote files open too
-            if (!lastRemotePushed)
-                li.classList.add("is-new");
-            const name = makeName(f);
-            name.appendChild(makeUnderline(fi * 9 + 31));
-            li.append(fileIcon(f), name);
-            const m = document.createElement("span");
-            m.className = "f__mark";
-            m.textContent = MARK.committed;
-            li.appendChild(m);
-            remoteList.appendChild(li);
-        });
-    }
-    else {
-        const empty = document.createElement("li");
-        empty.className = "remote-empty";
-        empty.textContent = "nothing pushed yet";
-        remoteList.appendChild(empty);
-    }
-    lastRemoteShown = shown;
-    lastRemotePushed = pushed;
+    renderTree(remoteTree, model);
+    lastRemoteShown = true;
+    lastRemotePushed = stepIndex > stepIdx("push");
 }
 // ---- remote mini-graph (the remote's own tree, drawn above the local one) ---
 // The remote is the shared source of truth. On the FIRST push a small copy of
@@ -1852,7 +2554,10 @@ function renderRemoteGraph(allowAnim = true) {
     const firstShow = oldCount === 0;
     // caption so it's clearly the remote, not a second local graph
     const label = S.el("text", {
-        x: cx, y: restY - 52, "text-anchor": "middle", class: "remote-graph-label",
+        x: cx,
+        y: restY - 52,
+        "text-anchor": "middle",
+        class: "remote-graph-label",
     });
     label.textContent = "the remote";
     gRemoteInner.appendChild(label);
@@ -1865,13 +2570,18 @@ function renderRemoteGraph(allowAnim = true) {
         if (i > 0) {
             conn = S.el("path", {
                 d: connectorPath({ x: -REMOTE_GAP, y: 0, r: REMOTE_NODE_R }, { x: 0, y: 0, r: REMOTE_NODE_R }, node.id * 5 + 2),
-                class: "edge-stroke", stroke: COLORS.main, "stroke-width": 2,
+                class: "edge-stroke",
+                stroke: COLORS.main,
+                "stroke-width": 2,
             });
             g.appendChild(conn);
         }
         g.appendChild(S.el("path", {
             d: shapePath(node.shape, 0, 0, REMOTE_NODE_R, node.id * 7 + 1),
-            fill: node.color, stroke: node.color, "stroke-width": 2, "stroke-linejoin": "round",
+            fill: node.color,
+            stroke: node.color,
+            "stroke-width": 2,
+            "stroke-linejoin": "round",
         }));
         gRemoteInner.appendChild(g);
         if (!animate) {
@@ -1909,7 +2619,8 @@ function renderRemoteGraph(allowAnim = true) {
     gRemoteInner.getBoundingClientRect(); // commit the start states
     requestAnimationFrame(() => {
         if (firstShow) {
-            label.style.transition = "transform 1.15s cubic-bezier(.4,0,.2,1), opacity .7s ease";
+            label.style.transition =
+                "transform 1.15s cubic-bezier(.4,0,.2,1), opacity .7s ease";
             label.style.transform = "translateY(0)";
             label.style.opacity = "1";
         }
@@ -1919,7 +2630,8 @@ function renderRemoteGraph(allowAnim = true) {
                 : "transform .8s cubic-bezier(.4,0,.2,1)"; // glide to re-centre
             p.g.style.transform = `translate(${p.finalX}px, ${restY}px)`;
             p.g.style.opacity = "1";
-            if (p.conn) { // draw the new connector in after the node arrives
+            if (p.conn) {
+                // draw the new connector in after the node arrives
                 p.conn.style.transition = "stroke-dashoffset .55s ease 1s";
                 p.conn.style.strokeDashoffset = "0";
             }
@@ -1979,7 +2691,10 @@ function buildTimeline() {
         return btn;
     };
     TIMELINE_TASKS.forEach((t, i) => {
-        const idx = t.keys.map(stepIdx).filter((s) => s >= 0).sort((a, b) => a - b);
+        const idx = t.keys
+            .map(stepIdx)
+            .filter((s) => s >= 0)
+            .sort((a, b) => a - b);
         const first = idx[0], last = idx[idx.length - 1];
         if (i > 0)
             linkInto(timelineEl);
@@ -1988,7 +2703,9 @@ function buildTimeline() {
         group.className = "tl-group";
         // clicking a stop goes TO that point (it becomes the current step), it does
         // not run the task. The milestone lands you at the start of its task.
-        const taskBtn = makeStop("tl-item", "tl-dot", t.label, () => { void seekTo(first); });
+        const taskBtn = makeStop("tl-item", "tl-dot", t.label, () => {
+            void seekTo(first);
+        });
         taskBtn.title = `Go to: ${t.label}`;
         group.appendChild(taskBtn);
         // .tl-sub is a 0fr<->1fr grid that animates to the exact content width; the
@@ -2003,7 +2720,9 @@ function buildTimeline() {
         let order = 0;
         idx.forEach((si) => {
             linkInto(inner, true, order++); // connector from the milestone / previous sub-step
-            const sBtn = makeStop("tl-substep", "tl-dot tl-dot--sub", cmdLabel(steps[si].key), () => { void seekTo(si); });
+            const sBtn = makeStop("tl-substep", "tl-dot tl-dot--sub", cmdLabel(steps[si].key), () => {
+                void seekTo(si);
+            });
             sBtn.title = `Go to: ${cmdLabel(steps[si].key)}`;
             sBtn.style.setProperty("--i", String(order++));
             inner.appendChild(sBtn);
@@ -2027,7 +2746,9 @@ function buildTimeline() {
     label.textContent = "complete";
     done.append(star, label);
     done.title = "Jump to the finished loop";
-    done.addEventListener("click", () => { void seekTo(steps.length); });
+    done.addEventListener("click", () => {
+        void seekTo(steps.length);
+    });
     timelineEl.appendChild(done);
     tlComplete = done;
     updateTimeline();
@@ -2065,47 +2786,521 @@ function resetBoard() {
     shownRemoteIds.clear();
     gRemote.style.opacity = "0";
 }
+// the value to replay a step with: YOUR saved value if you set one, otherwise
+// the step's own canonical default — so a custom origin name / commit message /
+// branch name survives a seek (and a reload) instead of snapping back to a canned
+// default, while steps you never customised still replay correctly.
+function argFor(st) {
+    if (!st.extract)
+        return undefined;
+    const saved = persisted.values[st.key];
+    return saved != null ? saved : st.extract(canonical(st));
+}
 async function seekTo(target) {
     if (busy || target === stepIndex)
         return;
     busy = true;
-    closeEditor(); // a seek cancels any in-flight edit and hides the editor
-    resetBoard();
-    if (target <= 0) {
-        stage.classList.remove("is-docked");
-        stage.classList.add("is-centered");
-        stage.style.setProperty("--stage-y", "50%");
+    // try/finally so a thrown replay (real git on the shared fs) can never leave
+    // `busy` or `instant` stuck true and freeze every future command + seek.
+    try {
+        closeEditor(); // a seek cancels any in-flight edit and hides the editor
+        resetBoard();
+        if (target <= 0) {
+            stage.classList.remove("is-docked");
+            stage.classList.add("is-centered");
+            stage.style.setProperty("--stage-y", "50%");
+        }
+        instant = true;
+        try {
+            for (let k = 0; k < target; k++) {
+                await steps[k].run(argFor(steps[k]));
+            }
+            centerOnHead(); // pan instantly while still in replay mode (no glide)
+            if (target >= steps.length)
+                showEndState();
+        }
+        finally {
+            instant = false;
+        }
+        stepIndex = target;
+        persisted.step = target;
+        savePersisted(); // remember where a seek left you, too
+        cmd.value = "";
+        showStep(stepIndex);
+        updateTimeline();
+        await refreshRepo();
+        renderRemoteTree();
+        renderRemoteGraph(false); // seek: the remote tree is just there, no float
+        updateLayout();
+        syncCompanion();
+        if (!isPhone)
+            cmd.focus();
     }
-    instant = true;
-    for (let k = 0; k < target; k++) {
-        const st = steps[k];
-        await st.run(st.extract ? st.extract(canonical(st)) : undefined);
+    finally {
+        busy = false;
     }
-    centerOnHead(); // pan instantly while still in replay mode (no glide)
-    if (target >= steps.length)
-        showEndState();
-    instant = false;
-    stepIndex = target;
-    cmd.value = "";
-    showStep(stepIndex);
-    updateTimeline();
-    renderFileTree();
-    renderRemoteTree();
-    renderRemoteGraph(false); // seek: the remote tree is just there, no float
-    updateLayout();
-    busy = false;
-    if (!isPhone)
-        cmd.focus();
 }
 // ---- boot -----------------------------------------------------------
-function boot() {
+// landing intro: type the file-tree callout in, character by character, in step
+// with the CSS draw-on of the tree, its arrow, the clone note and the roadmap.
+// (reduced motion / phones just get the finished text.)
+function typeLandingCallout() {
+    const label = document.querySelector(".note--tree .note__label");
+    if (!label)
+        return;
+    const text = label.getAttribute("data-text") ?? "";
+    if (S.prefersReduced || isPhone) {
+        label.textContent = text;
+        return;
+    }
+    label.textContent = "";
+    let i = 0;
+    const step = () => {
+        label.textContent = text.slice(0, i);
+        if (i < text.length) {
+            i++;
+            window.setTimeout(step, 24);
+        }
+    };
+    window.setTimeout(step, 800);
+}
+// ---- the curiosity companion -----------------------------------------
+// A persistent bottom-right voice. It renders the current step's questions for
+// the right tense (pre/post), each a tap-to-open button. Opening a question
+// whose answer is about a real thing on the board inks an arrow to it.
+const CARET_PATH = "M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13"; // the hand-drawn ">"
+// arrows currently drawn, keyed by the question button that opened them, so we
+// can retract one on close and redraw them all on resize
+const openArrows = new Map();
+// the one question currently in focus (only one is ever open at a time)
+let openBtn = null;
+let gitOpenBeforePeek = false; // .git open-state before a companion question peeked into it
+// the live snapshot from the REAL git repo (repo.ts) drives the tree + states.
+let snap = null;
+let lastCommitMsg = "first commit";
+const localTree = {
+    el: treeList,
+    open: new Set(["root"]),
+    side: "local",
+};
+const remoteTree = {
+    el: remoteList,
+    open: new Set(["root"]),
+    side: "remote",
+};
+// flat index of every .git *file* by path, so a click can open it in the
+// editor. The remote mirrors the local's .git after push, so one index serves
+// both. Rebuilt from each snapshot.
+let gitNodeByPath = new Map();
+function indexGitNodes(nodes) {
+    for (const n of nodes) {
+        if (n.isDir)
+            indexGitNodes(n.children ?? []);
+        else
+            gitNodeByPath.set(n.path, n);
+    }
+}
+// the real-git commands that should have run by a given step (init/add/commit).
+// Replaying these from scratch reproduces the exact repo state for that step.
+function repoCommandsFor(i) {
+    const cmds = [];
+    if (i > stepIdx("init"))
+        cmds.push({ kind: "init" });
+    if (i > stepIdx("add"))
+        cmds.push({ kind: "add" });
+    if (i > stepIdx("commit"))
+        cmds.push({
+            kind: "commit",
+            message: persisted.values["commit"] ?? lastCommitMsg,
+        });
+    // git remote add really runs (writes .git/config), so the config file shows it
+    if (i > stepIdx("remote"))
+        cmds.push({ kind: "remoteAdd", url: remoteUrl });
+    return cmds;
+}
+// replay real git to the current step, take a fresh snapshot, redraw the tree.
+// The tree's open/closed state persists across steps by default; a step can opt
+// into a tidy (collapsed) tree on arrival with `collapseTree`.
+async function refreshRepo() {
+    await replayTo(repoCommandsFor(stepIndex));
+    snap = await snapshot();
+    gitNodeByPath = new Map();
+    indexGitNodes(snap.git);
+    if (steps[stepIndex]?.collapseTree) {
+        localTree.open.clear();
+        localTree.open.add("root");
+    }
+    renderFileTree();
+}
+// open/close a tree node by path: flips its row + the subwrap that follows it,
+// and (for folders) swaps the closed folder icon for an open one. Animations
+// ride the class change, so we never re-render to toggle.
+function setNodeOpen(tree, path, open) {
+    if (open)
+        tree.open.add(path);
+    else
+        tree.open.delete(path);
+    const row = tree.el.querySelector(`[data-path="${path}"]`);
+    if (!row)
+        return;
+    row.classList.toggle("is-open", open);
+    const sub = row.nextElementSibling;
+    if (sub && sub.classList.contains("tree__subwrap")) {
+        sub.classList.toggle("is-open", open);
+        // opening a folder cascades a staggered write-on over EVERYTHING it reveals,
+        // recursively (nested open folders included) — nothing just blinks in.
+        if (open)
+            revealSubtree(sub);
+    }
+    if (row.classList.contains("is-folder")) {
+        row
+            .querySelector(".ic")
+            ?.replaceWith(open ? folderIconOpen() : folderIcon());
+    }
+}
+// collect a subwrap's currently-visible rows in top-to-bottom order, descending
+// only into nested folders that are themselves open (so hidden rows don't count)
+function collectVisibleRows(sub, acc) {
+    for (const child of Array.from(sub.children)) {
+        if (child.classList.contains("tree__subwrap")) {
+            if (child.classList.contains("is-open")) {
+                const inner = child.querySelector(":scope > .tree__sub");
+                if (inner)
+                    collectVisibleRows(inner, acc);
+            }
+        }
+        else {
+            acc.push(child); // a file/folder/placeholder row
+        }
+    }
+}
+// re-run the write-on entrance on every row a just-opened folder reveals,
+// staggered by visual order, so the whole subtree animates in (not a blink)
+function revealSubtree(wrap) {
+    if (S.prefersReduced)
+        return;
+    const sub = wrap.querySelector(":scope > .tree__sub");
+    if (!sub)
+        return;
+    const rows = [];
+    collectVisibleRows(sub, rows);
+    rows.forEach((r) => r.classList.remove("is-revealing"));
+    void wrap.offsetWidth; // reflow so removing + re-adding restarts the animation
+    rows.forEach((r, i) => {
+        r.style.setProperty("--ri", String(i));
+        r.classList.add("is-revealing");
+    });
+}
+// the companion's .git/ question drives the same folder open as a manual click
+function setGitOpen(open) {
+    if (open)
+        setNodeOpen(localTree, "root", true); // make sure the root is open so .git/ is visible
+    setNodeOpen(localTree, ".git", open);
+}
+// resolve a `points` key to the live board element its arrow should reach
+function companionTarget(points) {
+    switch (points) {
+        case "dotgit":
+            return treeList.querySelector(".d--git");
+        case "node:tip":
+            return gNodes.lastElementChild;
+        case "tag:HEAD":
+            return refPills.get("HEAD") ?? null;
+        default:
+            return null;
+    }
+}
+// draw a hand-drawn arrow from the open answer to its board target, in pixel
+// space (the overlay is a full-viewport SVG with no viewBox)
+function drawCompanionArrow(fromEl, points) {
+    const target = companionTarget(points);
+    if (!target)
+        return null;
+    const a = fromEl.getBoundingClientRect();
+    const b = target.getBoundingClientRect();
+    if (!a.width || !b.width)
+        return null;
+    // start just left of the answer's first line, end just right of the target
+    const x1 = a.left - 6, y1 = a.top + Math.min(16, a.height / 2);
+    const x2 = b.right + 8, y2 = b.top + b.height / 2;
+    // a curve that LEAVES the answer heading left and ARRIVES at .git/ travelling
+    // horizontally, so the arrowhead points straight at it rather than tipping up
+    const dx = x2 - x1;
+    const cx1 = x1 + dx * 0.4, cy1 = y1 + (y2 - y1) * 0.1;
+    const cx2 = x2 + Math.max(70, Math.abs(dx) * 0.32), cy2 = y2; // control sits level, to the right
+    const ns = "http://www.w3.org/2000/svg";
+    const g = document.createElementNS(ns, "g");
+    const shaft = document.createElementNS(ns, "path");
+    shaft.setAttribute("d", `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${cx1.toFixed(1)} ${cy1.toFixed(1)}, ${cx2.toFixed(1)} ${cy2.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`);
+    shaft.setAttribute("pathLength", "1");
+    // arrowhead: two short barbs off the tip, angled back toward the shaft
+    const head = document.createElementNS(ns, "path");
+    const ang = Math.atan2(y2 - cy2, x2 - cx2);
+    const len = 11;
+    const hx1 = x2 - len * Math.cos(ang - 0.42), hy1 = y2 - len * Math.sin(ang - 0.42);
+    const hx2 = x2 - len * Math.cos(ang + 0.42), hy2 = y2 - len * Math.sin(ang + 0.42);
+    head.setAttribute("d", `M ${hx1.toFixed(1)} ${hy1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)} L ${hx2.toFixed(1)} ${hy2.toFixed(1)}`);
+    head.setAttribute("pathLength", "1");
+    if (!S.prefersReduced) {
+        shaft.classList.add("is-drawing");
+        head.classList.add("is-drawing");
+        head.style.animationDelay = "0.4s"; // the head lands after the shaft is drawn
+    }
+    g.append(shaft, head);
+    companionArrows.appendChild(g);
+    return g;
+}
+// retract an arrow by un-drawing it in the SAME direction it was drawn (the
+// stroke keeps travelling toward the target, erasing from the tail), then drop it
+function removeCompanionArrow(q) {
+    const g = openArrows.get(q);
+    if (!g)
+        return;
+    openArrows.delete(q);
+    if (S.prefersReduced) {
+        g.remove();
+        return;
+    }
+    g.querySelectorAll("path").forEach((p, i) => {
+        p.classList.remove("is-drawing");
+        p.style.animationDelay = i === 1 ? "0.3s" : ""; // the head erases just after the shaft
+        p.classList.add("is-erasing");
+    });
+    window.setTimeout(() => g.remove(), 850);
+}
+// re-aim every open arrow (after a resize or relayout moved its endpoints)
+function redrawCompanionArrows() {
+    openArrows.forEach((g, q) => {
+        const points = q.dataset.points;
+        g.remove();
+        openArrows.delete(q);
+        if (points && q.getAttribute("aria-expanded") === "true") {
+            const wrap = q.nextElementSibling;
+            const answer = wrap?.firstElementChild ?? q;
+            const fresh = drawCompanionArrow(answer, points);
+            if (fresh)
+                openArrows.set(q, fresh);
+        }
+    });
+}
+// entering "learn mode": the user has decided that understanding, not
+// continuing, is what matters now, so the command line and its scaffolding
+// recede. You're either continuing or learning, never both at once.
+function enterLearnMode() {
+    document.body.classList.add("is-learning");
+    companionEl.classList.add("is-focus");
+    if (!isPhone)
+        cmd.blur();
+}
+function exitLearnMode() {
+    document.body.classList.remove("is-learning");
+    companionEl.classList.remove("is-focus");
+    if (!isPhone && !pointerDown)
+        cmd.focus();
+}
+// bring a question into focus: it grows, the others step back, the page dims,
+// and (if it points somewhere) an arrow inks out to the real thing
+function openCurio(btn, ans, points) {
+    if (openBtn && openBtn !== btn)
+        closeCurio(openBtn);
+    btn.setAttribute("aria-expanded", "true");
+    btn.parentElement?.classList.add("is-open");
+    openBtn = btn;
+    enterLearnMode();
+    // peek inside .git for the answer, remembering the prior state so closing the
+    // question restores it (rather than force-collapsing a folder the user opened)
+    if (points === "dotgit") {
+        gitOpenBeforePeek = localTree.open.has(".git");
+        setGitOpen(true);
+    }
+    if (points) {
+        // let the answer enlarge first, so the arrow leaves from its settled spot
+        window.setTimeout(() => {
+            if (btn.getAttribute("aria-expanded") !== "true")
+                return;
+            const g = drawCompanionArrow(ans, points);
+            if (g)
+                openArrows.set(btn, g);
+        }, S.prefersReduced ? 0 : 380);
+    }
+}
+// let a question go: retract its arrow + .git/ peek, and if it was the focused
+// one, hand attention back to continuing
+function closeCurio(btn) {
+    btn.setAttribute("aria-expanded", "false");
+    btn.parentElement?.classList.remove("is-open");
+    removeCompanionArrow(btn);
+    if (btn.dataset.points === "dotgit")
+        setGitOpen(gitOpenBeforePeek); // restore prior state
+    if (openBtn === btn) {
+        openBtn = null;
+        exitLearnMode();
+    }
+}
+// build one question + answer block; clicking it pulls it into focus (or, if
+// it's already the focused one, lets it go)
+function curioBlock(c) {
+    const qa = document.createElement("div");
+    qa.className = "companion__qa";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "companion__q";
+    btn.setAttribute("aria-expanded", "false");
+    if (c.points)
+        btn.dataset.points = c.points;
+    btn.innerHTML =
+        `<svg class="companion__caret" viewBox="0 0 16 16" aria-hidden="true">` +
+            `<path class="note-stroke" pathLength="1" d="${CARET_PATH}" /></svg><span>${c.q}</span>`;
+    const wrap = document.createElement("div");
+    wrap.className = "companion__a-wrap";
+    const ans = document.createElement("p");
+    ans.className = "companion__a";
+    ans.innerHTML = c.a;
+    wrap.appendChild(ans);
+    btn.addEventListener("click", () => {
+        if (btn.getAttribute("aria-expanded") === "true")
+            closeCurio(btn);
+        else
+            openCurio(btn, ans, c.points);
+    });
+    qa.append(btn, wrap);
+    return qa;
+}
+// tear down any focus state + arrows when the question set is about to change.
+// It deliberately does NOT touch the tree's open/closed state: advancing a
+// command respects whatever the user (or a prior peek) left open.
+function resetCompanion() {
+    openBtn = null;
+    companionEl.classList.remove("is-focus");
+    document.body.classList.remove("is-learning");
+    openArrows.clear();
+    companionArrows.replaceChildren();
+}
+// show (or hide) the companion for a given step + tense
+function setCompanion(key, phase) {
+    resetCompanion();
+    const step = key ? steps.find((s) => s.key === key) : null;
+    const list = step?.curiosity?.[phase] ?? [];
+    if (!step || !list.length) {
+        companionEl.classList.remove("is-visible");
+        companionList.replaceChildren();
+        return;
+    }
+    companionList.replaceChildren(...list.map(curioBlock));
+    companionEl.classList.add("is-visible");
+}
+// pick what the companion should show for the current machine state: the
+// landing shows init's forward-looking questions; after a command runs we show
+// that command's "what just happened" set (only init has one for now).
+let companionPrimed = false; // has the first landing reveal happened yet?
+function syncCompanion() {
+    companionEl.classList.toggle("is-landing", stepIndex === 0);
+    if (stepIndex === 0) {
+        // first load: let the area fade in in step with the rest of the intro
+        if (!companionPrimed && !S.prefersReduced) {
+            companionEl.style.transitionDelay = "2.4s";
+            window.setTimeout(() => {
+                companionEl.style.transitionDelay = "";
+            }, 3200);
+        }
+        companionPrimed = true;
+        setCompanion("init", "pre");
+        return;
+    }
+    const prev = steps[stepIndex - 1];
+    setCompanion(prev?.curiosity?.post ? prev.key : null, "post");
+}
+// dev helper: ?step=N (index) or ?step=<key> seeks straight to that state on
+// load, so any screen can be screenshotted without typing the whole sequence.
+function applyStepParam() {
+    let v = null;
+    try {
+        v = new URLSearchParams(window.location.search).get("step");
+    }
+    catch {
+        return;
+    }
+    if (!v)
+        return;
+    const target = /^\d+$/.test(v)
+        ? parseInt(v, 10)
+        : steps.findIndex((s) => s.key === v);
+    if (target > 0)
+        void seekTo(target);
+}
+// ---- brand logo: click once to arm, again to restart ----------------
+// Clicking "howtogit.dev" the first time reveals a "click again to restart"
+// hint under it; clicking again wipes the saved session and drops you back on
+// the centred start page. Clicking elsewhere (or waiting) cancels the arming.
+function wireBrand() {
+    const brand = needSel(".brand");
+    const word = needSel(".brand__word");
+    let armed = false;
+    let disarmTimer = 0;
+    const disarm = () => {
+        armed = false;
+        brand.classList.remove("is-armed");
+        if (disarmTimer) {
+            window.clearTimeout(disarmTimer);
+            disarmTimer = 0;
+        }
+    };
+    const restart = () => {
+        disarm();
+        clearPersisted(); // forget the saved session
+        remoteName = "origin"; // seekTo(0) runs no steps,
+        remoteUrl = "https://github.com/you/site.git"; // so reset these by hand
+        lastCommitMsg = "first commit";
+        void seekTo(0); // back to the centred landing
+    };
+    const activate = (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // don't let this same click immediately disarm
+        if (armed) {
+            restart();
+            return;
+        }
+        armed = true;
+        brand.classList.add("is-armed");
+        disarmTimer = window.setTimeout(disarm, 5000); // forget the arming if ignored
+    };
+    word.addEventListener("click", activate);
+    word.addEventListener("keydown", (e) => {
+        const k = e.key;
+        if (k === "Enter" || k === " ")
+            activate(e);
+    });
+    document.addEventListener("click", (e) => {
+        // a click elsewhere cancels it
+        if (armed && !brand.contains(e.target))
+            disarm();
+    });
+}
+// On load: a hard refresh (Ctrl+Shift+R) starts clean; a normal reload restores
+// the saved step and your typed values, replaying the lesson straight to where
+// you left off (custom origin name, commit messages, branch names and all).
+async function restoreSession() {
+    if (isHardRefresh()) {
+        clearPersisted();
+        return;
+    }
+    const p = loadPersisted();
+    if (!p)
+        return;
+    persisted = p;
+    lastCommitMsg = persisted.values["commit"] ?? lastCommitMsg;
+    const target = Math.max(0, Math.min(persisted.step, steps.length));
+    if (target > 0)
+        await seekTo(target);
+}
+async function boot() {
     sizeBoard();
     stage.style.setProperty("--stage-y", "50%");
     drawRule(brandRule, COLORS.main, 11);
     startAmbient();
     showStep(0); // draws the command underline at the right width via updateInk
     buildTimeline();
-    renderFileTree();
+    await refreshRepo(); // seed the real repo + draw the initial tree
     renderRemoteTree();
     renderRemoteGraph(false);
     // No file editor exists yet, so the local tree leads (is-focus) until a remote
@@ -2116,8 +3311,13 @@ function boot() {
     needSel("#filetree .tree__title").prepend(computerIcon());
     needSel("#remotetree .tree__title").prepend(cloudIcon());
     wireFileViewer(); // click any file in either tree to open it
+    wireBrand(); // click the logo once to arm, again to restart
+    typeLandingCallout(); // landing intro: type the file-tree callout in
+    syncCompanion(); // landing: the curiosity companion's forward-looking questions
+    await restoreSession(); // normal reload resumes where you left off; hard refresh starts clean
     if (!isPhone)
         cmd.focus();
+    applyStepParam(); // dev: ?step=N jumps straight to a state for screenshots
 }
 window.addEventListener("resize", () => {
     sizeBoard();
@@ -2126,11 +3326,12 @@ window.addEventListener("resize", () => {
     centerOnHead(); // viewW changed: keep HEAD centred
     renderRemoteGraph(false); // recompute the mini-graph's float-up transform
     updateInk(); // recompute field width + redraw the underline
+    redrawCompanionArrows(); // re-aim any open answer arrows at their moved targets
 });
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot);
+    document.addEventListener("DOMContentLoaded", () => void boot());
 }
 else {
-    boot();
+    void boot();
 }
 //# sourceMappingURL=app.js.map

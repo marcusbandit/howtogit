@@ -19,6 +19,28 @@ total beginner is never lost.
 - `src/app.ts` — the controller: a step machine, the graph model, the command
   line (live token colouring + ghost suggestion + Tab complete), the file
   tree, the remote panel, and the clickable timeline (instant replay/seek).
+- `src/repo.ts` — **the real git backend.** The local repo is an actual git
+  repository run by **isomorphic-git** on a tiny in-memory filesystem, entirely
+  in the browser (no server). `git init/add/commit` genuinely execute and write
+  real `.git` objects/refs/HEAD; the sidebar's file states come from real
+  `git.statusMatrix`, and the `.git/` tree is the real one (curated, with
+  friendly descriptions). Moving the timeline replays the commands from scratch
+  (~4ms, instant) with a fixed author/timestamp so object hashes are stable.
+  Scope today: the **init → add → commit** flow is real; remote/push/branch/merge
+  are still simulated and overlaid on top (the "pushed ✓✓" / branch states).
+  isomorphic-git is vendored as a single browser ESM at
+  `public/vendor/isomorphic-git.mjs` (rebuild via `npm run vendor`).
+- `scripts/shoot.mjs` — headless screenshot harness: drive the app to any step
+  (`--step N`), optionally interact (`--do "<js>"`), and capture a PNG, so any
+  state can be inspected/verified programmatically.
+- **One tree renderer for everything.** The local working tree and the remote
+  panel are two `TreeView` instances (a container + its own open-paths set +
+  side) drawn by the same `renderTree(tree, model)` from a `RepoModel`. All the
+  behaviour (recursive folders, hover notes, the staggered write-on reveal, the
+  note-card editor) lives in the shared `.tree__list` CSS + the shared
+  interaction helpers (`setNodeOpen`/`revealSubtree`/`wireTree`), so a new tree
+  is just a new model. The remote's `.git` reuses the local snapshot (identical
+  after push). Add trees by writing a model, not a renderer.
 
 ## Done
 
@@ -82,6 +104,38 @@ people or other machines change things in the future, that mini-graph changes
 This is how we'll illustrate multiple machines: right now there's just this
 desktop, but later there's a laptop and a desktop, and the remote sits above
 both as the common copy everyone syncs through.
+
+### Curiosity companion + an explorable file tree (the next depth pass)
+
+The bottom-right curiosity companion (per-step `pre`/`post` questions, tap one to
+pull it into focus while the rest dims, answers that ink an arrow to the thing on
+the board) is live for `git init` only. Two directions to grow it:
+
+1. **Carry it through the whole flow.** Each later step (`add`, `commit`,
+   `remote`, `branch`, ...) gets its own `pre`/`post` curiosity data + arrow
+   targets. No new mechanism, just data. Goal: the explanation walks with the
+   user the entire way, so they never feel pushed forward without knowing why.
+
+2. **One unified, explorable file tree. [DONE]** The sidebar was two competing
+   systems (project files with git-state + editor; a separate `.git` explorer
+   with inline reveals). Now it's a single recursive tree with one set of
+   affordances:
+   - Every folder opens/closes on click (closed→open folder icon swap, no
+     chevron). `my-site/`, `.git/`, `objects/`, `refs/` and subfolders all
+     expand; nesting indents one step per level. `objects/`/`refs/` carry
+     fake-but-plausible contents (`e2/` object, `refs/heads/main`, `tags/`).
+   - Every *file* opens in the editor popup: project files show their
+     syntax-highlighted source (and keep their git state — colour, mark, note);
+     readable `.git` files (`HEAD`, `config`, `description`) show their contents;
+     files not meant to be read by hand (packed objects) show a short note
+     describing what they're for.
+   - Every clickable row (folder or file) shares the same hover underline +
+     cursor. Git state still rides on the tracked project files.
+   - The companion's `.git/` question and a direct folder click drive the same
+     open state and the arrow still points at `.git/`.
+
+   Still open here: per-step curiosity content for the rest of the flow (item 1),
+   and richer fake contents as later commands add real objects/refs.
 
 ### Simplified timeline (by task, not by command)
 

@@ -55,6 +55,11 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* on-brand text selection: a learner can grab any label to ask a chatbot,
+   and the highlight reads as a warm marker swipe over the paper rather than
+   default browser blue (reuses the amber of the just-edited file flash). */
+::selection { background: rgba(176, 125, 43, 0.28); }
+
 html, body { height: 100%; }
 
 body {
@@ -91,7 +96,6 @@ body {
   top: clamp(1rem, 3vw, 1.9rem);
   left: clamp(1.1rem, 3vw, 2.2rem);
   z-index: 6;
-  user-select: none;
   width: fit-content;
 }
 .brand__word {
@@ -101,6 +105,13 @@ body {
   line-height: 0.8;
   color: var(--ink);
   display: block;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.brand__word:focus-visible {
+  outline: 2px dashed var(--main);
+  outline-offset: 4px;
+  border-radius: 3px;
 }
 .brand__rule {
   display: block;
@@ -108,6 +119,27 @@ body {
   height: 0.7rem;
   margin-top: 0.1rem;
   overflow: visible;
+}
+/* the "click again to restart" hint: revealed after the first click on the
+   logo, in the same inked hand. A second click (wired in app.ts) restarts. */
+.brand__restart {
+  display: block;
+  font-family: var(--hand);
+  font-size: clamp(0.95rem, 2.4vw, 1.2rem);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-soft);
+  margin-top: 0.2rem;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-4px) rotate(-1.6deg);
+  transform-origin: left center;
+  transition: opacity .22s ease, transform .32s cubic-bezier(.16, 1, .3, 1);
+  pointer-events: none;
+}
+.brand.is-armed .brand__restart {
+  opacity: 1;
+  transform: translateY(0) rotate(-1.6deg);
 }
 
 /* ---- dark-mode toggle (top right, a hand-drawn lightbulb) ----------- */
@@ -240,13 +272,26 @@ body {
   align-items: center;
   gap: 1.1rem;
   padding: 0 1.2rem;
-  transition: top 0.95s var(--ease-settle);
+  transition: top 0.95s var(--ease-settle), opacity 0.4s ease;
   pointer-events: none;
+}
+
+/* learn mode: the user chose to understand rather than continue, so everything
+   that competes for "continue" recedes. The board and file tree stay lit, since
+   they're the very thing being explained (and where the arrow points). */
+body.is-learning #stage,
+body.is-learning .tl-zone,
+body.is-learning #remotetree,
+body.is-learning .landing-notes {
+  opacity: 0.12 !important;
+  pointer-events: none !important;
+  transition: opacity 0.4s ease;
 }
 #stage > * { pointer-events: auto; }
 
 /* ---- the lesson (what + why + the parts of the command) ------------ */
 .lesson {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -288,6 +333,8 @@ body {
   margin-top: 0.45rem;
   font-size: clamp(0.92rem, 2vw, 1.05rem);
 }
+/* on the landing the parts caption is empty, so don't reserve its line */
+.lesson__parts:empty { min-height: 0; margin-top: 0; }
 .part {
   display: flex;
   justify-content: center;
@@ -336,11 +383,450 @@ body {
   .part--in-up, .part--in-down, .part--out-up, .part--out-down { animation: none; }
 }
 
+/* ---- landing (only on the centred first screen, before git init) ----
+   Extra welcome beats that orient a first-timer: a hand-drawn "start here"
+   cue under the lesson, a warm note that cloning comes later, and a sketchy
+   roadmap of the journey. All of it is gated to #stage.is-centered, so the
+   moment the stage docks (after git init) these melt away and never crowd
+   the graph. Kept in the hand-drawn idiom: Caveat, ink, uneven ink-boxes. */
+/* the cue is pulled OUT of the lesson's flow (absolute) so it neither stretches
+   the lesson box nor disturbs positionStage's height maths when the stage docks.
+   It just fades: in on the landing, out the moment git init docks. */
+.lesson__cue {
+  position: absolute;
+  bottom: 100%;          /* sit directly above the command line, never over it */
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  margin-bottom: 0.35rem;
+  color: var(--pen-red);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+#stage.is-centered .lesson__cue { opacity: 1; }
+.lesson__cue-label {
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 1.35rem;
+  line-height: 1;
+  transform: rotate(-4deg);
+}
+.lesson__cue-arrow {
+  width: 2.1rem;
+  height: 1.9rem;
+  overflow: visible;
+  animation: cue-bob 1.7s ease-in-out infinite;
+}
+.cue-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@keyframes cue-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(4px); }
+}
+
+/* clone note + roadmap, pulled below the command line but OUT of #stage's flow
+   (absolute), so the docked stage measures only lesson + cli. They fade out as
+   one when the stage docks. */
+.landing {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.7rem;
+  width: max-content;
+  max-width: 92vw;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+#stage.is-centered .landing { opacity: 1; pointer-events: auto; }
+.landing__clone {
+  font-family: var(--hand);
+  font-weight: 600;
+  font-size: clamp(1.2rem, 2.7vw, 1.55rem);
+  line-height: 1.15;
+  color: var(--ink);
+  max-width: min(40rem, 90vw);
+}
+.landing__road {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.road-chip {
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  padding: 0.14rem 0.7rem 0.22rem;
+  border: 2px solid var(--ink-soft);
+  /* an uneven, hand-drawn ink box */
+  border-radius: 14px 10px 17px 8px / 9px 16px 10px 15px;
+}
+.road-chip--now { color: var(--pen-blue); border-color: var(--pen-blue); }
+.road-chip--clone { color: var(--ink-soft); border-style: dashed; }
+.road-sep {
+  font-family: var(--hand);
+  font-size: 1.2rem;
+  color: var(--ink-soft);
+  opacity: 0.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lesson__cue-arrow { animation: none; }
+}
+
+/* ---- landing annotations (only on the centred first screen) ----------
+   The first screen drops the plain lesson body in favour of hand-drawn
+   callouts that point at the real parts of the page: where your files are,
+   where explanations will show up, and a timeline that hides until you find
+   it. Everything here is gated to #stage.is-centered via sibling selectors,
+   so the instant git init docks the stage, every annotation melts away. */
+
+/* on the landing the lesson is just the hook (step 0's why/parts are empty in
+   the data), so the callouts around it carry the explaining. Nothing is
+   display:none here, so docking into git add grows the lesson cleanly. */
+
+/* the floating annotation layer: see-through, only the labels opt back in.
+   Fades (not display-toggles) so the callouts melt away as the stage docks. */
+.landing-notes {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s ease, visibility 0.45s;
+}
+#stage.is-centered ~ .landing-notes { opacity: 1; visibility: visible; }
+.note { position: fixed; }
+.note__label {
+  font-family: var(--hand);
+  font-weight: 600;
+  font-size: clamp(1.1rem, 2.3vw, 1.5rem);
+  line-height: 1.12;
+  color: var(--ink-soft);
+  pointer-events: auto;            /* selectable */
+}
+.note__arrow { display: block; overflow: visible; }
+.note-stroke {
+  fill: none;
+  stroke: var(--pen-red);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+
+/* file-tree callout: sits to the right of the focused tree, arrow pointing back */
+.note--tree {
+  left: clamp(18.5rem, 20vw, 23rem);
+  top: 42%;
+  width: clamp(11rem, 15vw, 14rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+.note--tree .note__arrow { width: 5.4rem; height: 3.4rem; }
+.note--tree .note__label { text-align: left; }
+
+/* ---- curiosity companion: a persistent bottom-right voice ------------- */
+/* the questions a beginner actually asks, in their own voice; tap one and its
+   answer unfolds (and, if it's about a real thing on the board, an arrow inks
+   out to it). Lives outside the landing layer so it survives the dock and can
+   say "what just happened", not only "what's about to". */
+.companion {
+  position: fixed;
+  right: clamp(2.5rem, 5vw, 5rem);   /* sit in from the edge for breathing room */
+  bottom: clamp(2rem, 7vh, 5rem);
+  /* one fixed width for both states: focusing grows the type, not the box, so
+     the wrap width never changes and the answer text doesn't reflow/jump */
+  width: clamp(20rem, 34vw, 31rem);
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  pointer-events: none;     /* only the questions opt back in */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s ease, visibility 0.45s;
+}
+.companion.is-visible { opacity: 1; visibility: visible; }
+/* the "i'll explain things over here" flourish only belongs on the centred
+   landing; once we've docked it has done its job and goes. It's a whiteboard
+   note sitting in the open space above the questions, with a long arrow dropping
+   onto them. The translate slides it left toward the page centre as far as it can
+   go before the command-line column (which owns the true middle) would crowd it. */
+.companion__intro {
+  align-self: center;
+  text-align: center;
+  margin-bottom: 0.3rem;
+  transform: translateX(-9rem);
+}
+.companion:not(.is-landing) .companion__intro { display: none; }
+.companion__intro-label {
+  font-family: var(--hand);
+  font-weight: 600;
+  font-size: clamp(1.5rem, 2.9vw, 2rem);
+  line-height: 1.1;
+  color: var(--ink-soft);
+  max-width: 15rem;
+  margin: 0 auto;
+  text-wrap: balance;
+}
+.companion__intro-arrow { display: block; margin: 0.1rem auto 0; width: 2.4rem; height: 11rem; overflow: visible; }
+
+.companion__qa + .companion__qa { margin-top: 0.4rem; }
+/* a question is a bare, tappable line: hand-drawn caret + the words */
+.companion__q {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.1rem 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  pointer-events: auto;     /* the area is see-through; the question is not */
+  text-align: left;
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 1.34rem;
+  line-height: 1.18;
+  color: var(--ink-soft);
+  /* the felt motion on click is the question GROWING, not a menu dropping */
+  transition: color 0.25s ease, font-size 0.4s var(--ease-settle), transform 0.4s var(--ease-settle);
+  transform-origin: left center;
+}
+.companion__q:hover { color: var(--ink); }
+.companion__q b { color: var(--pen-red); font-weight: 700; }
+/* the caret inks red and swings down a quarter-turn when its answer is open */
+.companion__caret {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  transform: rotate(0deg);
+  transition: transform 0.4s var(--ease-settle);
+}
+.companion__caret .note-stroke { stroke: var(--pen-red); stroke-width: 2; fill: none; }
+.companion__q[aria-expanded="true"] .companion__caret { transform: rotate(90deg); }
+/* the answer slides open by animating its grid row from 0fr to 1fr, then the
+   text drifts up into place */
+.companion__a-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.45s var(--ease-settle), opacity 0.3s ease 0.05s;
+}
+.companion__a-wrap > .companion__a {
+  overflow: hidden;
+  min-height: 0;
+  transform: translateY(-4px);
+  transition: transform 0.45s var(--ease-settle);
+}
+.companion__q[aria-expanded="true"] + .companion__a-wrap {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.companion__q[aria-expanded="true"] + .companion__a-wrap > .companion__a {
+  transform: none;
+}
+.companion__a {
+  font-family: var(--ui);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  padding: 0.25rem 0 0.4rem 1.3rem;   /* indent under the caret */
+  pointer-events: auto;               /* selectable */
+}
+.companion__a b { color: var(--ink); font-weight: 600; }
+
+/* ---- focus / learn mode --------------------------------------------- */
+/* clicking a question pulls it into focus: the chosen question grows and
+   brightens, and the others step back so it stands alone (the box itself does
+   NOT resize, so wrapping stays put) */
+.companion.is-focus .companion__qa:not(.is-open) {
+  opacity: 0.22;
+  transition: opacity 0.35s ease;
+}
+.companion__qa.is-open .companion__q {
+  font-size: 1.95rem;
+  color: var(--ink);
+}
+.companion__qa.is-open .companion__a {
+  font-size: 1.2rem;
+  line-height: 1.5;
+  padding-left: 1.7rem;
+}
+
+/* the ink layer for answer arrows: full-viewport, pixel-space, see-through */
+.companion-arrows {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 6;
+  pointer-events: none;
+  overflow: visible;
+}
+.companion-arrows path {
+  fill: none;
+  stroke: var(--pen-red);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+.companion-arrows path.is-drawing {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: companion-draw 0.55s var(--ease-settle) forwards;
+}
+@keyframes companion-draw { to { stroke-dashoffset: 0; } }
+/* retract by continuing the SAME direction the pen travelled (offset 0 -> -1),
+   so the line erases from its tail toward the target rather than rewinding */
+.companion-arrows path.is-erasing {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: companion-erase 0.5s var(--ease-settle) forwards;
+}
+@keyframes companion-erase { to { stroke-dashoffset: -1; } }
+
+/* ---- landing intro: the first screen draws itself in ----------------- */
+/* the file tree fades in ~0.5s after load. Opacity only: its is-focus state
+   carries a translateY(-50%) for centring that a transform animation would
+   clobber. */
+#filetree { animation: landing-fade 0.7s ease 0.5s both; }
+@keyframes landing-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* the hook and the command line (one element, reused across every step) rise
+   gently into place first; the rest of the page draws itself in around them */
+#stage.is-centered .lesson__goal { animation: landing-rise 0.6s var(--ease-settle) 0.05s both; }
+#stage.is-centered #cli         { animation: landing-rise 0.6s var(--ease-settle) 0.2s both; }
+@keyframes landing-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* the callout arrows ink themselves on (paths carry pathLength="1", so the dash
+   maths is exact); shaft first, then the arrowhead */
+.note-stroke { stroke-dasharray: 1; }
+.note--tree .note__arrow path:nth-of-type(1) { animation: landing-draw 0.55s ease 0.65s both; }
+.note--tree .note__arrow path:nth-of-type(2) { animation: landing-draw 0.35s ease 1.05s both; }
+@keyframes landing-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+/* the clone note and the roadmap wipe on left-to-right, like ink being laid */
+#stage.is-centered .landing__clone { animation: landing-wipe 0.9s var(--ease-settle) 1.4s both; }
+#stage.is-centered .landing__road  { animation: landing-wipe 0.9s var(--ease-settle) 1.8s both; }
+@keyframes landing-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 -4% 0 0); }
+}
+
+/* the companion inks itself in last: on first load its area fades in (JS adds
+   .is-visible with a matching delay) and then the intro flourish's down-arrow
+   draws on, just after the area appears */
+.companion.is-landing .companion__intro-arrow path:nth-of-type(1) { animation: landing-draw 0.5s ease 2.55s both; }
+.companion.is-landing .companion__intro-arrow path:nth-of-type(2) { animation: landing-draw 0.3s ease 2.9s both; }
+
+@media (prefers-reduced-motion: reduce) {
+  #filetree,
+  #stage.is-centered .lesson__goal,
+  #stage.is-centered #cli,
+  .note__arrow path,
+  .companion__intro-arrow path,
+  #stage.is-centered .landing__clone,
+  #stage.is-centered .landing__road { animation: none; }
+  .companion { transition: none; }
+  .companion__q,
+  .companion__a-wrap,
+  .companion__a-wrap > .companion__a,
+  .companion__caret,
+  .tree__subwrap { transition: none; }
+  .tree__list .tree__subitem { opacity: 1; }
+  .tree__list li.is-revealing { animation: none; }
+  .companion-arrows path.is-drawing { animation: none; stroke-dashoffset: 0; }
+  .companion-arrows path.is-erasing { animation: none; }
+}
+
+/* ---- landing timeline: hidden until you hover its strip --------------- */
+.tl-zone { display: none; }
+#stage.is-centered ~ .tl-zone {
+  display: block;
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(40rem, 86vw);
+  height: clamp(3.5rem, 10vh, 6rem);
+  z-index: 5;
+  pointer-events: auto;
+}
+#stage.is-centered ~ #timeline {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+#stage.is-centered ~ .tl-zone:hover ~ #timeline { opacity: 1; }
+
+.tl-found { display: none; }
+#stage.is-centered ~ .tl-found {
+  display: block;
+  position: fixed;
+  left: 50%;
+  bottom: clamp(3.4rem, 9vh, 5.6rem);
+  transform: translateX(-50%);
+  z-index: 6;
+  margin: 0;
+  font-family: var(--hand);
+  font-weight: 600;
+  font-size: clamp(1.15rem, 2.5vw, 1.55rem);
+  line-height: 1.1;
+  text-align: center;
+  white-space: pre-line;            /* honour the line break in the markup */
+  color: var(--pen-green);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+#stage.is-centered ~ .tl-zone:hover ~ .tl-found { opacity: 1; }
+
+/* phones: the fixed annotations don't fit the narrow layout, so skip them
+   and just leave the timeline visible as usual */
+@media (max-width: 760px) {
+  #stage.is-centered ~ .landing-notes,
+  #stage.is-centered ~ .tl-zone,
+  #stage.is-centered ~ .tl-found { display: none; }
+  #stage.is-centered ~ #timeline { opacity: 1; pointer-events: auto; }
+}
+
 /* ---- command line with highlight + ghost overlay ------------------- */
 #cli {
+  position: relative;        /* anchors the landing "start here" cue above it */
   display: flex;
   justify-content: center;
+  /* the landing opens a gap above the field for the cue; ease it shut on dock */
+  transition: margin-top 0.55s var(--ease-settle);
 }
+/* on the landing, open a gap above the field so the cue has room to sit there */
+#stage.is-centered #cli { margin-top: 3.2rem; }
 .cli__field { position: relative; display: inline-block; }
 
 /* the input and the overlay must share identical text metrics */
@@ -364,7 +850,7 @@ body {
   color: transparent;            /* real text is painted by the overlay */
   caret-color: var(--pen-red);
 }
-#cmd::selection { background: rgba(46, 92, 158, 0.18); }
+#cmd::selection { background: rgba(176, 125, 43, 0.24); }
 .cli__ink {
   position: absolute;
   left: 0;
@@ -463,7 +949,7 @@ body {
   font-family: var(--mono);
   font-size: 1.05rem;
   color: var(--ink);
-  user-select: none;
+  /* selectable: a learner should be able to grab a filename and ask about it */
   transition:
     top 0.6s var(--ease-settle), left 0.6s var(--ease-settle),
     width 0.6s var(--ease-settle),
@@ -476,7 +962,8 @@ body {
   top: 50%;
   transform: translateY(-50%);
   left: clamp(1.5rem, 4.5vw, 5rem);
-  width: clamp(19rem, 28vw, 26rem);
+  /* hug the filenames instead of reserving a fixed wide column */
+  width: fit-content;
   font-size: 1.55rem;
 }
 .tree.is-focus .tree__title { font-size: 0.98rem; margin-bottom: 1.1rem; }
@@ -554,9 +1041,13 @@ body {
   line-height: 1.35;
   position: relative;
 }
+/* a row is only as wide as its own content, so hover/click land on the file,
+   not the empty space stretching off to the right */
+.tree__list li:not(.tree__subwrap) { width: max-content; max-width: 100%; }
 /* the underline dips below the name into the next row; lift the hovered row so
    it paints over the file beneath instead of being clipped by it */
-.tree__list li.is-openable:hover { z-index: 2; }
+.tree__list li.is-openable:hover,
+.tree__list li.is-expandable:hover { z-index: 2; }
 .tree__list .d > .f__name { color: var(--ink); font-weight: 700; }
 .tree__list .f { padding-left: 0.9rem; }
 .f__name { white-space: nowrap; position: relative; display: inline-block; }
@@ -607,7 +1098,8 @@ body {
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
-.tree__list li.is-openable:hover .f__underline { clip-path: inset(-6px -2px -6px -2px); }
+.tree__list li.is-openable:hover .f__underline,
+.tree__list li.is-expandable:hover .f__underline { clip-path: inset(-6px -2px -6px -2px); }
 .f__mark { font-weight: 700; font-size: 1em; }
 .f--untracked .f__name { color: var(--ink-soft); }
 .f--untracked .f__mark { color: var(--ink-soft); }
@@ -655,8 +1147,76 @@ body {
   color: var(--ink-soft);
   font-style: italic;
 }
-/* the .git/ line writes itself on, left to right, then slides into place */
-.tree__list li.is-new { animation: git-write 0.7s var(--ease-settle) both; }
+/* every folder is clickable to open/close; the cursor + a hover lift say so, and
+   the folder icon itself swaps closed->open (no chevron) */
+.tree__list li.is-expandable { cursor: pointer; }
+.tree__list li.is-expandable:hover { opacity: 1; }
+.tree__list li.is-folder.is-open > .f__name,
+.tree__list li.d.is-open > .f__name { /* keep the open folder's name colour as-is */ }
+
+/* nested, openable contents. Scoped under .tree__list so these beat the generic
+   `.tree__list li` rules (which would otherwise force display:flex and kill the
+   collapse). Each subwrap adds one indent step; nesting compounds naturally. */
+.tree__list .tree__subwrap {
+  display: grid;
+  grid-template-rows: 0fr;          /* collapses to zero height (no empty gap) */
+  /* `.tree__list li` forces align-items:baseline; restore the grid default so
+     the inner stretches to the 0fr track and actually clips when collapsed.
+     overflow:hidden guarantees the clip even if the inner overflows the track. */
+  align-items: stretch;
+  overflow: hidden;
+  padding: 0 0 0 1.15rem;           /* one indent step per level */
+  /* an even ease (not the front-loaded --ease-settle) so collapse/expand reads
+     as a smooth slide of the whole open subtree, not a snap. */
+  transition: grid-template-rows 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tree__list .tree__subwrap.is-open { grid-template-rows: 1fr; }
+/* When fully open, let content bleed past the box so the LAST row's hover
+   underline (which dips ~6px below it) isn't clipped at the subwrap's bottom
+   edge. While collapsed/animating (no .is-open) overflow stays hidden so the
+   collapse still clips to zero. Both the grid container and its inner clip. */
+.tree__list .tree__subwrap.is-open,
+.tree__list .tree__subwrap.is-open > .tree__sub { overflow: visible; }
+.tree__list .tree__subwrap--root { padding-left: 0.9rem; }
+/* no own padding: it would keep the collapsed 0fr track ~5px open (a residual
+   gap). The rows carry their own vertical padding for spacing. */
+.tree__list .tree__sub { list-style: none; overflow: hidden; min-height: 0; margin: 0; padding: 0; }
+/* indentation comes from the subwraps, so flatten inner rows' own padding */
+.tree__list .tree__sub .f { padding-left: 0; }
+/* base opacity 1 so a row that isn't animating is simply visible. */
+.tree__list .tree__subitem { padding: 0.1rem 0; opacity: 1; }
+/* opening a folder writes its contents on, staggered and RECURSIVE: app.ts adds
+   .is-revealing to every row the open reveals (nested folders included), in
+   visual order via --ri, so the whole subtree cascades in rather than blinking.
+   `backwards` holds the hidden `from` state through the stagger delay, then the
+   row reverts to its plain base (no held transform/clip-path stacking context). */
+.tree__list li.is-revealing {
+  animation: git-write 0.5s var(--ease-settle) backwards;
+  animation-delay: calc(var(--ri, 0) * 0.045s);
+}
+.tree__list .tree__subitem .f__name { color: var(--ink-soft); font-weight: 600; font-style: normal; }
+.tree__list .tree__subitem .ic { opacity: 0.7; }
+.tree__list .tree__subitem .f__note {
+  font-family: var(--ui);
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--ink-soft);
+  opacity: 0.8;
+}
+.tree__empty .f__note { font-style: italic; opacity: 0.65; }
+/* the descriptive labels stay quiet so the tree reads as names; on row hover the
+   relevant one fades + slides in. The hide rule uses :not(:hover) so it outranks
+   the per-state note rules (and on hover the note reverts to its own opacity).
+   Marks (the ·/✓ status) are untouched and always show. Click a file for more. */
+.tree__list .f__note { transition: opacity 0.22s ease, transform 0.3s var(--ease-settle); }
+.tree__list li:not(:hover) > .f__note { opacity: 0; transform: translateX(-6px); }
+/* the .git/ line writes itself on, left to right, then slides into place.
+   `backwards` (not `both`): the row reverts to its plain base after animating,
+   so it holds NO transform/clip-path — both would persist as a stacking context
+   (a held transform computes to a matrix, clip-path stays non-none) and stop the
+   hover underline from layering over the next row. Base opacity is 1 (below), so
+   reverting to base leaves the row fully visible. */
+.tree__list li.is-new { animation: git-write 0.7s var(--ease-settle) backwards; }
 @keyframes git-write {
   from { clip-path: inset(0 100% 0 0); opacity: 0; transform: translateX(-14px); }
   55%  { opacity: 1; }
@@ -671,52 +1231,62 @@ body {
   top: 40%;
   left: 50%;
   z-index: 5;
-  width: clamp(20rem, 34vw, 30rem);
+  /* the card is as wide as its widest content line, per file: short notes stay
+     compact, a file with long lines (config's remote url) widens to fit instead
+     of clipping. Bounded so it never gets silly-wide or overflows the screen. */
+  width: max-content;
+  min-width: min(22rem, 86vw);
+  max-width: min(48rem, 92vw);
   transform: translate(-50%, -50%) scale(0.86);
   transform-origin: center;
   opacity: 0;
   pointer-events: none;
   background: #fbf6e8;
-  border: 2.5px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 0 18px 42px -18px rgba(42, 37, 33, 0.5);
-  rotate: -0.6deg;
+  /* a hand-drawn note, not a window: a 2px ink edge with uneven, sketched
+     corners, a soft drop shadow and a slight tilt, like a card pinned up */
+  border: 2px solid var(--ink);
+  border-radius: 22px 12px 24px 13px / 13px 24px 12px 22px;
+  box-shadow: 0 16px 40px -16px rgba(42, 37, 33, 0.45);
+  rotate: -1.1deg;
   overflow: hidden;
   /* JS drives the grow/shrink transform + opacity inline (it animates out of and
-     back into the index.html line in the tree); this is just an idle fallback */
+     back into the file's line in the tree); this is just an idle fallback */
   transition: opacity 0.42s var(--ease-settle), transform 0.42s var(--ease-settle);
 }
 .editor__bar {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.85rem;
-  border-bottom: 2px solid rgba(42, 37, 33, 0.16);
-  background: rgba(42, 37, 33, 0.045);
-  cursor: pointer;   /* the title bar is the close affordance */
+  gap: 0.45rem;
+  padding: 0.55rem 0.9rem 0.45rem;
+  border-bottom: 1.6px dashed rgba(42, 37, 33, 0.2);   /* a torn-note divider, not a chrome bar */
+  cursor: pointer;   /* the bar is a close affordance */
 }
-.editor__dots { display: inline-flex; gap: 0.34rem; }
-/* hovering the bar warms the first dot, the classic "close" hint */
-.editor__bar:hover .editor__dots i:first-child {
-  border-color: var(--pen-red);
-  background: rgba(192, 73, 47, 0.55);
-}
-.editor__dots i {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  border: 1.6px solid var(--ink-soft);
-  display: inline-block;
-}
+/* a little sketched pin/thumbtack where the window dots used to be */
+.editor__pin { width: 1.05rem; height: 1.05rem; flex: none; overflow: visible; }
+.editor__pin .note-stroke { stroke: var(--pen-red); stroke-width: 1.5; fill: none; stroke-dasharray: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
 .editor__name {
   font-family: var(--mono);
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--ink-soft);
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
 }
+.editor__close {
+  margin-left: 0.4rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--ui);
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  opacity: 0.5;
+  padding: 0.1rem 0.25rem;
+  transition: opacity 0.2s ease, color 0.2s ease, transform 0.2s var(--ease-settle);
+}
+.editor__close:hover { opacity: 1; color: var(--pen-red); transform: rotate(90deg); }
 .editor__unsaved {
   color: var(--pen-red);
   font-size: 0.9rem;
@@ -738,7 +1308,7 @@ body {
 .editor__code {
   padding: 0.7rem 0 0.9rem;
   font-family: var(--mono);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   line-height: 1.6;
 }
 .editor__line {
@@ -746,6 +1316,26 @@ body {
   align-items: baseline;
   padding: 0 0.85rem;
   white-space: pre;
+}
+/* shown instead of code for files that aren't meant to be read by hand */
+.editor__note {
+  font-family: var(--ui);
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  padding: 0.4rem 1.1rem 0.6rem;
+  max-width: 30rem;
+}
+/* a readable file's one-line "what it is", above its actual contents */
+.editor__explain {
+  font-family: var(--ui);
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  padding: 0.5rem 1.1rem 0.7rem;
+  margin-bottom: 0.4rem;
+  max-width: 32rem;
+  border-bottom: 1.5px dashed rgba(122, 112, 96, 0.35);
 }
 .editor__line.is-active { background: rgba(46, 92, 158, 0.09); }
 .editor__num {
@@ -764,6 +1354,70 @@ body {
   box-shadow: inset 3px 0 0 var(--pen-green);
 }
 .editor__line.is-changed .editor__num { color: var(--pen-green); opacity: 0.9; }
+
+/* the one content line worth looking at in a .git note: a warm marker band +
+   gutter, reusing the on-brand amber (same hue as the just-edited flash) */
+.editor__line.is-key {
+  background: rgba(176, 125, 43, 0.16);
+  box-shadow: inset 3px 0 0 rgba(176, 125, 43, 0.7);
+}
+:root[data-theme="dark"] .editor__line.is-key {
+  background: rgba(214, 168, 92, 0.15);
+  box-shadow: inset 3px 0 0 rgba(214, 168, 92, 0.65);
+}
+/* a hand-drawn marker-pen swipe over the important word(s) of a note */
+.hl {
+  background: linear-gradient(101deg,
+    rgba(176, 125, 43, 0) 1.5%, rgba(176, 125, 43, 0.38) 5%,
+    rgba(176, 125, 43, 0.34) 95%, rgba(176, 125, 43, 0) 98.5%);
+  padding: 0.04em 0.2em;
+  border-radius: 0.6em 0.8em 0.55em 0.7em;
+  color: var(--ink);
+  font-weight: 600;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+:root[data-theme="dark"] .hl {
+  background: linear-gradient(101deg,
+    rgba(214, 168, 92, 0) 1.5%, rgba(214, 168, 92, 0.34) 5%,
+    rgba(214, 168, 92, 0.3) 95%, rgba(214, 168, 92, 0) 98.5%);
+}
+/* the muted "we'll get to this later" footnote under a note's body/contents */
+.editor__later {
+  font-family: var(--ui);
+  font-size: 0.9rem;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  opacity: 0.92;
+  padding: 0.6rem 1.1rem 0.25rem;
+  margin-top: 0.45rem;
+  border-top: 1.5px dashed rgba(122, 112, 96, 0.3);
+  max-width: 32rem;
+}
+.editor__later::before { content: "↳ "; font-style: normal; opacity: 0.6; }
+/* the bar + the prose follow the card's content width (set by the code lines)
+   rather than contributing to it: long sentences wrap to the card instead of
+   stretching it, while a config url line is free to make the card wider. The
+   note (note-only files) is NOT here: it stays the width driver and wraps at its
+   own max-width. */
+.editor__bar, .editor__explain, .editor__later { width: 0; min-width: 100%; }
+/* the index's friendly list: a filename + its real state, coloured the same way
+   the file tree colours states (green staged, blue committed) so they read as
+   one language. The state word sits to the right and updates step to step. */
+.editor__idx {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.3rem;
+  padding: 0.16rem 1.1rem;
+  font-family: var(--mono);
+  font-size: 0.92rem;
+}
+.editor__idx-tag { font-family: var(--ui); font-size: 0.8rem; font-style: italic; opacity: 0.9; }
+.editor__idx--staged    { color: var(--pen-green); }
+.editor__idx--committed { color: var(--pen-blue); }
+.editor__idx--modified  { color: #b07d2b; }
 
 /* syntax highlighting palette (kept within the inked colour set) */
 .sx-tag     { color: var(--pen-blue); }
@@ -801,6 +1455,8 @@ body {
   align-items: flex-start;
   gap: 0;
   --tl-row: 0.95rem;   /* common dot centre-line height for every stop + link */
+  /* so it fades in (not pops) when the stage docks off the landing */
+  transition: opacity 0.4s ease;
 }
 .tl-group { display: flex; align-items: flex-start; gap: 0; flex: 0 0 auto; }
 .tl-item, .tl-substep {
@@ -973,10 +1629,11 @@ body {
   /* the editor sits centred and narrower so it fits the phone width */
   .editor {
     top: 38%;
-    width: 86vw;
+    max-width: 92vw;       /* stay content-driven, just don't exceed the screen */
+    min-width: 0;
     font-size: 0.78rem;
   }
-  .editor__code { font-size: 0.74rem; }
+  .editor__code { font-size: 0.74rem; overflow-x: auto; }   /* tiny screens: scroll a long line, never clip */
 
   /* lesson + command line stay inside the viewport */
   #stage { padding: 0 0.8rem; gap: 0.8rem; }

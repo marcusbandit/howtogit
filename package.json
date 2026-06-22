@@ -9,9 +9,14 @@
     "watch": "tsc --watch",
     "dev": "tsc && wrangler dev",
     "start": "tsc && wrangler dev",
-    "deploy": "tsc && wrangler deploy"
+    "deploy": "tsc && wrangler deploy",
+    "vendor": "bash scripts/vendor-isogit.sh"
   },
   "devDependencies": {
+    "buffer": "6.0.3",
+    "esbuild": "0.28.1",
+    "isomorphic-git": "1.38.5",
+    "process": "0.11.10",
     "typescript": "^5.6.0",
     "wrangler": "^4"
   }

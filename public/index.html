@@ -7,6 +7,12 @@
   <meta name="description" content="An interactive, hand-drawn guide to git for beginners — type real commands and watch the graph get drawn for you." />
   <meta name="color-scheme" content="light dark" />
 
+  <!-- a tiny, cached-forever probe: a normal reload serves it from cache, a hard
+       refresh re-fetches it. app.ts reads that difference to tell the two apart,
+       so a hard refresh can start clean while a normal reload restores your
+       session. See serve.py / public/_headers for its Cache-Control. -->
+  <script src="reload-probe.js"></script>
+
   <!-- apply the saved (or system) theme before first paint, so there's no flash
        of the wrong colours. The toggle button is wired up on DOMContentLoaded. -->
   <script>
@@ -47,7 +53,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=darkmode1" />
+  <link rel="stylesheet" href="style.css?v=landing33" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -60,8 +66,11 @@
   </svg>
 
   <header class="brand">
-    <span class="brand__word">howtogit.dev</span>
+    <span class="brand__word" role="button" tabindex="0"
+          aria-label="howtogit.dev — click twice to restart from the beginning">howtogit.dev</span>
     <svg class="brand__rule" aria-hidden="true" viewBox="0 0 160 12" preserveAspectRatio="none"></svg>
+    <!-- shown after the first click; a second click restarts (wired in app.ts) -->
+    <span class="brand__restart" id="brand-restart" aria-hidden="true">click again to restart</span>
   </header>
 
   <!-- dark-mode toggle: a hand-drawn lightbulb. Lit (with rays) in light mode,
@@ -80,7 +89,7 @@
   <div class="wip" aria-label="work in progress">work in progress</div>
 
   <!-- a simplified project on disk; git init adds the .git folder -->
-  <aside id="filetree" class="tree" aria-label="project files">
+  <aside id="filetree" class="tree is-focus" aria-label="project files">
     <p class="tree__title">on your computer</p>
     <ul class="tree__list" id="tree-list"></ul>
   </aside>
@@ -112,13 +121,17 @@
     </svg>
   </main>
 
-  <!-- a make-believe code editor: on the feature branch it opens, types an edit
-       into index.html, then saves. Purely a visual beat, nothing functional. -->
+  <!-- a hand-drawn note that opens when you click a file: shows what it is and
+       its contents. On the feature branch it also types an edit + saves. -->
   <div id="editor" class="editor" aria-hidden="true">
     <div class="editor__bar">
-      <span class="editor__dots"><i></i><i></i><i></i></span>
+      <svg class="editor__pin" viewBox="0 0 20 20" aria-hidden="true">
+        <path class="note-stroke" d="M10 3.2 C 7.4 3.6, 6.6 6, 8.2 8 L 6.6 12.4 C 9.6 13.6, 11.4 13.4, 13.8 12.2 L 12 8 C 13.4 6, 12.6 3.6, 10 3.2 Z" />
+        <path class="note-stroke" d="M9.7 13.2 L 9.2 17" />
+      </svg>
       <span class="editor__name"><span id="editor-name">index.html</span><b class="editor__unsaved" id="editor-unsaved">●</b></span>
       <span class="editor__save" id="editor-save">saved ✓</span>
+      <button class="editor__close" type="button" aria-label="close">✕</button>
     </div>
     <div class="editor__code" id="editor-code"></div>
   </div>
@@ -132,6 +145,15 @@
       <div class="lesson__parts" id="parts"></div>
     </div>
     <form id="cli" autocomplete="off" spellcheck="false">
+      <!-- landing-only "start here" cue: a hand-drawn arrow sitting just above the
+           command line, pointing down at it. Gated to #stage.is-centered in CSS. -->
+      <div class="lesson__cue" id="landing-cue" aria-hidden="true">
+        <span class="lesson__cue-label">start here</span>
+        <svg class="lesson__cue-arrow" viewBox="0 0 44 40" aria-hidden="true">
+          <path class="cue-stroke" d="M21 3 C 17 13, 25 17, 21 30" />
+          <path class="cue-stroke" d="M13 23 L21 33 L29 22" />
+        </svg>
+      </div>
       <span class="cli__field">
         <span class="cli__ink" id="ink" aria-hidden="true"></span>
         <input id="cmd" name="cmd" type="text" inputmode="text" autocapitalize="none"
@@ -141,11 +163,70 @@
       </span>
     </form>
     <p class="nudge" id="nudge" aria-live="assertive"></p>
+
+    <!-- landing-only welcome beats (shown while the stage is centred, before
+         git init; they melt away when the stage docks). See .landing in CSS. -->
+    <div class="landing" id="landing" aria-hidden="true">
+      <p class="landing__clone">Most folks come to git wanting to clone a project.<br>We'll get there together, right after this.</p>
+      <nav class="landing__road" aria-label="what you'll learn">
+        <span class="road-chip road-chip--now">init</span>
+        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
+        <span class="road-chip">commit</span>
+        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
+        <span class="road-chip">branch</span>
+        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
+        <span class="road-chip">push</span>
+        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
+        <span class="road-chip road-chip--clone">clone</span>
+      </nav>
+    </div>
   </section>
+
+  <!-- landing-only hover strip: on the first screen the timeline hides until you
+       hover here, then fades in with a friendly note (see CSS gating). -->
+  <div class="tl-zone" aria-hidden="true"></div>
 
   <!-- a clickable history of the steps; returning users can skip ahead -->
   <nav id="timeline" class="timeline" aria-label="lesson steps"></nav>
 
-  <script type="module" src="app.js?v=darkmode1"></script>
+  <p class="tl-found" aria-hidden="true">You found the timeline!
+this will be useful if you wanna come back later</p>
+
+  <!-- landing-only hand-drawn annotations pointing at the page's parts. Shown
+       only while the stage is centred (before git init); see CSS gating. -->
+  <div id="landing-notes" class="landing-notes" aria-hidden="true">
+    <!-- points back at the focused file tree on the left -->
+    <div class="note note--tree">
+      <svg class="note__arrow" viewBox="0 0 96 60" aria-hidden="true">
+        <path class="note-stroke" pathLength="1" d="M90 10 C 62 16, 32 28, 8 48" />
+        <path class="note-stroke" pathLength="1" d="M8 48 L21 46 M8 48 L14 37" />
+      </svg>
+      <p class="note__label" data-text="these are your project's files, the ones on your computer"></p>
+    </div>
+  </div>
+
+  <!-- the curiosity companion: a persistent bottom-right voice that asks the
+       questions a beginner actually has and answers them, pointing at the real
+       thing on the board. Driven by the step machine's `curiosity` data and
+       filled by app.ts; it survives the dock so it can explain what just
+       happened, not only what's about to. -->
+  <aside id="companion" class="companion" aria-live="polite" aria-label="things explained as you go">
+    <div class="companion__intro" aria-hidden="true">
+      <p class="companion__intro-label">i'll explain things over here as you go</p>
+      <!-- tall viewBox matches the rendered aspect (2.4rem wide x 11rem tall) so
+           the long arrow scales uniformly and the stroke stays an even weight -->
+      <svg class="companion__intro-arrow" viewBox="0 0 30 138" aria-hidden="true">
+        <path class="note-stroke" pathLength="1" d="M15 5 C 11 42, 19 92, 15 124" />
+        <path class="note-stroke" pathLength="1" d="M7 109 L15 127 L23 108" />
+      </svg>
+    </div>
+    <div class="companion__list" id="companion-list"></div>
+  </aside>
+
+  <!-- full-viewport ink layer for the hand-drawn arrows an answer draws to the
+       thing it's talking about (the .git/ row, a node, a tag). Pixel-space. -->
+  <svg id="companion-arrows" class="companion-arrows" aria-hidden="true"></svg>
+
+  <script type="module" src="app.js?v=landing33"></script>
 </body>
 </html>
