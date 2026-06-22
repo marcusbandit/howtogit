@@ -1353,107 +1353,90 @@ function overlaidState(file, base) {
         return "pushed";
     return base;
 }
-function renderFileTree() {
-    const gitPresent = !!snap?.inited;
-    const editing = stepIndex === stepIdx("add2");
-    const remoteExists = stepIndex > stepIdx("remote"); // is there anywhere to push to yet?
-    const pushedNow = new Set();
-    const fileStates = new Map((snap?.files ?? []).map((f) => [f.name, f.state]));
-    treeList.replaceChildren();
-    underlineSeed = 0;
-    // my-site/ is the (collapsible) project root; everything else lives inside it
-    const root = document.createElement("li");
-    root.className = "d is-expandable is-folder";
-    root.dataset.path = "root";
-    const rootOpen = treeOpen.has("root");
-    if (rootOpen)
-        root.classList.add("is-open");
-    root.append(rootOpen ? folderIconOpen() : folderIcon(), makeNameUnderlined(`${PROJECT.root}/`));
-    treeList.appendChild(root);
-    const rootWrap = document.createElement("li");
-    rootWrap.className = "tree__subwrap tree__subwrap--root" + (rootOpen ? " is-open" : "");
-    const rootSub = document.createElement("ul");
-    rootSub.className = "tree__sub";
-    rootWrap.appendChild(rootSub);
-    treeList.appendChild(rootWrap);
-    if (gitPresent && snap) {
-        // .git/ is a real, openable folder; its contents are the REAL repo's .git
-        const git = document.createElement("li");
-        git.className = "f d--git is-expandable is-folder";
-        git.dataset.path = ".git";
-        const gitOpen = treeOpen.has(".git");
-        if (gitOpen)
-            git.classList.add("is-open");
-        if (!lastGitPresent)
-            git.classList.add("is-new");
-        const note = document.createElement("span");
-        note.className = "f__note";
-        note.textContent = "git lives here";
-        git.append(gitOpen ? folderIconOpen() : folderIcon(), makeNameUnderlined(".git/"), note);
-        rootSub.appendChild(git);
-        const gitWrap = document.createElement("li");
-        gitWrap.className = "tree__subwrap" + (gitOpen ? " is-open" : "");
-        const gitSub = document.createElement("ul");
-        gitSub.className = "tree__sub";
-        snap.git.forEach((n, i) => appendGitNode(gitSub, n, i));
-        gitWrap.appendChild(gitSub);
-        rootSub.appendChild(gitWrap);
-    }
-    PROJECT.files.forEach((f) => {
-        const st = overlaidState(f, fileStates.get(f) ?? "plain");
-        const li = document.createElement("li");
-        li.className = st === "plain" ? "f is-openable" : `f f--${st} is-openable`;
-        li.dataset.file = f; // click to open it in the editor
-        if (f === EDIT_FILE && st === "modified" && !wasEditing)
-            li.classList.add("is-edited");
-        if (st === "pushed")
-            pushedNow.add(f);
-        // the moment a file lands on the remote, give it a quick purple flash
-        if (st === "pushed" && !pushedBefore.has(f))
-            li.classList.add("is-pushed-now");
-        li.append(fileIcon(f), makeNameUnderlined(f));
-        if (MARK[st]) {
-            const m = document.createElement("span");
-            m.className = "f__mark";
-            m.textContent = MARK[st];
-            li.appendChild(m);
-        }
-        // spell out the commit-vs-push distinction next to the file
-        let note = "";
-        if (f === EDIT_FILE && st === "modified")
-            note = "just edited";
-        else if (st === "pushed")
-            note = "pushed";
-        else if (st === "committed" && remoteExists)
-            note = "committed, not pushed";
-        if (note) {
-            const n = document.createElement("span");
-            n.className = "f__note";
-            n.textContent = note;
-            li.appendChild(n);
-        }
-        rootSub.appendChild(li);
-    });
-    lastGitPresent = gitPresent;
-    wasEditing = editing;
-    pushedBefore = pushedNow;
+function noteSpan(text) {
+    const n = document.createElement("span");
+    n.className = "f__note";
+    n.textContent = text;
+    return n;
 }
-// render one real .git node into a list. Folders nest recursively (a subwrap
+// a folder row + its (collapsed/animatable) contents wrapper
+function buildFolder(name, path, open, cls, opts = {}) {
+    const row = document.createElement("li");
+    row.className = `${cls} is-expandable is-folder` + (open ? " is-open" : "") + (opts.isNew ? " is-new" : "");
+    row.dataset.path = path;
+    row.append(open ? folderIconOpen() : folderIcon(), makeNameUnderlined(name));
+    if (opts.note)
+        row.appendChild(noteSpan(opts.note));
+    const wrap = document.createElement("li");
+    wrap.className = "tree__subwrap" + (opts.rootWrap ? " tree__subwrap--root" : "") + (open ? " is-open" : "");
+    const sub = document.createElement("ul");
+    sub.className = "tree__sub";
+    wrap.appendChild(sub);
+    return { row, sub, wrap };
+}
+// a project/remote file row: state colour + mark + hover note, opens in the editor
+function buildFileRow(fr) {
+    const li = document.createElement("li");
+    li.className = fr.state === "plain" ? "f is-openable" : `f f--${fr.state} is-openable`;
+    li.dataset.file = fr.file;
+    if (fr.flash === "edited")
+        li.classList.add("is-edited");
+    if (fr.flash === "pushed")
+        li.classList.add("is-pushed-now");
+    li.append(fileIcon(fr.file), makeNameUnderlined(fr.name));
+    if (MARK[fr.state]) {
+        const m = document.createElement("span");
+        m.className = "f__mark";
+        m.textContent = MARK[fr.state];
+        li.appendChild(m);
+    }
+    if (fr.note)
+        li.appendChild(noteSpan(fr.note));
+    return li;
+}
+// render a whole repo (local or remote) into its tree container
+function renderTree(tree, model) {
+    tree.el.replaceChildren();
+    underlineSeed = 0;
+    if (model.url) {
+        const u = document.createElement("li");
+        u.className = "remote-url";
+        u.textContent = model.url;
+        tree.el.appendChild(u);
+    }
+    // <root>/ is the collapsible project folder; everything lives inside it
+    const rootF = buildFolder(`${model.root}/`, "root", tree.open.has("root"), "d", { rootWrap: true });
+    tree.el.append(rootF.row, rootF.wrap);
+    if (model.git) {
+        const gitF = buildFolder(".git/", ".git", tree.open.has(".git"), "f d--git", { note: model.gitNote, isNew: model.gitNew });
+        rootF.sub.append(gitF.row, gitF.wrap);
+        if (model.git.length)
+            model.git.forEach((n, i) => appendGitNode(tree, gitF.sub, n, i));
+        else
+            gitF.sub.appendChild(emptyRow());
+    }
+    for (const fr of model.files)
+        rootF.sub.appendChild(buildFileRow(fr));
+    if (!model.files.length && model.emptyMsg) {
+        const e = document.createElement("li");
+        e.className = "remote-empty";
+        e.textContent = model.emptyMsg;
+        rootF.sub.appendChild(e);
+    }
+}
+// render one real .git node into a tree. Folders nest recursively (a subwrap
 // that opens); files are openable rows that show their contents in the editor.
-function appendGitNode(ul, node, idx) {
-    const open = treeOpen.has(node.path);
+function appendGitNode(tree, ul, node, idx) {
+    const open = tree.open.has(node.path);
     const row = document.createElement("li");
     row.className = "tree__subitem";
     row.dataset.path = node.path;
     row.style.setProperty("--i", String(idx));
-    const noteEl = document.createElement("span");
-    noteEl.className = "f__note";
-    noteEl.textContent = node.note;
     if (node.isDir) {
         row.classList.add("is-expandable", "is-folder");
         if (open)
             row.classList.add("is-open");
-        row.append(open ? folderIconOpen() : folderIcon(), makeNameUnderlined(node.name), noteEl);
+        row.append(open ? folderIconOpen() : folderIcon(), makeNameUnderlined(node.name), noteSpan(node.note));
         ul.appendChild(row);
         const wrap = document.createElement("li");
         wrap.className = "tree__subwrap" + (open ? " is-open" : "");
@@ -1461,18 +1444,49 @@ function appendGitNode(ul, node, idx) {
         sub.className = "tree__sub";
         const kids = node.children ?? [];
         if (kids.length)
-            kids.forEach((c, i) => appendGitNode(sub, c, i));
+            kids.forEach((c, i) => appendGitNode(tree, sub, c, i));
         else
             sub.appendChild(emptyRow()); // an opened-but-empty folder still says so
         wrap.appendChild(sub);
         ul.appendChild(wrap);
     }
     else {
-        // a file: clicking opens it in the editor (same as a project file)
         row.classList.add("is-openable", "is-gitfile");
-        row.append(fileIcon(node.name), makeNameUnderlined(node.name), noteEl);
+        row.append(fileIcon(node.name), makeNameUnderlined(node.name), noteSpan(node.note));
         ul.appendChild(row);
     }
+}
+// ---- the local working tree's model + render ------------------------
+function localModel() {
+    const remoteExists = stepIndex > stepIdx("remote");
+    const states = new Map((snap?.files ?? []).map((f) => [f.name, f.state]));
+    const files = PROJECT.files.map((f) => {
+        const st = overlaidState(f, states.get(f) ?? "plain");
+        let note = "";
+        if (f === EDIT_FILE && st === "modified")
+            note = "just edited";
+        else if (st === "pushed")
+            note = "pushed";
+        else if (st === "committed" && remoteExists)
+            note = "committed, not pushed";
+        const flash = (f === EDIT_FILE && st === "modified" && !wasEditing) ? "edited"
+            : (st === "pushed" && !pushedBefore.has(f)) ? "pushed" : undefined;
+        return { name: f, file: f, state: st, note, flash };
+    });
+    return {
+        root: PROJECT.root,
+        git: snap?.inited ? snap.git : null,
+        gitNote: "git lives here",
+        gitNew: !!snap?.inited && !lastGitPresent,
+        files,
+    };
+}
+function renderFileTree() {
+    const model = localModel();
+    renderTree(localTree, model);
+    lastGitPresent = !!snap?.inited;
+    wasEditing = stepIndex === stepIdx("add2");
+    pushedBefore = new Set(model.files.filter((f) => f.state === "pushed").map((f) => f.name));
 }
 function emptyRow() {
     const li = document.createElement("li");
@@ -1823,13 +1837,13 @@ function openFileViewer(file, side, row) {
 }
 // open a .git internal file in the same editor: readable ones (HEAD, config)
 // show their contents; the rest show a note describing what they're for
-function openGitFile(path, row) {
+function openGitFile(path, row, side = "local") {
     const node = gitNodeByPath.get(path);
     if (!node)
         return;
     ++editSeqGen;
     viewerFile = path;
-    viewerSide = "local";
+    viewerSide = side;
     editorName.textContent = node.name;
     editorUnsaved.style.opacity = "0";
     editorSave.classList.remove("show");
@@ -1930,44 +1944,43 @@ async function playEditSequence() {
 }
 // clicking a file row opens it; clicking the open file again, its bar, outside,
 // or Escape folds it away. Delegated so re-rendered rows keep working.
-function wireFileViewer() {
-    const onList = (listEl, side) => {
-        listEl.addEventListener("click", (e) => {
-            const li = e.target.closest("li[data-file]");
-            const file = li?.dataset.file;
-            if (!file || !li)
-                return;
-            if (viewerFile === file && viewerSide === side)
-                closeFileViewer();
-            else
-                openFileViewer(file, side, li);
-        });
-    };
-    onList(treeList, "local");
-    onList(remoteList, "remote");
-    // a folder click toggles it open/closed; a .git file click opens it in the
-    // editor. stopPropagation keeps either from also tripping the companion's
-    // outside-click dismissal, so the tree is interactive on its own terms.
-    // (project files carry data-file and are handled by onList above.)
-    treeList.addEventListener("click", (e) => {
+// one click handler for ANY tree (local or remote): a folder toggles open, a
+// .git file or a project file opens in the note editor. stopPropagation keeps a
+// tree click from also tripping the companion's outside-click dismissal.
+function wireTree(tree) {
+    tree.el.addEventListener("click", (e) => {
         const t = e.target;
         const folder = t.closest(".is-folder[data-path]");
         if (folder) {
             e.stopPropagation();
             const path = folder.dataset.path;
-            setNodeOpen(path, !treeOpen.has(path));
+            setNodeOpen(tree, path, !tree.open.has(path));
             return;
         }
         const gitFile = t.closest(".is-gitfile[data-path]");
         if (gitFile) {
             e.stopPropagation();
             const path = gitFile.dataset.path;
-            if (viewerFile === path)
+            if (viewerFile === path && viewerSide === tree.side)
                 closeFileViewer();
             else
-                openGitFile(path, gitFile);
+                openGitFile(path, gitFile, tree.side);
+            return;
+        }
+        const projFile = t.closest("li[data-file]");
+        if (projFile) {
+            e.stopPropagation();
+            const file = projFile.dataset.file;
+            if (viewerFile === file && viewerSide === tree.side)
+                closeFileViewer();
+            else
+                openFileViewer(file, tree.side, projFile);
         }
     });
+}
+function wireFileViewer() {
+    wireTree(localTree);
+    wireTree(remoteTree);
     editorEl.addEventListener("click", (e) => {
         if (viewerFile == null)
             return; // the auto-edit ignores clicks
@@ -1987,61 +2000,41 @@ function wireFileViewer() {
             closeFileViewer();
     });
 }
-// ---- remote tree (right) -------------------------------------------
+// ---- the remote panel: the SAME tree, fed a remote model ------------
+// The remote is a copy of your repo online. Once pushed, its .git mirrors the
+// local one exactly (same objects/refs/HEAD), so we reuse the local snapshot's
+// .git for it — clicking the remote's HEAD shows the same real file.
 let lastRemoteShown = false;
 let lastRemotePushed = false;
+function remoteModel() {
+    if (stepIndex <= stepIdx("remote"))
+        return null; // no remote added yet
+    const pushed = stepIndex > stepIdx("push");
+    const files = pushed
+        ? PROJECT.files.map((f) => ({ name: f, file: f, state: "committed", flash: lastRemotePushed ? undefined : "pushed" }))
+        : [];
+    return {
+        root: PROJECT.root,
+        url: remoteUrl.replace(/^https?:\/\//, "").replace(/\.git$/, ""),
+        git: pushed && snap?.inited ? snap.git : [], // mirror the local .git once pushed; empty before
+        gitNote: "the remote repo",
+        gitNew: !lastRemoteShown,
+        files,
+        emptyMsg: pushed ? undefined : "nothing pushed yet",
+    };
+}
 function renderRemoteTree() {
-    const shown = stepIndex > stepIdx("remote"); // git remote add done
-    const pushed = stepIndex > stepIdx("push"); // git push done
-    remoteTreeEl.classList.toggle("is-shown", shown);
-    remoteList.replaceChildren();
-    if (!shown) {
+    const model = remoteModel();
+    remoteTreeEl.classList.toggle("is-shown", !!model);
+    if (!model) {
+        remoteList.replaceChildren();
         lastRemoteShown = false;
         lastRemotePushed = false;
         return;
     }
-    const url = document.createElement("li");
-    url.className = "remote-url";
-    url.textContent = remoteUrl.replace(/^https?:\/\//, "").replace(/\.git$/, "");
-    remoteList.appendChild(url);
-    const root = document.createElement("li");
-    root.className = "d";
-    root.append(folderIcon(), makeName(`${PROJECT.root}/`));
-    remoteList.appendChild(root);
-    const git = document.createElement("li");
-    git.className = "f d--git";
-    if (!lastRemoteShown)
-        git.classList.add("is-new");
-    const note = document.createElement("span");
-    note.className = "f__note";
-    note.textContent = "the remote repo";
-    git.append(folderIcon(), makeName(".git/"), note);
-    remoteList.appendChild(git);
-    if (pushed) {
-        PROJECT.files.forEach((f, fi) => {
-            const li = document.createElement("li");
-            li.className = "f f--committed is-openable";
-            li.dataset.file = f; // remote files open too
-            if (!lastRemotePushed)
-                li.classList.add("is-new");
-            const name = makeName(f);
-            name.appendChild(makeUnderline(fi * 9 + 31));
-            li.append(fileIcon(f), name);
-            const m = document.createElement("span");
-            m.className = "f__mark";
-            m.textContent = MARK.committed;
-            li.appendChild(m);
-            remoteList.appendChild(li);
-        });
-    }
-    else {
-        const empty = document.createElement("li");
-        empty.className = "remote-empty";
-        empty.textContent = "nothing pushed yet";
-        remoteList.appendChild(empty);
-    }
-    lastRemoteShown = shown;
-    lastRemotePushed = pushed;
+    renderTree(remoteTree, model);
+    lastRemoteShown = true;
+    lastRemotePushed = stepIndex > stepIdx("push");
 }
 // ---- remote mini-graph (the remote's own tree, drawn above the local one) ---
 // The remote is the shared source of truth. On the FIRST push a small copy of
@@ -2382,10 +2375,11 @@ let gitOpenBeforePeek = false; // .git open-state before a companion question pe
 // the live snapshot from the REAL git repo (repo.ts) drives the tree + states.
 let snap = null;
 let lastCommitMsg = "first commit";
-// which tree folders/files are open, by path. The project root starts open.
-const treeOpen = new Set(["root"]);
+const localTree = { el: treeList, open: new Set(["root"]), side: "local" };
+const remoteTree = { el: remoteList, open: new Set(["root"]), side: "remote" };
 // flat index of every .git *file* by path, so a click can open it in the
-// editor. Rebuilt from each snapshot.
+// editor. The remote mirrors the local's .git after push, so one index serves
+// both. Rebuilt from each snapshot.
 let gitNodeByPath = new Map();
 function indexGitNodes(nodes) {
     for (const n of nodes) {
@@ -2416,20 +2410,20 @@ async function refreshRepo() {
     gitNodeByPath = new Map();
     indexGitNodes(snap.git);
     if (steps[stepIndex]?.collapseTree) {
-        treeOpen.clear();
-        treeOpen.add("root");
+        localTree.open.clear();
+        localTree.open.add("root");
     }
     renderFileTree();
 }
 // open/close a tree node by path: flips its row + the subwrap that follows it,
 // and (for folders) swaps the closed folder icon for an open one. Animations
 // ride the class change, so we never re-render to toggle.
-function setNodeOpen(path, open) {
+function setNodeOpen(tree, path, open) {
     if (open)
-        treeOpen.add(path);
+        tree.open.add(path);
     else
-        treeOpen.delete(path);
-    const row = treeList.querySelector(`[data-path="${path}"]`);
+        tree.open.delete(path);
+    const row = tree.el.querySelector(`[data-path="${path}"]`);
     if (!row)
         return;
     row.classList.toggle("is-open", open);
@@ -2478,8 +2472,8 @@ function revealSubtree(wrap) {
 // the companion's .git/ question drives the same folder open as a manual click
 function setGitOpen(open) {
     if (open)
-        setNodeOpen("root", true); // make sure the root is open so .git/ is visible
-    setNodeOpen(".git", open);
+        setNodeOpen(localTree, "root", true); // make sure the root is open so .git/ is visible
+    setNodeOpen(localTree, ".git", open);
 }
 // resolve a `points` key to the live board element its arrow should reach
 function companionTarget(points) {
@@ -2590,7 +2584,7 @@ function openCurio(btn, ans, points) {
     // peek inside .git for the answer, remembering the prior state so closing the
     // question restores it (rather than force-collapsing a folder the user opened)
     if (points === "dotgit") {
-        gitOpenBeforePeek = treeOpen.has(".git");
+        gitOpenBeforePeek = localTree.open.has(".git");
         setGitOpen(true);
     }
     if (points) {

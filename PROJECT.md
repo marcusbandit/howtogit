@@ -33,6 +33,14 @@ total beginner is never lost.
 - `scripts/shoot.mjs` — headless screenshot harness: drive the app to any step
   (`--step N`), optionally interact (`--do "<js>"`), and capture a PNG, so any
   state can be inspected/verified programmatically.
+- **One tree renderer for everything.** The local working tree and the remote
+  panel are two `TreeView` instances (a container + its own open-paths set +
+  side) drawn by the same `renderTree(tree, model)` from a `RepoModel`. All the
+  behaviour (recursive folders, hover notes, the staggered write-on reveal, the
+  note-card editor) lives in the shared `.tree__list` CSS + the shared
+  interaction helpers (`setNodeOpen`/`revealSubtree`/`wireTree`), so a new tree
+  is just a new model. The remote's `.git` reuses the local snapshot (identical
+  after push). Add trees by writing a model, not a renderer.
 
 ## Done
 
