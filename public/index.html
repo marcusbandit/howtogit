@@ -53,7 +53,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=landing30" />
+  <link rel="stylesheet" href="style.css?v=landing31" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -66,8 +66,11 @@
   </svg>
 
   <header class="brand">
-    <span class="brand__word">howtogit.dev</span>
+    <span class="brand__word" role="button" tabindex="0"
+          aria-label="howtogit.dev — click twice to restart from the beginning">howtogit.dev</span>
     <svg class="brand__rule" aria-hidden="true" viewBox="0 0 160 12" preserveAspectRatio="none"></svg>
+    <!-- shown after the first click; a second click restarts (wired in app.ts) -->
+    <span class="brand__restart" id="brand-restart" aria-hidden="true">click again to restart</span>
   </header>
 
   <!-- dark-mode toggle: a hand-drawn lightbulb. Lit (with rays) in light mode,
@@ -224,6 +227,6 @@ this will be useful if you wanna come back later</p>
        thing it's talking about (the .git/ row, a node, a tag). Pixel-space. -->
   <svg id="companion-arrows" class="companion-arrows" aria-hidden="true"></svg>
 
-  <script type="module" src="app.js?v=landing30"></script>
+  <script type="module" src="app.js?v=landing31"></script>
 </body>
 </html>

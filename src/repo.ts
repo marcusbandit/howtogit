@@ -111,7 +111,8 @@ export const PROJECT_FILES: Record<string, string> = {
 export type RepoCmd =
   | { kind: "init" }
   | { kind: "add"; filepath?: string }
-  | { kind: "commit"; message: string };
+  | { kind: "commit"; message: string }
+  | { kind: "remoteAdd"; remote?: string; url: string };
 
 let fs = new MemFs();
 
@@ -128,6 +129,10 @@ async function runOne(cmd: RepoCmd): Promise<void> {
     case "init": await git.init({ fs, dir: DIR, defaultBranch: "main" }); break;
     case "add": await git.add({ fs, dir: DIR, filepath: cmd.filepath ?? "." }); break;
     case "commit": await git.commit({ fs, dir: DIR, message: cmd.message, author: AUTHOR }); break;
+    // "git remote add" is the one bit of the remote that's real: it genuinely
+    // writes a [remote "origin"] section into .git/config (there's no GitHub to
+    // talk to, but the config entry is real), so the config file actually shows it.
+    case "remoteAdd": await git.addRemote({ fs, dir: DIR, remote: cmd.remote ?? "origin", url: cmd.url, force: true }); break;
   }
 }
 
@@ -173,7 +178,7 @@ function baseState(row: [string, number, number, number] | undefined): FileBase 
 // is intentionally absent: isomorphic-git's init never creates it.
 const TOP_SHOW = new Set(["HEAD", "config", "objects", "refs", "index"]);
 const READABLE = new Set(["HEAD", "config"]);
-interface Described { note: string; readable: boolean; explain?: string; later?: string; markLine?: number; desc?: string }
+interface Described { note: string; readable: boolean; explain?: string; later?: string; markLine?: number; markToken?: string; desc?: string }
 function describe(name: string, rel: string, isDir: boolean): Described {
   if (rel === "HEAD") return {
     note: "where you are right now", readable: true,
@@ -182,8 +187,8 @@ function describe(name: string, rel: string, isDir: boolean): Described {
   };
   if (rel === "config") return {
     note: "your project's settings", readable: true,
-    explain: "Settings git wrote for this repo.",
-    later: "Your name and the remote get added here as you go.",
+    explain: "Settings git keeps for this repo.", markToken: "url =",
+    later: "This is where your remote's address gets saved.",
   };
   if (rel === "index") return {
     note: "what's lined up for your next save", readable: false,
@@ -241,7 +246,13 @@ async function walkGit(absPath: string, rel: string): Promise<GitNode[]> {
       node.content = (await fs.promises.readFile(`${absPath}/${e.name}`, "utf8") as string).replace(/\n+$/, "");
       if (d.explain) node.explain = d.explain;
       if (d.later) node.later = d.later;
+      // markLine is a fixed line; markToken finds the line by content (e.g. the
+      // remote's "url =", which only exists once you've added a remote)
       if (d.markLine != null) node.markLine = d.markLine;
+      else if (d.markToken) {
+        const idx = node.content.split("\n").findIndex((l) => l.includes(d.markToken!));
+        if (idx >= 0) node.markLine = idx;
+      }
     } else {
       node.desc = d.desc ?? "This file isn't meant to be read by hand.";
       if (d.later) node.later = d.later;

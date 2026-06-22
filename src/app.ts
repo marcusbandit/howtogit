@@ -23,6 +23,66 @@ const COLORS = {
   remote: "#6b5ca5",
 } as const;
 
+// ---- session memory (survives a normal reload) ----------------------
+// A session is two things: which step you're on, and every value you typed on
+// the way there (commit messages, the remote's name + url, branch names), kept
+// keyed by step. Replaying / seeking reuses YOUR words instead of the canned
+// defaults, and a normal reload drops you back exactly where you left off.
+// A hard refresh (Ctrl+Shift+R) is treated as "start me clean" — see
+// isHardRefresh, which is the only reliable way to tell the two reloads apart.
+const LS_SESSION = "htg-session-v1";
+const LS_CACHE_OK = "htg-cache-ok";   // have we ever seen the probe served from cache?
+const PROBE_NAME = "reload-probe.js";
+
+interface Persisted { step: number; values: Record<string, string>; }
+let persisted: Persisted = { step: 0, values: {} };
+
+function savePersisted(): void {
+  try { localStorage.setItem(LS_SESSION, JSON.stringify(persisted)); } catch { /* private mode / full */ }
+}
+function loadPersisted(): Persisted | null {
+  try {
+    const raw = localStorage.getItem(LS_SESSION);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Partial<Persisted>;
+    if (!p || typeof p.step !== "number" || typeof p.values !== "object" || !p.values) return null;
+    return { step: p.step, values: p.values as Record<string, string> };
+  } catch { return null; }
+}
+function clearPersisted(): void {
+  persisted = { step: 0, values: {} };
+  try { localStorage.removeItem(LS_SESSION); } catch { /* ignore */ }
+}
+
+// The browser gives no direct "was this a hard refresh?" flag: a normal reload
+// and a Ctrl+Shift+R both report navigation type "reload". The only thing a hard
+// refresh changes is the HTTP cache — it re-downloads everything. So we watch a
+// tiny cached-forever probe (reload-probe.js): on a normal reload it comes from
+// cache (resource-timing transferSize === 0); a hard refresh re-fetches it (> 0).
+// We only act on this once we've actually seen the probe cached at least once
+// (LS_CACHE_OK), so a no-cache dev server, proxy, or misconfigured host can
+// never make us forget by mistake — it just keeps remembering. And only a real
+// reload counts (a fresh navigation with an evicted cache must NOT wipe state).
+function isHardRefresh(): boolean {
+  let navType = "";
+  let probe: PerformanceResourceTiming | undefined;
+  try {
+    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    navType = nav?.type ?? "";
+    probe = (performance.getEntriesByType("resource") as PerformanceResourceTiming[])
+      .find((e) => e.name.includes(PROBE_NAME));
+  } catch { return false; }
+  if (!probe) return false;                       // can't tell -> keep remembering
+  const fromCache = probe.transferSize === 0;
+  let cacheOk = false;
+  try { cacheOk = localStorage.getItem(LS_CACHE_OK) === "1"; } catch { /* ignore */ }
+  if (fromCache && !cacheOk) {
+    cacheOk = true;                               // self-calibrate: caching works here
+    try { localStorage.setItem(LS_CACHE_OK, "1"); } catch { /* ignore */ }
+  }
+  return navType === "reload" && !fromCache && cacheOk;
+}
+
 // the board is drawn ~20% larger than 1:1 by shrinking the viewBox under the
 // full-size <svg>. One knob zooms every node, label and stroke together.
 // On a narrow phone we zoom OUT (smaller ZOOM = more board per screen) so the
@@ -1297,8 +1357,11 @@ form.addEventListener("submit", async (e) => {
   clearNudge();
   closeFileViewer();                  // a new command changes the board: dismiss any open file
   const arg = step.extract ? step.extract(input) : undefined;
+  if (arg !== undefined) persisted.values[step.key] = arg;   // remember YOUR value for this step
   cmd.value = "";
   stepIndex++;
+  persisted.step = stepIndex;
+  savePersisted();                    // a normal reload resumes right here, with your words
   // advance the lesson + ghost immediately, before the drawing animates
   showStep(stepIndex);
   updateTimeline();
@@ -2411,6 +2474,16 @@ function resetBoard(): void {
   shownRemoteIds.clear();
   gRemote.style.opacity = "0";
 }
+// the value to replay a step with: YOUR saved value if you set one, otherwise
+// the step's own canonical default — so a custom origin name / commit message /
+// branch name survives a seek (and a reload) instead of snapping back to a canned
+// default, while steps you never customised still replay correctly.
+function argFor(st: Step): string | undefined {
+  if (!st.extract) return undefined;
+  const saved = persisted.values[st.key];
+  return saved != null ? saved : st.extract(canonical(st));
+}
+
 async function seekTo(target: number): Promise<void> {
   if (busy || target === stepIndex) return;
   busy = true;
@@ -2427,8 +2500,7 @@ async function seekTo(target: number): Promise<void> {
     instant = true;
     try {
       for (let k = 0; k < target; k++) {
-        const st = steps[k];
-        await st.run(st.extract ? st.extract(canonical(st)) : undefined);
+        await steps[k].run(argFor(steps[k]));
       }
       centerOnHead();   // pan instantly while still in replay mode (no glide)
       if (target >= steps.length) showEndState();
@@ -2436,6 +2508,8 @@ async function seekTo(target: number): Promise<void> {
       instant = false;
     }
     stepIndex = target;
+    persisted.step = target;
+    savePersisted();            // remember where a seek left you, too
     cmd.value = "";
     showStep(stepIndex);
     updateTimeline();
@@ -2509,7 +2583,9 @@ function repoCommandsFor(i: number): RepoCmd[] {
   const cmds: RepoCmd[] = [];
   if (i > stepIdx("init")) cmds.push({ kind: "init" });
   if (i > stepIdx("add")) cmds.push({ kind: "add" });
-  if (i > stepIdx("commit")) cmds.push({ kind: "commit", message: lastCommitMsg });
+  if (i > stepIdx("commit")) cmds.push({ kind: "commit", message: persisted.values["commit"] ?? lastCommitMsg });
+  // git remote add really runs (writes .git/config), so the config file shows it
+  if (i > stepIdx("remote")) cmds.push({ kind: "remoteAdd", url: remoteUrl });
   return cmds;
 }
 // replay real git to the current step, take a fresh snapshot, redraw the tree.
@@ -2787,6 +2863,59 @@ function applyStepParam(): void {
   if (target > 0) void seekTo(target);
 }
 
+// ---- brand logo: click once to arm, again to restart ----------------
+// Clicking "howtogit.dev" the first time reveals a "click again to restart"
+// hint under it; clicking again wipes the saved session and drops you back on
+// the centred start page. Clicking elsewhere (or waiting) cancels the arming.
+function wireBrand(): void {
+  const brand = needSel<HTMLElement>(".brand");
+  const word = needSel<HTMLElement>(".brand__word");
+  let armed = false;
+  let disarmTimer = 0;
+  const disarm = (): void => {
+    armed = false;
+    brand.classList.remove("is-armed");
+    if (disarmTimer) { window.clearTimeout(disarmTimer); disarmTimer = 0; }
+  };
+  const restart = (): void => {
+    disarm();
+    clearPersisted();                                // forget the saved session
+    remoteName = "origin";                           // seekTo(0) runs no steps,
+    remoteUrl = "https://github.com/you/site.git";   // so reset these by hand
+    lastCommitMsg = "first commit";
+    void seekTo(0);                                  // back to the centred landing
+  };
+  const activate = (e: Event): void => {
+    e.preventDefault();
+    e.stopPropagation();             // don't let this same click immediately disarm
+    if (armed) { restart(); return; }
+    armed = true;
+    brand.classList.add("is-armed");
+    disarmTimer = window.setTimeout(disarm, 5000);   // forget the arming if ignored
+  };
+  word.addEventListener("click", activate);
+  word.addEventListener("keydown", (e) => {
+    const k = (e as KeyboardEvent).key;
+    if (k === "Enter" || k === " ") activate(e);
+  });
+  document.addEventListener("click", (e) => {        // a click elsewhere cancels it
+    if (armed && !brand.contains(e.target as Node)) disarm();
+  });
+}
+
+// On load: a hard refresh (Ctrl+Shift+R) starts clean; a normal reload restores
+// the saved step and your typed values, replaying the lesson straight to where
+// you left off (custom origin name, commit messages, branch names and all).
+async function restoreSession(): Promise<void> {
+  if (isHardRefresh()) { clearPersisted(); return; }
+  const p = loadPersisted();
+  if (!p) return;
+  persisted = p;
+  lastCommitMsg = persisted.values["commit"] ?? lastCommitMsg;
+  const target = Math.max(0, Math.min(persisted.step, steps.length));
+  if (target > 0) await seekTo(target);
+}
+
 async function boot(): Promise<void> {
   sizeBoard();
   stage.style.setProperty("--stage-y", "50%");
@@ -2805,8 +2934,10 @@ async function boot(): Promise<void> {
   needSel<HTMLElement>("#filetree .tree__title").prepend(computerIcon());
   needSel<HTMLElement>("#remotetree .tree__title").prepend(cloudIcon());
   wireFileViewer();   // click any file in either tree to open it
+  wireBrand();        // click the logo once to arm, again to restart
   typeLandingCallout();   // landing intro: type the file-tree callout in
   syncCompanion();        // landing: the curiosity companion's forward-looking questions
+  await restoreSession(); // normal reload resumes where you left off; hard refresh starts clean
   if (!isPhone) cmd.focus();
   applyStepParam();   // dev: ?step=N jumps straight to a state for screenshots
 }

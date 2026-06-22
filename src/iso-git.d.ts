@@ -10,6 +10,7 @@ declare module "*/vendor/isomorphic-git.mjs" {
   export function add(a: Common & { filepath: string }): Promise<void>;
   export function remove(a: Common & { filepath: string }): Promise<void>;
   export function commit(a: Common & { message: string; author: Author }): Promise<string>;
+  export function addRemote(a: Common & { remote: string; url: string; force?: boolean }): Promise<void>;
   export function statusMatrix(a: Common & { filepaths?: string[] }): Promise<Array<[string, number, number, number]>>;
   export function log(a: Common & { depth?: number; ref?: string }): Promise<Array<{ oid: string; commit: { message: string; tree: string; parent: string[] } }>>;
   export function listFiles(a: Common & { ref?: string }): Promise<string[]>;

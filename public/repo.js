@@ -135,6 +135,12 @@ async function runOne(cmd) {
         case "commit":
             await git.commit({ fs, dir: DIR, message: cmd.message, author: AUTHOR });
             break;
+        // "git remote add" is the one bit of the remote that's real: it genuinely
+        // writes a [remote "origin"] section into .git/config (there's no GitHub to
+        // talk to, but the config entry is real), so the config file actually shows it.
+        case "remoteAdd":
+            await git.addRemote({ fs, dir: DIR, remote: cmd.remote ?? "origin", url: cmd.url, force: true });
+            break;
     }
 }
 // wipe and replay the given commands from scratch; the repo is the source of truth
@@ -175,8 +181,8 @@ function describe(name, rel, isDir) {
     if (rel === "config")
         return {
             note: "your project's settings", readable: true,
-            explain: "Settings git wrote for this repo.",
-            later: "Your name and the remote get added here as you go.",
+            explain: "Settings git keeps for this repo.", markToken: "url =",
+            later: "This is where your remote's address gets saved.",
         };
     if (rel === "index")
         return {
@@ -247,8 +253,15 @@ async function walkGit(absPath, rel) {
                 node.explain = d.explain;
             if (d.later)
                 node.later = d.later;
+            // markLine is a fixed line; markToken finds the line by content (e.g. the
+            // remote's "url =", which only exists once you've added a remote)
             if (d.markLine != null)
                 node.markLine = d.markLine;
+            else if (d.markToken) {
+                const idx = node.content.split("\n").findIndex((l) => l.includes(d.markToken));
+                if (idx >= 0)
+                    node.markLine = idx;
+            }
         }
         else {
             node.desc = d.desc ?? "This file isn't meant to be read by hand.";
