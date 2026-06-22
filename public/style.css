@@ -1126,6 +1126,12 @@ body.is-learning .landing-notes {
   transition: grid-template-rows 0.5s var(--ease-settle);
 }
 .tree__list .tree__subwrap.is-open { grid-template-rows: 1fr; }
+/* When fully open, let content bleed past the box so the LAST row's hover
+   underline (which dips ~6px below it) isn't clipped at the subwrap's bottom
+   edge. While collapsed/animating (no .is-open) overflow stays hidden so the
+   collapse still clips to zero. Both the grid container and its inner clip. */
+.tree__list .tree__subwrap.is-open,
+.tree__list .tree__subwrap.is-open > .tree__sub { overflow: visible; }
 .tree__list .tree__subwrap--root { padding-left: 0.9rem; }
 /* no own padding: it would keep the collapsed 0fr track ~5px open (a residual
    gap). The rows carry their own vertical padding for spacing. */
