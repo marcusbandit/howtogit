@@ -168,43 +168,43 @@ const READABLE = new Set(["HEAD", "config"]);
 function describe(name, rel, isDir) {
     if (rel === "HEAD")
         return {
-            note: "the branch you're on right now", readable: true,
-            explain: "HEAD is how git knows which branch you're on. It holds a pointer, ref: refs/heads/main, so your next commit lands on main. Check out another branch and git rewrites this one line to point there instead.",
+            note: "where you're working right now", readable: true,
+            explain: "Think of HEAD as a bookmark that says “you are here.” Right now it's on main, so everything you save gets added to main. If you move to a different part of your project later, the bookmark just comes along with you.",
         };
     if (rel === "config")
         return {
-            note: "settings for this repo", readable: true,
-            explain: "This repo's settings, in plain text. git init writes the defaults; as you go, things like your remote's URL and your name on commits get saved here.",
+            note: "your project's settings", readable: true,
+            explain: "This is your project's settings page. git filled in some sensible defaults to start you off; later, things like your name or where to back the project up online get saved here too. You rarely touch it by hand.",
         };
     if (rel === "index")
         return {
-            note: "the staging area for your next commit", readable: false,
-            desc: "The staging area: a binary list of exactly what git add has lined up for your next commit. git commit turns it into a snapshot. Not meant to be read by hand.",
+            note: "what's packed for your next save", readable: false,
+            desc: "Think of this as a packing box for your next save. “git add” drops your changes into the box, then “git commit” seals it into a snapshot. It's just a checklist git keeps for itself, not something you read.",
         };
     if (rel === "objects")
-        return { note: "every snapshot you save, stored by id", readable: false };
+        return { note: "every version of your work, kept safe", readable: false };
     if (rel === "refs")
-        return { note: "names that point at commits", readable: false };
+        return { note: "names that point at your saves", readable: false };
     if (rel === "refs/heads")
         return { note: "your branches", readable: false };
     if (rel === "refs/tags")
         return { note: "your tags", readable: false };
     if (/^objects\/[0-9a-f]{2}$/.test(rel))
-        return { note: "objects whose id starts with these two characters", readable: false };
+        return { note: "saves whose id starts with these two characters", readable: false };
     if (/^objects\/[0-9a-f]{2}\/[0-9a-f]+$/.test(rel))
         return {
-            note: "one stored object", readable: false,
-            desc: "A compressed, checksummed object, a file's contents, a folder listing (a 'tree'), or a commit. Git names each by a hash of what's inside and unpacks it for you; it's not meant to be opened by hand.",
+            note: "one stored snapshot", readable: false,
+            desc: "This is one of your saved snapshots, squished down so it takes less room and locked so it can never change. git keeps every version of your work in here and pulls them back out for you, you never open these yourself.",
         };
     if (/^refs\/heads\//.test(rel))
         return {
-            note: "this branch → its latest commit", readable: true,
-            explain: "A branch is just a file holding one commit's id. This is where the branch points; when you commit again, git updates this id to the new commit. That's all a branch really is.",
+            note: "this branch → its latest save", readable: true,
+            explain: "A branch like main is really just a sticky note with the id of your latest save written on it. Every time you save, git updates the note to point at the new one. That's the whole trick.",
         };
     if (/^refs\/tags\//.test(rel))
         return {
-            note: "a tag → a fixed commit", readable: true,
-            explain: "A tag is a file pinned to one commit's id, a permanent name for a point in history (like a release), unlike a branch which moves as you commit.",
+            note: "a tag → a fixed save", readable: true,
+            explain: "A tag is a sticky note pinned to one exact save and left there, a permanent name for a moment in your project (like a release). Unlike a branch, it never moves.",
         };
     return { note: "", readable: !isDir && READABLE.has(name) };
 }
@@ -228,7 +228,11 @@ async function walkGit(absPath, rel) {
     for (const e of visible) {
         const childRel = rel ? `${rel}/${e.name}` : e.name;
         const d = describe(e.name, childRel, e.isDir);
-        const node = { name: e.isDir ? `${e.name}/` : e.name, path: `.git/${childRel}`, isDir: e.isDir, note: d.note };
+        // object ids are 38-hex names that aren't worth reading; show a short stub
+        // (the full name stays in `path` for the editor + uniqueness)
+        const display = e.isDir ? `${e.name}/`
+            : (/^[0-9a-f]{16,}$/i.test(e.name) ? `${e.name.slice(0, 7)}…` : e.name);
+        const node = { name: display, path: `.git/${childRel}`, isDir: e.isDir, note: d.note };
         if (e.isDir) {
             node.children = await walkGit(`${absPath}/${e.name}`, childRel);
         }

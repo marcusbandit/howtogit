@@ -542,11 +542,10 @@ body.is-learning .landing-notes {
 }
 .companion.is-visible { opacity: 1; visibility: visible; }
 /* the "i'll explain things over here" flourish only belongs on the centred
-   landing; once we've docked it has done its job and goes */
-/* the label sits above the questions and the arrow drops onto them, so the whole
-   flourish stays anchored to the companion. We only slide it left toward the
-   centre of the page by a set amount (the page middle itself is taken by the
-   command line, so it can't go all the way). */
+   landing; once we've docked it has done its job and goes. It's a whiteboard
+   note sitting in the open space above the questions, with a long arrow dropping
+   onto them. The translate slides it left toward the page centre as far as it can
+   go before the command-line column (which owns the true middle) would crowd it. */
 .companion__intro {
   align-self: center;
   text-align: center;
@@ -564,7 +563,7 @@ body.is-learning .landing-notes {
   margin: 0 auto;
   text-wrap: balance;
 }
-.companion__intro-arrow { display: block; margin: 0.1rem auto 0; width: 2.3rem; height: 11rem; overflow: visible; }
+.companion__intro-arrow { display: block; margin: 0.1rem auto 0; width: 2.4rem; height: 11rem; overflow: visible; }
 
 .companion__qa + .companion__qa { margin-top: 0.4rem; }
 /* a question is a bare, tappable line: hand-drawn caret + the words */
@@ -1014,6 +1013,9 @@ body.is-learning .landing-notes {
   line-height: 1.35;
   position: relative;
 }
+/* a row is only as wide as its own content, so hover/click land on the file,
+   not the empty space stretching off to the right */
+.tree__list li:not(.tree__subwrap) { width: max-content; max-width: 100%; }
 /* the underline dips below the name into the next row; lift the hovered row so
    it paints over the file beneath instead of being clipped by it */
 .tree__list li.is-openable:hover,
@@ -1207,46 +1209,51 @@ body.is-learning .landing-notes {
   opacity: 0;
   pointer-events: none;
   background: #fbf6e8;
-  border: 2.5px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 0 18px 42px -18px rgba(42, 37, 33, 0.5);
-  rotate: -0.6deg;
+  /* a hand-drawn note, not a window: a 2px ink edge with uneven, sketched
+     corners, a soft drop shadow and a slight tilt, like a card pinned up */
+  border: 2px solid var(--ink);
+  border-radius: 22px 12px 24px 13px / 13px 24px 12px 22px;
+  box-shadow: 0 16px 40px -16px rgba(42, 37, 33, 0.45);
+  rotate: -1.1deg;
   overflow: hidden;
   /* JS drives the grow/shrink transform + opacity inline (it animates out of and
-     back into the index.html line in the tree); this is just an idle fallback */
+     back into the file's line in the tree); this is just an idle fallback */
   transition: opacity 0.42s var(--ease-settle), transform 0.42s var(--ease-settle);
 }
 .editor__bar {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.85rem;
-  border-bottom: 2px solid rgba(42, 37, 33, 0.16);
-  background: rgba(42, 37, 33, 0.045);
-  cursor: pointer;   /* the title bar is the close affordance */
+  gap: 0.45rem;
+  padding: 0.55rem 0.9rem 0.45rem;
+  border-bottom: 1.6px dashed rgba(42, 37, 33, 0.2);   /* a torn-note divider, not a chrome bar */
+  cursor: pointer;   /* the bar is a close affordance */
 }
-.editor__dots { display: inline-flex; gap: 0.34rem; }
-/* hovering the bar warms the first dot, the classic "close" hint */
-.editor__bar:hover .editor__dots i:first-child {
-  border-color: var(--pen-red);
-  background: rgba(192, 73, 47, 0.55);
-}
-.editor__dots i {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  border: 1.6px solid var(--ink-soft);
-  display: inline-block;
-}
+/* a little sketched pin/thumbtack where the window dots used to be */
+.editor__pin { width: 1.05rem; height: 1.05rem; flex: none; overflow: visible; }
+.editor__pin .note-stroke { stroke: var(--pen-red); stroke-width: 1.5; fill: none; stroke-dasharray: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
 .editor__name {
   font-family: var(--mono);
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--ink-soft);
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
 }
+.editor__close {
+  margin-left: 0.4rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--ui);
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  opacity: 0.5;
+  padding: 0.1rem 0.25rem;
+  transition: opacity 0.2s ease, color 0.2s ease, transform 0.2s var(--ease-settle);
+}
+.editor__close:hover { opacity: 1; color: var(--pen-red); transform: rotate(90deg); }
 .editor__unsaved {
   color: var(--pen-red);
   font-size: 0.9rem;

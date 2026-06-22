@@ -47,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=landing25" />
+  <link rel="stylesheet" href="style.css?v=landing26" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -112,13 +112,17 @@
     </svg>
   </main>
 
-  <!-- a make-believe code editor: on the feature branch it opens, types an edit
-       into index.html, then saves. Purely a visual beat, nothing functional. -->
+  <!-- a hand-drawn note that opens when you click a file: shows what it is and
+       its contents. On the feature branch it also types an edit + saves. -->
   <div id="editor" class="editor" aria-hidden="true">
     <div class="editor__bar">
-      <span class="editor__dots"><i></i><i></i><i></i></span>
+      <svg class="editor__pin" viewBox="0 0 20 20" aria-hidden="true">
+        <path class="note-stroke" d="M10 3.2 C 7.4 3.6, 6.6 6, 8.2 8 L 6.6 12.4 C 9.6 13.6, 11.4 13.4, 13.8 12.2 L 12 8 C 13.4 6, 12.6 3.6, 10 3.2 Z" />
+        <path class="note-stroke" d="M9.7 13.2 L 9.2 17" />
+      </svg>
       <span class="editor__name"><span id="editor-name">index.html</span><b class="editor__unsaved" id="editor-unsaved">●</b></span>
       <span class="editor__save" id="editor-save">saved ✓</span>
+      <button class="editor__close" type="button" aria-label="close">✕</button>
     </div>
     <div class="editor__code" id="editor-code"></div>
   </div>
@@ -200,9 +204,11 @@ this will be useful if you wanna come back later</p>
   <aside id="companion" class="companion" aria-live="polite" aria-label="things explained as you go">
     <div class="companion__intro" aria-hidden="true">
       <p class="companion__intro-label">i'll explain things over here as you go</p>
-      <svg class="companion__intro-arrow" viewBox="0 0 60 72" aria-hidden="true">
-        <path class="note-stroke" pathLength="1" d="M30 4 C 25 26, 35 42, 30 62" />
-        <path class="note-stroke" pathLength="1" d="M22 52 L30 64 L38 51" />
+      <!-- tall viewBox matches the rendered aspect (2.4rem wide x 11rem tall) so
+           the long arrow scales uniformly and the stroke stays an even weight -->
+      <svg class="companion__intro-arrow" viewBox="0 0 30 138" aria-hidden="true">
+        <path class="note-stroke" pathLength="1" d="M15 5 C 11 42, 19 92, 15 124" />
+        <path class="note-stroke" pathLength="1" d="M7 109 L15 127 L23 108" />
       </svg>
     </div>
     <div class="companion__list" id="companion-list"></div>
@@ -212,6 +218,6 @@ this will be useful if you wanna come back later</p>
        thing it's talking about (the .git/ row, a node, a tag). Pixel-space. -->
   <svg id="companion-arrows" class="companion-arrows" aria-hidden="true"></svg>
 
-  <script type="module" src="app.js?v=landing25"></script>
+  <script type="module" src="app.js?v=landing26"></script>
 </body>
 </html>

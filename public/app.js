@@ -1655,7 +1655,20 @@ const JS_RULES = [
     { re: /\b\d+\b/y, cls: "num" },
     { re: /[A-Za-z_$][\w$]*/y, cls: "val" },
 ];
-const RULES = { html: HTML_RULES, css: CSS_RULES, js: JS_RULES, txt: [] };
+// git's config / HEAD / refs are INI-ish: [sections], key = value, the odd
+// ref: path. Light colour so it reads as structured, not a wall of grey.
+const INI_RULES = [
+    { re: /[#;].*/y, cls: "comment" },
+    { re: /\[[^\]]*\]/y, cls: "tag" }, // [core], [remote "origin"]
+    { re: /"[^"]*"/y, cls: "str" }, // quoted values / subsection names
+    { re: /\bref\b/y, cls: "kw" }, // HEAD's "ref:"
+    { re: /[\w-]+(?=\s*=)/y, cls: "attr" }, // key before =
+    { re: /[=:]/y, cls: "punct" },
+    { re: /\b(?:true|false)\b/y, cls: "kw" },
+    { re: /\b\d+\b/y, cls: "num" },
+    { re: /https?:\/\/\S+|\S+\.git\b/y, cls: "str" }, // urls
+];
+const RULES = { html: HTML_RULES, css: CSS_RULES, js: JS_RULES, txt: [], ini: INI_RULES };
 function highlight(line, lang) {
     const rules = RULES[lang];
     let out = "", i = 0;
@@ -1822,7 +1835,7 @@ function openGitFile(path, row) {
     editorSave.classList.remove("show");
     if (node.content != null) {
         // readable file: explain what it does + why, then show its real contents
-        editorLang = "txt";
+        editorLang = "ini"; // [sections], key = value, ref: paths — light colour
         renderEditorLines(node.content.split("\n"));
         if (node.explain) {
             const p = document.createElement("p");

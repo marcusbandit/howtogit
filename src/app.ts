@@ -1689,7 +1689,7 @@ function fileLines(file: string, side: "local" | "remote"): { lines: string[]; c
 // A small ordered-rule tokenizer: at each position the first sticky rule that
 // matches wins and its text is wrapped in a coloured span; anything no rule
 // claims is emitted as plain (escaped) text. Enough for the short snippets here.
-type Lang = "html" | "css" | "js" | "txt";
+type Lang = "html" | "css" | "js" | "txt" | "ini";
 interface SxRule { re: RegExp; cls: string; }
 const sxWrap = (cls: string, s: string): string => `<span class="sx-${cls}">${esc(s)}</span>`;
 
@@ -1720,7 +1720,20 @@ const JS_RULES: SxRule[] = [
   { re: /\b\d+\b/y, cls: "num" },
   { re: /[A-Za-z_$][\w$]*/y, cls: "val" },
 ];
-const RULES: Record<Lang, SxRule[]> = { html: HTML_RULES, css: CSS_RULES, js: JS_RULES, txt: [] };
+// git's config / HEAD / refs are INI-ish: [sections], key = value, the odd
+// ref: path. Light colour so it reads as structured, not a wall of grey.
+const INI_RULES: SxRule[] = [
+  { re: /[#;].*/y, cls: "comment" },
+  { re: /\[[^\]]*\]/y, cls: "tag" },           // [core], [remote "origin"]
+  { re: /"[^"]*"/y, cls: "str" },              // quoted values / subsection names
+  { re: /\bref\b/y, cls: "kw" },               // HEAD's "ref:"
+  { re: /[\w-]+(?=\s*=)/y, cls: "attr" },      // key before =
+  { re: /[=:]/y, cls: "punct" },
+  { re: /\b(?:true|false)\b/y, cls: "kw" },
+  { re: /\b\d+\b/y, cls: "num" },
+  { re: /https?:\/\/\S+|\S+\.git\b/y, cls: "str" },   // urls
+];
+const RULES: Record<Lang, SxRule[]> = { html: HTML_RULES, css: CSS_RULES, js: JS_RULES, txt: [], ini: INI_RULES };
 
 function highlight(line: string, lang: Lang): string {
   const rules = RULES[lang];
@@ -1888,7 +1901,7 @@ function openGitFile(path: string, row: HTMLElement): void {
   editorSave.classList.remove("show");
   if (node.content != null) {
     // readable file: explain what it does + why, then show its real contents
-    editorLang = "txt";
+    editorLang = "ini";   // [sections], key = value, ref: paths — light colour
     renderEditorLines(node.content.split("\n"));
     if (node.explain) {
       const p = document.createElement("p");
