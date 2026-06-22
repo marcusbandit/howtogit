@@ -511,7 +511,7 @@ body {
 .note--explainer {
   right: clamp(1.5rem, 3vw, 3rem);
   bottom: clamp(2rem, 7vh, 5rem);
-  width: clamp(16rem, 24vw, 22rem);
+  width: clamp(19rem, 31vw, 28rem);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -523,33 +523,33 @@ body {
   border: 2.5px dashed var(--ink-soft);
   /* an uneven, hand-drawn box */
   border-radius: 20px 11px 22px 13px / 13px 22px 11px 20px;
-  padding: 0.7rem 0.95rem 0.8rem;
+  padding: 1rem 1.25rem 1.1rem;
   text-align: left;
   pointer-events: auto;     /* the expander inside is interactive */
 }
 .explainer__cmd {
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 1.08rem;
   color: var(--pen-blue);
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.55rem;
 }
 .explainer__q {
   font-family: var(--hand);
   font-weight: 700;
-  font-size: 1.18rem;
+  font-size: 1.42rem;
   line-height: 1.1;
   color: var(--ink);
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.25rem;
 }
 .explainer__a {
   font-family: var(--ui);
-  font-size: 0.82rem;
-  line-height: 1.42;
+  font-size: 0.95rem;
+  line-height: 1.45;
   color: var(--ink-soft);
 }
 .explainer__a b { color: var(--ink); font-weight: 600; }
-.explainer__more { margin-top: 0.6rem; border-top: 1.5px dashed rgba(122, 112, 96, 0.4); padding-top: 0.55rem; }
+.explainer__more { margin-top: 0.75rem; border-top: 1.5px dashed rgba(122, 112, 96, 0.4); padding-top: 0.7rem; }
 .explainer__more summary {
   display: flex;
   justify-content: space-between;
@@ -559,7 +559,7 @@ body {
   cursor: pointer;
   font-family: var(--hand);
   font-weight: 700;
-  font-size: 1.12rem;
+  font-size: 1.32rem;
   line-height: 1.1;
   color: var(--ink);
 }
@@ -567,7 +567,7 @@ body {
 .explainer__more summary b { color: var(--pen-red); font-weight: 700; }
 .explainer__chev {
   font-family: var(--ui);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--pen-red);
   white-space: nowrap;
