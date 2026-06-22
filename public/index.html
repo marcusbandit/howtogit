@@ -47,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=landing8" />
+  <link rel="stylesheet" href="style.css?v=landing9" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -190,33 +190,29 @@ this will be useful if you wanna come back later</p>
       </svg>
       <p class="note__label" data-text="these are your project's files, the ones on your computer"></p>
     </div>
-    <!-- the repurposed bottom-right: a sketchy explainer area -->
-    <div class="note note--explainer">
-      <p class="note__label note__label--explainer">i'll explain things over here as you go</p>
-      <svg class="note__arrow note__arrow--explainer" viewBox="0 0 60 48" aria-hidden="true">
+  </div>
+
+  <!-- the curiosity companion: a persistent bottom-right voice that asks the
+       questions a beginner actually has and answers them, pointing at the real
+       thing on the board. Driven by the step machine's `curiosity` data and
+       filled by app.ts; it survives the dock so it can explain what just
+       happened, not only what's about to. -->
+  <aside id="companion" class="companion" aria-live="polite" aria-label="things explained as you go">
+    <div class="companion__intro" aria-hidden="true">
+      <p class="companion__intro-label">i'll explain things over here as you go</p>
+      <svg class="companion__intro-arrow" viewBox="0 0 60 48" aria-hidden="true">
         <path class="note-stroke" pathLength="1" d="M30 4 C 26 18, 34 27, 30 40" />
         <path class="note-stroke" pathLength="1" d="M22 31 L30 42 L38 30" />
       </svg>
-      <div class="explainer-box">
-        <p class="explainer__cmd">git init</p>
-        <div class="explainer__qa">
-          <button type="button" class="explainer__q" aria-expanded="false">
-            <svg class="explainer__caret" viewBox="0 0 16 16" aria-hidden="true"><path class="note-stroke" pathLength="1" d="M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13" /></svg>
-            <span>What does it do?</span>
-          </button>
-          <div class="explainer__a-wrap"><p class="explainer__a">Turns this plain folder into a git repository. It adds a hidden <b>.git/</b> folder to keep track of your work, and changes nothing else, your files stay exactly as they are.</p></div>
-        </div>
-        <div class="explainer__qa">
-          <button type="button" class="explainer__q" aria-expanded="false">
-            <svg class="explainer__caret" viewBox="0 0 16 16" aria-hidden="true"><path class="note-stroke" pathLength="1" d="M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13" /></svg>
-            <span>What's in <b>.git/</b>?</span>
-          </button>
-          <div class="explainer__a-wrap"><p class="explainer__a">Everything git needs to remember your project: every snapshot you save, the branches you make, and a pointer called HEAD that marks where you are. Delete <b>.git/</b> and it's an ordinary folder again.</p></div>
-        </div>
-      </div>
     </div>
-  </div>
+    <p class="companion__cmd" id="companion-cmd"></p>
+    <div class="companion__list" id="companion-list"></div>
+  </aside>
 
-  <script type="module" src="app.js?v=landing8"></script>
+  <!-- full-viewport ink layer for the hand-drawn arrows an answer draws to the
+       thing it's talking about (the .git/ row, a node, a tag). Pixel-space. -->
+  <svg id="companion-arrows" class="companion-arrows" aria-hidden="true"></svg>
+
+  <script type="module" src="app.js?v=landing9"></script>
 </body>
 </html>

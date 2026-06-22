@@ -65,6 +65,10 @@ const treeList = need("tree-list");
 const remoteTreeEl = need("remotetree");
 const remoteList = need("remote-list");
 const timelineEl = need("timeline");
+const companionEl = need("companion");
+const companionCmd = need("companion-cmd");
+const companionList = need("companion-list");
+const companionArrows = need("companion-arrows");
 const brandRule = needSel(".brand__rule");
 const cliRule = needSel(".cli__rule");
 const model = { nodes: [], head: null, headBranch: "main", branches: {}, tagEls: null, pending: null };
@@ -631,6 +635,36 @@ const steps = [
             goal: "Your first repository starts here.",
             why: "",
             parts: [],
+        },
+        curiosity: {
+            cmd: "git init",
+            // before you run it: nothing exists yet, so the questions look forward
+            pre: [
+                {
+                    q: "what even is git?",
+                    a: "git keeps a history of your project: every version you save, so you can look back, undo a mistake, and try things without fear of losing your work.",
+                },
+                {
+                    q: "what's <b>git init</b> about to do?",
+                    a: "it turns this plain folder into a git repository, so git can start keeping track of it. you only ever do this once per project.",
+                },
+            ],
+            // after it runs: .git/ now exists, so the questions look back at what happened
+            post: [
+                {
+                    q: "wait, what just happened?",
+                    a: "your folder is now a git repository. nothing about your own files changed, git just added a place to keep track of them.",
+                },
+                {
+                    q: "what's this <b>.git/</b> that showed up?",
+                    a: "that's where git stores everything it remembers: every snapshot you save, the branches you make, and a pointer called HEAD that marks where you are. delete <b>.git/</b> and it's an ordinary folder again.",
+                    points: "dotgit",
+                },
+                {
+                    q: "why do we even need it?",
+                    a: "without it, your files are just files. with it, you get history, undo, branches, and a way to share, everything the rest of this page teaches.",
+                },
+            ],
         },
         run: doInit,
     },
@@ -1201,6 +1235,9 @@ form.addEventListener("submit", async (e) => {
     // advance the lesson + ghost immediately, before the drawing animates
     showStep(stepIndex);
     updateTimeline();
+    // the companion steps back while the action happens, then returns to explain
+    // what just appeared (its "post" set points at the now-real thing)
+    setCompanion(null, "post");
     busy = true;
     await step.run(arg);
     busy = false;
@@ -1211,6 +1248,7 @@ form.addEventListener("submit", async (e) => {
     renderRemoteTree();
     renderRemoteGraph();
     updateLayout();
+    syncCompanion();
     // landing on the feature branch means "you edited index.html": play it out
     if (stepIndex === stepIdx("add2"))
         void playEditSequence();
@@ -2115,6 +2153,7 @@ async function seekTo(target) {
     renderRemoteTree();
     renderRemoteGraph(false); // seek: the remote tree is just there, no float
     updateLayout();
+    syncCompanion();
     busy = false;
     if (!isPhone)
         cmd.focus();
@@ -2143,17 +2182,159 @@ function typeLandingCallout() {
     };
     window.setTimeout(step, 800);
 }
-// landing explainer: each question is a button that toggles its own answer
-// open (animated by CSS via aria-expanded). Answers start closed so nothing is
-// revealed until the reader taps the question they care about.
-function wireExplainer() {
-    const qs = document.querySelectorAll(".explainer__q");
-    qs.forEach((q) => {
-        q.addEventListener("click", () => {
-            const open = q.getAttribute("aria-expanded") === "true";
-            q.setAttribute("aria-expanded", open ? "false" : "true");
-        });
+// ---- the curiosity companion -----------------------------------------
+// A persistent bottom-right voice. It renders the current step's questions for
+// the right tense (pre/post), each a tap-to-open button. Opening a question
+// whose answer is about a real thing on the board inks an arrow to it.
+const CARET_PATH = "M5 3 C 9 6, 11 7, 12 8 C 11 9, 9 10, 5 13"; // the hand-drawn ">"
+// arrows currently drawn, keyed by the question button that opened them, so we
+// can retract one on close and redraw them all on resize
+const openArrows = new Map();
+// resolve a `points` key to the live board element its arrow should reach
+function companionTarget(points) {
+    switch (points) {
+        case "dotgit": return treeList.querySelector(".d--git");
+        case "node:tip": return gNodes.lastElementChild;
+        case "tag:HEAD": return refPills.get("HEAD") ?? null;
+        default: return null;
+    }
+}
+// draw a hand-drawn arrow from the open answer to its board target, in pixel
+// space (the overlay is a full-viewport SVG with no viewBox)
+function drawCompanionArrow(fromEl, points) {
+    const target = companionTarget(points);
+    if (!target)
+        return null;
+    const a = fromEl.getBoundingClientRect();
+    const b = target.getBoundingClientRect();
+    if (!a.width || !b.width)
+        return null;
+    // start just left of the answer's first line, end just right of the target
+    const x1 = a.left - 6, y1 = a.top + Math.min(16, a.height / 2);
+    const x2 = b.right + 8, y2 = b.top + b.height / 2;
+    // bow the curve so it arcs like a drawn line rather than a straight ruler
+    const my = (y1 + y2) / 2;
+    const bow = Math.max(24, Math.abs(x1 - x2) * 0.18);
+    const cx1 = x1 - bow, cy1 = y1 + bow * 0.3;
+    const cx2 = x2 + bow * 0.5, cy2 = my - bow;
+    const ns = "http://www.w3.org/2000/svg";
+    const g = document.createElementNS(ns, "g");
+    const shaft = document.createElementNS(ns, "path");
+    shaft.setAttribute("d", `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${cx1.toFixed(1)} ${cy1.toFixed(1)}, ${cx2.toFixed(1)} ${cy2.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`);
+    shaft.setAttribute("pathLength", "1");
+    // arrowhead: two short barbs off the tip, angled back toward the shaft
+    const head = document.createElementNS(ns, "path");
+    const ang = Math.atan2(y2 - cy2, x2 - cx2);
+    const len = 11;
+    const hx1 = x2 - len * Math.cos(ang - 0.42), hy1 = y2 - len * Math.sin(ang - 0.42);
+    const hx2 = x2 - len * Math.cos(ang + 0.42), hy2 = y2 - len * Math.sin(ang + 0.42);
+    head.setAttribute("d", `M ${hx1.toFixed(1)} ${hy1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)} L ${hx2.toFixed(1)} ${hy2.toFixed(1)}`);
+    head.setAttribute("pathLength", "1");
+    if (!S.prefersReduced) {
+        shaft.classList.add("is-drawing");
+        head.classList.add("is-drawing");
+        head.style.animationDelay = "0.4s"; // the head lands after the shaft is drawn
+    }
+    g.append(shaft, head);
+    companionArrows.appendChild(g);
+    return g;
+}
+function removeCompanionArrow(q) {
+    const g = openArrows.get(q);
+    if (g) {
+        g.remove();
+        openArrows.delete(q);
+    }
+}
+// re-aim every open arrow (after a resize or relayout moved its endpoints)
+function redrawCompanionArrows() {
+    openArrows.forEach((g, q) => {
+        const points = q.dataset.points;
+        g.remove();
+        openArrows.delete(q);
+        if (points && q.getAttribute("aria-expanded") === "true") {
+            const wrap = q.nextElementSibling;
+            const answer = wrap?.firstElementChild ?? q;
+            const fresh = drawCompanionArrow(answer, points);
+            if (fresh)
+                openArrows.set(q, fresh);
+        }
     });
+}
+// build one question + answer block; clicking toggles its answer (and arrow)
+function curioBlock(c) {
+    const qa = document.createElement("div");
+    qa.className = "companion__qa";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "companion__q";
+    btn.setAttribute("aria-expanded", "false");
+    if (c.points)
+        btn.dataset.points = c.points;
+    btn.innerHTML =
+        `<svg class="companion__caret" viewBox="0 0 16 16" aria-hidden="true">` +
+            `<path class="note-stroke" pathLength="1" d="${CARET_PATH}" /></svg><span>${c.q}</span>`;
+    const wrap = document.createElement("div");
+    wrap.className = "companion__a-wrap";
+    const ans = document.createElement("p");
+    ans.className = "companion__a";
+    ans.innerHTML = c.a;
+    wrap.appendChild(ans);
+    btn.addEventListener("click", () => {
+        const open = btn.getAttribute("aria-expanded") === "true";
+        btn.setAttribute("aria-expanded", open ? "false" : "true");
+        if (open) {
+            removeCompanionArrow(btn);
+        }
+        else if (c.points) {
+            // wait for the answer to start expanding so the arrow starts from its real spot
+            window.setTimeout(() => {
+                if (btn.getAttribute("aria-expanded") !== "true")
+                    return;
+                const g = drawCompanionArrow(ans, c.points);
+                if (g)
+                    openArrows.set(btn, g);
+            }, S.prefersReduced ? 0 : 320);
+        }
+    });
+    qa.append(btn, wrap);
+    return qa;
+}
+// show (or hide) the companion for a given step + tense
+function setCompanion(key, phase) {
+    // any open arrows belong to the outgoing list; clear them
+    openArrows.clear();
+    companionArrows.replaceChildren();
+    const step = key ? steps.find((s) => s.key === key) : null;
+    const list = step?.curiosity?.[phase] ?? [];
+    if (!step || !list.length) {
+        companionEl.classList.remove("is-visible");
+        companionList.replaceChildren();
+        companionCmd.textContent = "";
+        return;
+    }
+    companionCmd.textContent = step.curiosity?.cmd ?? canonical(step).trim();
+    companionList.replaceChildren(...list.map(curioBlock));
+    companionEl.classList.add("is-visible");
+}
+// pick what the companion should show for the current machine state: the
+// landing shows init's forward-looking questions; after a command runs we show
+// that command's "what just happened" set (only init has one for now).
+let companionPrimed = false; // has the first landing reveal happened yet?
+function syncCompanion() {
+    companionEl.classList.toggle("is-landing", stepIndex === 0);
+    if (stepIndex === 0) {
+        // first load: let the area fade in in step with the rest of the intro
+        if (!companionPrimed && !S.prefersReduced) {
+            companionEl.style.transitionDelay = "2.4s";
+            window.setTimeout(() => { companionEl.style.transitionDelay = ""; }, 3200);
+        }
+        companionPrimed = true;
+        setCompanion("init", "pre");
+        return;
+    }
+    const prev = steps[stepIndex - 1];
+    setCompanion(prev?.curiosity?.post ? prev.key : null, "post");
 }
 // dev helper: ?step=N (index) or ?step=<key> seeks straight to that state on
 // load, so any screen can be screenshotted without typing the whole sequence.
@@ -2190,7 +2371,7 @@ function boot() {
     needSel("#remotetree .tree__title").prepend(cloudIcon());
     wireFileViewer(); // click any file in either tree to open it
     typeLandingCallout(); // landing intro: type the file-tree callout in
-    wireExplainer(); // landing: tap a question to reveal its answer
+    syncCompanion(); // landing: the curiosity companion's forward-looking questions
     if (!isPhone)
         cmd.focus();
     applyStepParam(); // dev: ?step=N jumps straight to a state for screenshots
@@ -2202,6 +2383,7 @@ window.addEventListener("resize", () => {
     centerOnHead(); // viewW changed: keep HEAD centred
     renderRemoteGraph(false); // recompute the mini-graph's float-up transform
     updateInk(); // recompute field width + redraw the underline
+    redrawCompanionArrows(); // re-aim any open answer arrows at their moved targets
 });
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);

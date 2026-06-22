@@ -506,35 +506,51 @@ body {
 .note--tree .note__arrow { width: 5.4rem; height: 3.4rem; }
 .note--tree .note__label { text-align: left; }
 
-/* explainer area, bottom-right: a label, an arrow pointing down, and a sketchy
-   panel that explains the current command one expandable beat at a time */
-.note--explainer {
+/* ---- curiosity companion: a persistent bottom-right voice ------------- */
+/* the questions a beginner actually asks, in their own voice; tap one and its
+   answer unfolds (and, if it's about a real thing on the board, an arrow inks
+   out to it). Lives outside the landing layer so it survives the dock and can
+   say "what just happened", not only "what's about to". */
+.companion {
+  position: fixed;
   right: clamp(1.5rem, 3vw, 3rem);
   bottom: clamp(2rem, 7vh, 5rem);
   width: clamp(19rem, 31vw, 28rem);
+  z-index: 7;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  pointer-events: none;     /* only the questions opt back in */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s ease, visibility 0.45s;
 }
-.note__label--explainer { text-align: center; margin-bottom: 0.05rem; }
-.note--explainer .note__arrow { width: 2.3rem; height: 1.9rem; margin-bottom: 0.25rem; }
-/* no box: free text, the command name on top and a stack of questions you
-   tap open one at a time */
-.explainer-box {
-  width: 100%;
-  text-align: left;
-  pointer-events: auto;     /* the questions inside are interactive */
+.companion.is-visible { opacity: 1; visibility: visible; }
+/* the "i'll explain things over here" flourish only belongs on the centred
+   landing; once we've docked it has done its job and goes */
+.companion__intro { align-self: center; text-align: center; margin-bottom: 0.3rem; }
+.companion:not(.is-landing) .companion__intro { display: none; }
+.companion__intro-label {
+  font-family: var(--hand);
+  font-weight: 600;
+  font-size: clamp(1.1rem, 2.3vw, 1.5rem);
+  line-height: 1.12;
+  color: var(--ink-soft);
 }
-.explainer__cmd {
+.companion__intro-arrow { display: block; margin: 0.05rem auto 0; width: 2.3rem; height: 1.9rem; overflow: visible; }
+
+.companion__cmd {
   font-family: var(--mono);
   font-weight: 700;
   font-size: 1.08rem;
   color: var(--pen-blue);
   margin-bottom: 0.6rem;
 }
-.explainer__qa + .explainer__qa { margin-top: 0.35rem; }
+.companion__cmd:empty { display: none; }
+
+.companion__qa + .companion__qa { margin-top: 0.35rem; }
 /* a question is a bare, tappable line: hand-drawn caret + the words */
-.explainer__q {
+.companion__q {
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -543,6 +559,7 @@ body {
   background: none;
   border: none;
   cursor: pointer;
+  pointer-events: auto;     /* the area is see-through; the question is not */
   text-align: left;
   font-family: var(--hand);
   font-weight: 700;
@@ -551,48 +568,74 @@ body {
   color: var(--ink-soft);
   transition: color 0.2s ease;
 }
-.explainer__q:hover,
-.explainer__q[aria-expanded="true"] { color: var(--ink); }
-.explainer__q b { color: var(--pen-red); font-weight: 700; }
+.companion__q:hover,
+.companion__q[aria-expanded="true"] { color: var(--ink); }
+.companion__q b { color: var(--pen-red); font-weight: 700; }
 /* the caret inks red and swings down a quarter-turn when its answer is open */
-.explainer__caret {
+.companion__caret {
   flex: none;
   width: 0.85rem;
   height: 0.85rem;
   transform: rotate(0deg);
   transition: transform 0.4s var(--ease-settle);
 }
-.explainer__caret .note-stroke { stroke: var(--pen-red); stroke-width: 2; fill: none; }
-.explainer__q[aria-expanded="true"] .explainer__caret { transform: rotate(90deg); }
-/* the answer slides open by animating its grid row from 0fr to 1fr, then
-   the text drifts up into place */
-.explainer__a-wrap {
+.companion__caret .note-stroke { stroke: var(--pen-red); stroke-width: 2; fill: none; }
+.companion__q[aria-expanded="true"] .companion__caret { transform: rotate(90deg); }
+/* the answer slides open by animating its grid row from 0fr to 1fr, then the
+   text drifts up into place */
+.companion__a-wrap {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
   transition: grid-template-rows 0.45s var(--ease-settle), opacity 0.3s ease 0.05s;
 }
-.explainer__a-wrap > .explainer__a {
+.companion__a-wrap > .companion__a {
   overflow: hidden;
   min-height: 0;
   transform: translateY(-4px);
   transition: transform 0.45s var(--ease-settle);
 }
-.explainer__q[aria-expanded="true"] + .explainer__a-wrap {
+.companion__q[aria-expanded="true"] + .companion__a-wrap {
   grid-template-rows: 1fr;
   opacity: 1;
 }
-.explainer__q[aria-expanded="true"] + .explainer__a-wrap > .explainer__a {
+.companion__q[aria-expanded="true"] + .companion__a-wrap > .companion__a {
   transform: none;
 }
-.explainer__a {
+.companion__a {
   font-family: var(--ui);
   font-size: 0.95rem;
   line-height: 1.45;
   color: var(--ink-soft);
   padding: 0.25rem 0 0.4rem 1.3rem;   /* indent under the caret */
+  pointer-events: auto;               /* selectable */
 }
-.explainer__a b { color: var(--ink); font-weight: 600; }
+.companion__a b { color: var(--ink); font-weight: 600; }
+
+/* the ink layer for answer arrows: full-viewport, pixel-space, see-through */
+.companion-arrows {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 6;
+  pointer-events: none;
+  overflow: visible;
+}
+.companion-arrows path {
+  fill: none;
+  stroke: var(--pen-red);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+.companion-arrows path.is-drawing {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: companion-draw 0.55s var(--ease-settle) forwards;
+}
+@keyframes companion-draw { to { stroke-dashoffset: 0; } }
 
 /* ---- landing intro: the first screen draws itself in ----------------- */
 /* the file tree fades in ~0.5s after load. Opacity only: its is-focus state
@@ -625,21 +668,25 @@ body {
   to   { clip-path: inset(0 -4% 0 0); }
 }
 
-/* the explainer draws itself in last: the label fades, the arrow inks, then the text wipes on */
-#stage.is-centered ~ .landing-notes .note__label--explainer { animation: landing-fade 0.5s ease 1.8s both; }
-.note--explainer .note__arrow path:nth-of-type(1) { animation: landing-draw 0.5s ease 2.05s both; }
-.note--explainer .note__arrow path:nth-of-type(2) { animation: landing-draw 0.3s ease 2.4s both; }
-#stage.is-centered ~ .landing-notes .explainer-box { animation: landing-wipe 0.75s var(--ease-settle) 2.45s both; }
+/* the companion inks itself in last: on first load its area fades in (JS adds
+   .is-visible with a matching delay) and then the intro flourish's down-arrow
+   draws on, just after the area appears */
+.companion.is-landing .companion__intro-arrow path:nth-of-type(1) { animation: landing-draw 0.5s ease 2.55s both; }
+.companion.is-landing .companion__intro-arrow path:nth-of-type(2) { animation: landing-draw 0.3s ease 2.9s both; }
 
 @media (prefers-reduced-motion: reduce) {
   #filetree,
   #stage.is-centered .lesson__goal,
   #stage.is-centered #cli,
   .note__arrow path,
-  #stage.is-centered ~ .landing-notes .note__label--explainer,
-  #stage.is-centered ~ .landing-notes .explainer-box,
+  .companion__intro-arrow path,
   #stage.is-centered .landing__clone,
   #stage.is-centered .landing__road { animation: none; }
+  .companion { transition: none; }
+  .companion__a-wrap,
+  .companion__a-wrap > .companion__a,
+  .companion__caret { transition: none; }
+  .companion-arrows path.is-drawing { animation: none; stroke-dashoffset: 0; }
 }
 
 /* ---- landing timeline: hidden until you hover its strip --------------- */
