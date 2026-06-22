@@ -11,9 +11,16 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 class NoCacheHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-        self.send_header("Pragma", "no-cache")
-        self.send_header("Expires", "0")
+        # reload-probe.js is the one file we WANT cached: a normal reload then
+        # serves it from cache while a hard refresh re-fetches it, which is how
+        # app.ts tells the two apart. It never changes, so caching is safe.
+        # Everything else stays no-store so edits always show on a plain refresh.
+        if self.path.split("?")[0].rstrip("/").endswith("reload-probe.js"):
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        else:
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
         super().end_headers()
 
     def log_message(self, *args):

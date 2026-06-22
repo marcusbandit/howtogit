@@ -1,0 +1,8 @@
+# Cloudflare static-asset headers.
+#
+# reload-probe.js must be cached hard so a normal reload serves it from cache
+# (and a hard refresh, which bypasses the cache, re-fetches it). app.ts uses
+# that difference to tell the two apart. The file never changes, so caching it
+# forever is safe.
+/reload-probe.js
+  Cache-Control: public, max-age=31536000, immutable
