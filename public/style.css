@@ -1231,7 +1231,12 @@ body.is-learning .landing-notes {
   top: 40%;
   left: 50%;
   z-index: 5;
-  width: clamp(20rem, 34vw, 30rem);
+  /* the card is as wide as its widest content line, per file: short notes stay
+     compact, a file with long lines (config's remote url) widens to fit instead
+     of clipping. Bounded so it never gets silly-wide or overflows the screen. */
+  width: max-content;
+  min-width: min(22rem, 86vw);
+  max-width: min(48rem, 92vw);
   transform: translate(-50%, -50%) scale(0.86);
   transform-origin: center;
   opacity: 0;
@@ -1391,6 +1396,12 @@ body.is-learning .landing-notes {
   max-width: 32rem;
 }
 .editor__later::before { content: "↳ "; font-style: normal; opacity: 0.6; }
+/* the bar + the prose follow the card's content width (set by the code lines)
+   rather than contributing to it: long sentences wrap to the card instead of
+   stretching it, while a config url line is free to make the card wider. The
+   note (note-only files) is NOT here: it stays the width driver and wraps at its
+   own max-width. */
+.editor__bar, .editor__explain, .editor__later { width: 0; min-width: 100%; }
 
 /* syntax highlighting palette (kept within the inked colour set) */
 .sx-tag     { color: var(--pen-blue); }
@@ -1602,10 +1613,11 @@ body.is-learning .landing-notes {
   /* the editor sits centred and narrower so it fits the phone width */
   .editor {
     top: 38%;
-    width: 86vw;
+    max-width: 92vw;       /* stay content-driven, just don't exceed the screen */
+    min-width: 0;
     font-size: 0.78rem;
   }
-  .editor__code { font-size: 0.74rem; }
+  .editor__code { font-size: 0.74rem; overflow-x: auto; }   /* tiny screens: scroll a long line, never clip */
 
   /* lesson + command line stay inside the viewport */
   #stage { padding: 0 0.8rem; gap: 0.8rem; }

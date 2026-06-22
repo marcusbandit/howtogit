@@ -187,7 +187,9 @@ function describe(name, rel, isDir) {
     if (rel === "index")
         return {
             note: "what's lined up for your next save", readable: false,
-            desc: "Whatever you *git add* waits here for the next commit. git keeps the list; you don't open it by hand.",
+            explain: "What your next commit will include:",
+            later: "*git add* puts files here, *git commit* saves them.",
+            desc: "Empty for now. Run *git add* and your files line up here.",
         };
     if (rel === "objects")
         return { note: "every saved version of your work", readable: false };
@@ -245,6 +247,22 @@ async function walkGit(absPath, rel) {
         const node = { name: display, path: `.git/${childRel}`, isDir: e.isDir, note: d.note };
         if (e.isDir) {
             node.children = await walkGit(`${absPath}/${e.name}`, childRel);
+        }
+        else if (childRel === "index") {
+            // the index is a binary file, so we don't show its raw bytes; instead we
+            // list what's ACTUALLY staged in it (the real index contents), so running
+            // "git add" visibly fills this in, exactly like the note promises
+            const staged = await git.listFiles({ fs, dir: DIR });
+            if (staged.length) {
+                node.content = staged.join("\n");
+                if (d.explain)
+                    node.explain = d.explain;
+            }
+            else {
+                node.desc = d.desc ?? "Nothing staged yet.";
+            }
+            if (d.later)
+                node.later = d.later;
         }
         else if (d.readable) {
             node.readable = true;
