@@ -9,6 +9,10 @@
  * Built so far: init, add, commit.
  */
 import * as S from "./sketch.js";
+import {
+  replayTo, snapshot,
+  type Snapshot as RepoSnapshot, type GitNode as RepoGitNode, type RepoCmd,
+} from "./repo.js";
 
 const COLORS = {
   ink: "#2a2521",
@@ -1302,7 +1306,8 @@ form.addEventListener("submit", async (e) => {
   busy = false;
   centerOnHead();
   if (stepIndex >= steps.length) showEndState();
-  renderFileTree();
+  if (step.key === "commit") lastCommitMsg = arg ?? lastCommitMsg;   // replay with the real message
+  await refreshRepo();                                                // real git -> tree + states
   renderRemoteTree();
   renderRemoteGraph();
   updateLayout();
@@ -1368,42 +1373,36 @@ const MARK: Record<FileState, string> = { plain: "", untracked: "·", modified: 
 function stepIdx(key: string): number {
   return steps.findIndex((s) => s.key === key);
 }
-// the baseline disk state for the project (stepIndex is the next step to do)
-function fileStateForStep(i: number): FileState {
-  if (i <= stepIdx("init")) return "plain";
-  if (i <= stepIdx("add")) return "untracked";
-  if (i <= stepIdx("commit")) return "staged";
-  return "committed";
-}
 // has this committed file actually reached the remote? The first push sends
 // every file; index.html is re-committed on the branch (commit2), so it falls
 // behind the remote again until that work is pushed with the merge (push2).
+// (The remote is still simulated; this overlays "pushed" on top of real state.)
 function isPushed(file: string): boolean {
   if (stepIndex <= stepIdx("push")) return false;            // first push not done
   if (file === EDIT_FILE && stepIndex > stepIdx("commit2") && stepIndex <= stepIdx("push2"))
     return false;                                            // edited again, awaiting push2
   return true;
 }
-// per-file state: index.html gets edited on the branch, so it diverges from the
-// baseline between checkout and the feature commit
-function fileState(file: string): FileState {
-  if (file === EDIT_FILE) {
-    if (stepIndex === stepIdx("add2")) return "modified";   // edited, not staged
-    if (stepIndex === stepIdx("commit2")) return "staged";  // staged the edit
-  }
-  const base = fileStateForStep(stepIndex);
-  if (base === "committed" && isPushed(file)) return "pushed";
-  return base;
-}
 
 let lastGitPresent = false;
 let wasEditing = false;
 let pushedBefore = new Set<string>();   // files already on the remote last render
+// the file's state: the BASE (untracked/modified/staged/committed) comes from
+// real git via the snapshot; the still-simulated branch edit + remote add the
+// "modified on the branch" / "pushed" overlays on top, until those are real too.
+function overlaidState(file: string, base: FileState): FileState {
+  if (file === EDIT_FILE && stepIndex === stepIdx("add2")) return "modified";
+  if (file === EDIT_FILE && stepIndex === stepIdx("commit2")) return "staged";
+  if (base === "committed" && isPushed(file)) return "pushed";
+  return base;
+}
+
 function renderFileTree(): void {
-  const gitPresent = stepIndex > stepIdx("init");
+  const gitPresent = !!snap?.inited;
   const editing = stepIndex === stepIdx("add2");
   const remoteExists = stepIndex > stepIdx("remote");   // is there anywhere to push to yet?
   const pushedNow = new Set<string>();
+  const fileStates = new Map((snap?.files ?? []).map((f) => [f.name, f.state] as const));
   treeList.replaceChildren();
 
   underlineSeed = 0;
@@ -1423,8 +1422,8 @@ function renderFileTree(): void {
   rootWrap.appendChild(rootSub);
   treeList.appendChild(rootWrap);
 
-  if (gitPresent) {
-    // .git/ is a real, openable folder; its contents come from GIT_TREE
+  if (gitPresent && snap) {
+    // .git/ is a real, openable folder; its contents are the REAL repo's .git
     const git = document.createElement("li");
     git.className = "f d--git is-expandable is-folder";
     git.dataset.path = ".git";
@@ -1441,13 +1440,13 @@ function renderFileTree(): void {
     gitWrap.className = "tree__subwrap" + (gitOpen ? " is-open" : "");
     const gitSub = document.createElement("ul");
     gitSub.className = "tree__sub";
-    GIT_TREE.forEach((n, i) => appendGitNode(gitSub, n, ".git", i));
+    snap.git.forEach((n, i) => appendGitNode(gitSub, n, i));
     gitWrap.appendChild(gitSub);
     rootSub.appendChild(gitWrap);
   }
 
   PROJECT.files.forEach((f) => {
-    const st = fileState(f);
+    const st = overlaidState(f, fileStates.get(f) ?? "plain");
     const li = document.createElement("li");
     li.className = st === "plain" ? "f is-openable" : `f f--${st} is-openable`;
     li.dataset.file = f;                          // click to open it in the editor
@@ -1480,21 +1479,20 @@ function renderFileTree(): void {
   pushedBefore = pushedNow;
 }
 
-// render one .git node into a list. Folders nest recursively (a subwrap that
-// opens); files are openable rows that show their contents in the editor.
-function appendGitNode(ul: HTMLElement, node: GitNode, parentPath: string, idx: number): void {
-  const path = `${parentPath}/${node.name}`;
-  const open = treeOpen.has(path);
+// render one real .git node into a list. Folders nest recursively (a subwrap
+// that opens); files are openable rows that show their contents in the editor.
+function appendGitNode(ul: HTMLElement, node: RepoGitNode, idx: number): void {
+  const open = treeOpen.has(node.path);
   const row = document.createElement("li");
   row.className = "tree__subitem";
-  row.dataset.path = path;
+  row.dataset.path = node.path;
   row.style.setProperty("--i", String(idx));
 
   const noteEl = document.createElement("span");
   noteEl.className = "f__note";
-  noteEl.textContent = node.note ?? "";
+  noteEl.textContent = node.note;
 
-  if (isFolder(node)) {
+  if (node.isDir) {
     row.classList.add("is-expandable", "is-folder");
     if (open) row.classList.add("is-open");
     row.append(open ? folderIconOpen() : folderIcon(), makeNameUnderlined(node.name), noteEl);
@@ -1504,7 +1502,7 @@ function appendGitNode(ul: HTMLElement, node: GitNode, parentPath: string, idx: 
     const sub = document.createElement("ul");
     sub.className = "tree__sub";
     const kids = node.children ?? [];
-    if (kids.length) kids.forEach((c, i) => appendGitNode(sub, c, path, i));
+    if (kids.length) kids.forEach((c, i) => appendGitNode(sub, c, i));
     else sub.appendChild(emptyRow());   // an opened-but-empty folder still says so
     wrap.appendChild(sub);
     ul.appendChild(wrap);
@@ -1869,7 +1867,7 @@ function openFileViewer(file: string, side: "local" | "remote", row: HTMLElement
 // open a .git internal file in the same editor: readable ones (HEAD, config)
 // show their contents; the rest show a note describing what they're for
 function openGitFile(path: string, row: HTMLElement): void {
-  const node = gitFileByPath.get(path);
+  const node = gitNodeByPath.get(path);
   if (!node) return;
   ++editSeqGen;
   viewerFile = path;
@@ -2346,7 +2344,7 @@ async function seekTo(target: number): Promise<void> {
   cmd.value = "";
   showStep(stepIndex);
   updateTimeline();
-  renderFileTree();
+  await refreshRepo();
   renderRemoteTree();
   renderRemoteGraph(false);   // seek: the remote tree is just there, no float
   updateLayout();
@@ -2385,76 +2383,38 @@ const openArrows = new Map<HTMLButtonElement, SVGGElement>();
 // the one question currently in focus (only one is ever open at a time)
 let openBtn: HTMLButtonElement | null = null;
 
-// a beginner's peek inside .git/: a curated, hand-drawn (fake but plausible)
-// view of what git actually creates. Folders nest and open; files reveal either
-// their contents (if readable) or a description of what they're for (if not).
-interface GitNode {
-  name: string;
-  note?: string;
-  children?: GitNode[];      // present => it's a folder
-  content?: string;          // a readable file's (fake) contents
-  desc?: string;             // what a not-meant-to-be-read file is for
-}
-const GIT_TREE: GitNode[] = [
-  {
-    name: "HEAD", note: "points at where you are",
-    content: "ref: refs/heads/main",
-    desc: "A tiny file naming the branch you're on. Right now it just says: you're on main.",
-  },
-  {
-    name: "config", note: "this repo's settings",
-    content: "[core]\n    repositoryformatversion = 0\n    bare = false\n[remote \"origin\"]\n    url = https://github.com/you/my-site.git",
-  },
-  {
-    name: "description", note: "names the repo (rarely used)",
-    content: "Unnamed repository; edit this file to name it.",
-  },
-  {
-    name: "objects/", note: "every snapshot, stored here",
-    children: [
-      {
-        name: "e2/", note: "grouped by the first 2 letters of their id",
-        children: [
-          {
-            name: "9f1c8a4b2d…",
-            note: "a stored snapshot",
-            desc: "A compressed, checksummed snapshot of your files. Git reads it for you, it's not meant to be opened by hand.",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    name: "refs/", note: "your branches and tags",
-    children: [
-      {
-        name: "heads/", note: "your branches",
-        children: [
-          {
-            name: "main", note: "your main branch",
-            desc: "After your first commit this will hold that commit's id, that's how git remembers where main points.",
-          },
-        ],
-      },
-      { name: "tags/", note: "your tags" },
-    ],
-  },
-];
-
+// the live snapshot from the REAL git repo (repo.ts) drives the tree + states.
+let snap: RepoSnapshot | null = null;
+let lastCommitMsg = "first commit";
 // which tree folders/files are open, by path. The project root starts open.
 const treeOpen = new Set<string>(["root"]);
-const isFolder = (n: GitNode): boolean => Array.isArray(n.children);
-
-// flat index of every .git *file* by its path, so a click can open it in the
-// editor. Built once from the static GIT_TREE.
-const gitFileByPath = new Map<string, GitNode>();
-(function indexGit(nodes: GitNode[], parent: string): void {
+// flat index of every .git *file* by path, so a click can open it in the
+// editor. Rebuilt from each snapshot.
+let gitNodeByPath = new Map<string, RepoGitNode>();
+function indexGitNodes(nodes: RepoGitNode[]): void {
   for (const n of nodes) {
-    const p = `${parent}/${n.name}`;
-    if (isFolder(n)) indexGit(n.children ?? [], p);
-    else gitFileByPath.set(p, n);
+    if (n.isDir) indexGitNodes(n.children ?? []);
+    else gitNodeByPath.set(n.path, n);
   }
-})(GIT_TREE, ".git");
+}
+
+// the real-git commands that should have run by a given step (init/add/commit).
+// Replaying these from scratch reproduces the exact repo state for that step.
+function repoCommandsFor(i: number): RepoCmd[] {
+  const cmds: RepoCmd[] = [];
+  if (i > stepIdx("init")) cmds.push({ kind: "init" });
+  if (i > stepIdx("add")) cmds.push({ kind: "add" });
+  if (i > stepIdx("commit")) cmds.push({ kind: "commit", message: lastCommitMsg });
+  return cmds;
+}
+// replay real git to the current step, take a fresh snapshot, redraw the tree
+async function refreshRepo(): Promise<void> {
+  await replayTo(repoCommandsFor(stepIndex));
+  snap = await snapshot();
+  gitNodeByPath = new Map();
+  indexGitNodes(snap.git);
+  renderFileTree();
+}
 
 // open/close a tree node by path: flips its row + the subwrap that follows it,
 // and (for folders) swaps the closed folder icon for an open one. Animations
@@ -2683,14 +2643,14 @@ function applyStepParam(): void {
   if (target > 0) void seekTo(target);
 }
 
-function boot(): void {
+async function boot(): Promise<void> {
   sizeBoard();
   stage.style.setProperty("--stage-y", "50%");
   drawRule(brandRule, COLORS.main, 11);
   startAmbient();
   showStep(0); // draws the command underline at the right width via updateInk
   buildTimeline();
-  renderFileTree();
+  await refreshRepo();   // seed the real repo + draw the initial tree
   renderRemoteTree();
   renderRemoteGraph(false);
   // No file editor exists yet, so the local tree leads (is-focus) until a remote
@@ -2717,7 +2677,7 @@ window.addEventListener("resize", () => {
 });
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", boot);
+  document.addEventListener("DOMContentLoaded", () => void boot());
 } else {
-  boot();
+  void boot();
 }

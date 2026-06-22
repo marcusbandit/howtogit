@@ -19,6 +19,20 @@ total beginner is never lost.
 - `src/app.ts` — the controller: a step machine, the graph model, the command
   line (live token colouring + ghost suggestion + Tab complete), the file
   tree, the remote panel, and the clickable timeline (instant replay/seek).
+- `src/repo.ts` — **the real git backend.** The local repo is an actual git
+  repository run by **isomorphic-git** on a tiny in-memory filesystem, entirely
+  in the browser (no server). `git init/add/commit` genuinely execute and write
+  real `.git` objects/refs/HEAD; the sidebar's file states come from real
+  `git.statusMatrix`, and the `.git/` tree is the real one (curated, with
+  friendly descriptions). Moving the timeline replays the commands from scratch
+  (~4ms, instant) with a fixed author/timestamp so object hashes are stable.
+  Scope today: the **init → add → commit** flow is real; remote/push/branch/merge
+  are still simulated and overlaid on top (the "pushed ✓✓" / branch states).
+  isomorphic-git is vendored as a single browser ESM at
+  `public/vendor/isomorphic-git.mjs` (rebuild via `npm run vendor`).
+- `scripts/shoot.mjs` — headless screenshot harness: drive the app to any step
+  (`--step N`), optionally interact (`--do "<js>"`), and capture a PNG, so any
+  state can be inspected/verified programmatically.
 
 ## Done
 
