@@ -174,33 +174,33 @@ const READABLE = new Set(["HEAD", "config"]);
 interface Described { note: string; readable: boolean; explain?: string; desc?: string }
 function describe(name: string, rel: string, isDir: boolean): Described {
   if (rel === "HEAD") return {
-    note: "where you're working right now", readable: true,
-    explain: "Think of HEAD as a bookmark that says “you are here.” Right now it's on main, so everything you save gets added to main. If you move to a different part of your project later, the bookmark just comes along with you.",
+    note: "where you are right now", readable: true,
+    explain: "This says you're on main, so that's where your saves go. HEAD is how git tracks where you are; you'll watch it move once you start switching branches with checkout.",
   };
   if (rel === "config") return {
     note: "your project's settings", readable: true,
-    explain: "This is your project's settings page. git filled in some sensible defaults to start you off; later, things like your name or where to back the project up online get saved here too. You rarely touch it by hand.",
+    explain: "Settings for this one repo: the defaults git wrote to get you started, plus things like your name and the remote's address later on.",
   };
   if (rel === "index") return {
-    note: "what's packed for your next save", readable: false,
-    desc: "Think of this as a packing box for your next save. “git add” drops your changes into the box, then “git commit” seals it into a snapshot. It's just a checklist git keeps for itself, not something you read.",
+    note: "what's lined up for your next save", readable: false,
+    desc: "The changes you've staged with git add, lined up for your next commit. git keeps this list for itself; you don't open it by hand.",
   };
-  if (rel === "objects") return { note: "every version of your work, kept safe", readable: false };
+  if (rel === "objects") return { note: "every saved version of your work", readable: false };
   if (rel === "refs") return { note: "names that point at your saves", readable: false };
   if (rel === "refs/heads") return { note: "your branches", readable: false };
   if (rel === "refs/tags") return { note: "your tags", readable: false };
   if (/^objects\/[0-9a-f]{2}$/.test(rel)) return { note: "saves whose id starts with these two characters", readable: false };
   if (/^objects\/[0-9a-f]{2}\/[0-9a-f]+$/.test(rel)) return {
-    note: "one stored snapshot", readable: false,
-    desc: "This is one of your saved snapshots, squished down so it takes less room and locked so it can never change. git keeps every version of your work in here and pulls them back out for you, you never open these yourself.",
+    note: "one saved snapshot", readable: false,
+    desc: "One saved version of your project, compressed and frozen so it can never change. git reads these back for you; you never open them by hand.",
   };
   if (/^refs\/heads\//.test(rel)) return {
     note: "this branch → its latest save", readable: true,
-    explain: "A branch like main is really just a sticky note with the id of your latest save written on it. Every time you save, git updates the note to point at the new one. That's the whole trick.",
+    explain: "A branch is just a name that points at one save. main points at your latest commit, and git nudges it forward every time you save.",
   };
   if (/^refs\/tags\//.test(rel)) return {
     note: "a tag → a fixed save", readable: true,
-    explain: "A tag is a sticky note pinned to one exact save and left there, a permanent name for a moment in your project (like a release). Unlike a branch, it never moves.",
+    explain: "A tag is a name pinned to one exact save that never moves, handy for marking something like a release. A branch keeps moving; a tag stays put.",
   };
   return { note: "", readable: !isDir && READABLE.has(name) };
 }
