@@ -94,22 +94,26 @@ the board) is live for `git init` only. Two directions to grow it:
    targets. No new mechanism, just data. Goal: the explanation walks with the
    user the entire way, so they never feel pushed forward without knowing why.
 
-2. **Make the file tree genuinely explorable (not only companion-driven). [DONE]**
-   The tree is now a recursive, expandable structure (`GIT_TREE` data + a
-   recursive renderer in `app.ts`):
-   - Every folder opens/closes on click, indicated by a closed→open folder icon
-     swap (no chevron). `my-site/`, `.git/`, `objects/`, `refs/`, and their
-     subfolders all expand; nesting indents one step per level.
-   - `objects/` and `refs/` carry fake-but-plausible contents (a sample object
-     under `e2/`, `refs/heads/main`, `tags/`).
-   - Clicking a `.git` file reveals, beneath it, either its (fake) contents in
-     mono (`HEAD`, `config`, `description`) or a plain description of what it's
-     for when it's not meant to be read by hand (packed objects).
+2. **One unified, explorable file tree. [DONE]** The sidebar was two competing
+   systems (project files with git-state + editor; a separate `.git` explorer
+   with inline reveals). Now it's a single recursive tree with one set of
+   affordances:
+   - Every folder opens/closes on click (closed→open folder icon swap, no
+     chevron). `my-site/`, `.git/`, `objects/`, `refs/` and subfolders all
+     expand; nesting indents one step per level. `objects/`/`refs/` carry
+     fake-but-plausible contents (`e2/` object, `refs/heads/main`, `tags/`).
+   - Every *file* opens in the editor popup: project files show their
+     syntax-highlighted source (and keep their git state — colour, mark, note);
+     readable `.git` files (`HEAD`, `config`, `description`) show their contents;
+     files not meant to be read by hand (packed objects) show a short note
+     describing what they're for.
+   - Every clickable row (folder or file) shares the same hover underline +
+     cursor. Git state still rides on the tracked project files.
    - The companion's `.git/` question and a direct folder click drive the same
-     open state, so they stay in sync.
+     open state and the arrow still points at `.git/`.
 
    Still open here: per-step curiosity content for the rest of the flow (item 1),
-   and richer fake contents as new commands add real objects/refs.
+   and richer fake contents as later commands add real objects/refs.
 
 ### Simplified timeline (by task, not by command)
 

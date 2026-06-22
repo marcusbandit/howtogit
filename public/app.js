@@ -1359,6 +1359,7 @@ function renderFileTree() {
     const remoteExists = stepIndex > stepIdx("remote"); // is there anywhere to push to yet?
     const pushedNow = new Set();
     treeList.replaceChildren();
+    underlineSeed = 0;
     // my-site/ is the (collapsible) project root; everything else lives inside it
     const root = document.createElement("li");
     root.className = "d is-expandable is-folder";
@@ -1366,7 +1367,7 @@ function renderFileTree() {
     const rootOpen = treeOpen.has("root");
     if (rootOpen)
         root.classList.add("is-open");
-    root.append(rootOpen ? folderIconOpen() : folderIcon(), makeName(`${PROJECT.root}/`));
+    root.append(rootOpen ? folderIconOpen() : folderIcon(), makeNameUnderlined(`${PROJECT.root}/`));
     treeList.appendChild(root);
     const rootWrap = document.createElement("li");
     rootWrap.className = "tree__subwrap tree__subwrap--root" + (rootOpen ? " is-open" : "");
@@ -1387,7 +1388,7 @@ function renderFileTree() {
         const note = document.createElement("span");
         note.className = "f__note";
         note.textContent = "git lives here";
-        git.append(gitOpen ? folderIconOpen() : folderIcon(), makeName(".git/"), note);
+        git.append(gitOpen ? folderIconOpen() : folderIcon(), makeNameUnderlined(".git/"), note);
         rootSub.appendChild(git);
         const gitWrap = document.createElement("li");
         gitWrap.className = "tree__subwrap" + (gitOpen ? " is-open" : "");
@@ -1397,7 +1398,7 @@ function renderFileTree() {
         gitWrap.appendChild(gitSub);
         rootSub.appendChild(gitWrap);
     }
-    PROJECT.files.forEach((f, fi) => {
+    PROJECT.files.forEach((f) => {
         const st = fileState(f);
         const li = document.createElement("li");
         li.className = st === "plain" ? "f is-openable" : `f f--${st} is-openable`;
@@ -1409,9 +1410,7 @@ function renderFileTree() {
         // the moment a file lands on the remote, give it a quick purple flash
         if (st === "pushed" && !pushedBefore.has(f))
             li.classList.add("is-pushed-now");
-        const name = makeName(f);
-        name.appendChild(makeUnderline(fi * 9 + 5)); // sketched hover underline
-        li.append(fileIcon(f), name);
+        li.append(fileIcon(f), makeNameUnderlined(f));
         if (MARK[st]) {
             const m = document.createElement("span");
             m.className = "f__mark";
@@ -1438,8 +1437,8 @@ function renderFileTree() {
     wasEditing = editing;
     pushedBefore = pushedNow;
 }
-// render one .git node (and its always-present, collapsed subwrap) into a list.
-// Folders nest recursively; files carry an explanation that opens beneath them.
+// render one .git node into a list. Folders nest recursively (a subwrap that
+// opens); files are openable rows that show their contents in the editor.
 function appendGitNode(ul, node, parentPath, idx) {
     const path = `${parentPath}/${node.name}`;
     const open = treeOpen.has(path);
@@ -1447,14 +1446,14 @@ function appendGitNode(ul, node, parentPath, idx) {
     row.className = "tree__subitem";
     row.dataset.path = path;
     row.style.setProperty("--i", String(idx));
-    if (open)
-        row.classList.add("is-open");
     const noteEl = document.createElement("span");
     noteEl.className = "f__note";
     noteEl.textContent = node.note ?? "";
     if (isFolder(node)) {
         row.classList.add("is-expandable", "is-folder");
-        row.append(open ? folderIconOpen() : folderIcon(), makeName(node.name), noteEl);
+        if (open)
+            row.classList.add("is-open");
+        row.append(open ? folderIconOpen() : folderIcon(), makeNameUnderlined(node.name), noteEl);
         ul.appendChild(row);
         const wrap = document.createElement("li");
         wrap.className = "tree__subwrap" + (open ? " is-open" : "");
@@ -1469,29 +1468,10 @@ function appendGitNode(ul, node, parentPath, idx) {
         ul.appendChild(wrap);
     }
     else {
-        // a file: clicking reveals either its contents or a description of its job
-        row.classList.add("is-expandable", "is-gitfile");
-        row.append(fileIcon(node.name), makeName(node.name), noteEl);
+        // a file: clicking opens it in the editor (same as a project file)
+        row.classList.add("is-openable", "is-gitfile");
+        row.append(fileIcon(node.name), makeNameUnderlined(node.name), noteEl);
         ul.appendChild(row);
-        const wrap = document.createElement("li");
-        wrap.className = "tree__subwrap tree__explain" + (open ? " is-open" : "");
-        const sub = document.createElement("ul");
-        sub.className = "tree__sub";
-        const descRow = document.createElement("li");
-        descRow.className = "tree__subitem tree__descrow";
-        const p = document.createElement("p");
-        if (node.content != null) {
-            p.className = "tree__desc tree__desc--code";
-            p.textContent = node.content;
-        }
-        else {
-            p.className = "tree__desc";
-            p.textContent = node.desc ?? "";
-        }
-        descRow.appendChild(p);
-        sub.appendChild(descRow);
-        wrap.appendChild(sub);
-        ul.appendChild(wrap);
     }
 }
 function emptyRow() {
@@ -1509,6 +1489,14 @@ function makeName(text) {
     s.className = "f__name";
     s.textContent = text;
     return s;
+}
+// a name that grows the sketched hover underline, the shared "this row is
+// interactive" cue used on every clickable row (folder or file)
+let underlineSeed = 0;
+function makeNameUnderlined(text) {
+    const name = makeName(text);
+    name.appendChild(makeUnderline((underlineSeed++) * 9 + 5));
+    return name;
 }
 // ---- hand-drawn icons (same inked language as the board) ------------
 // Built from the sketch helpers so the wobble matches everything else. Each is
@@ -1667,7 +1655,7 @@ const JS_RULES = [
     { re: /\b\d+\b/y, cls: "num" },
     { re: /[A-Za-z_$][\w$]*/y, cls: "val" },
 ];
-const RULES = { html: HTML_RULES, css: CSS_RULES, js: JS_RULES };
+const RULES = { html: HTML_RULES, css: CSS_RULES, js: JS_RULES, txt: [] };
 function highlight(line, lang) {
     const rules = RULES[lang];
     let out = "", i = 0;
@@ -1737,10 +1725,12 @@ const SHRINK_MS = 560; // full size -> back into the tree row
 function editorAnchor() {
     return { x: window.innerWidth * 0.5, y: window.innerHeight * 0.4 };
 }
-// the on-screen box of a file's row in a tree, if it's there
-function fileRowRect(file, side) {
+// the on-screen box of a row in a tree, if it's there. `key` is a project
+// file's name (data-file) or a .git node's path (data-path).
+function fileRowRect(key, side) {
     const listEl = side === "remote" ? remoteList : treeList;
-    const li = listEl.querySelector(`li[data-file="${file}"]`);
+    const li = listEl.querySelector(`li[data-file="${key}"]`)
+        ?? listEl.querySelector(`li[data-path="${key}"]`);
     return li ? li.getBoundingClientRect() : null;
 }
 // the transform that shrinks the centred editor down onto a tree row, so
@@ -1771,17 +1761,10 @@ function closeEditor() {
     editorEl.style.pointerEvents = "none";
     editorSave.classList.remove("show");
 }
-// ---- click any file to open it (view only, no editing yet) ----------
-function openFileViewer(file, side, row) {
-    const gen = ++editSeqGen; // cancel the auto-edit or a prior view
-    viewerFile = file;
-    viewerSide = side;
-    editorLang = langOf(file);
-    const { lines, changed } = fileLines(file, side);
-    editorName.textContent = file;
-    editorUnsaved.style.opacity = "0"; // viewing, nothing unsaved
-    editorSave.classList.remove("show");
-    renderEditorLines(lines, { changed });
+// grow the editor out of `row`, so the popup reads as coming from that file.
+// The caller has already set the content and bumped editSeqGen.
+function growEditorFrom(row) {
+    const gen = editSeqGen;
     if (S.prefersReduced) {
         editorEl.style.transition = "none";
         editorEl.style.transform = OPEN_TRANSFORM;
@@ -1802,6 +1785,49 @@ function openFileViewer(file, side, row) {
         editorEl.style.opacity = "1";
         editorEl.style.pointerEvents = "auto";
     });
+}
+// render a plain explanatory note in the editor body (for files that aren't
+// meant to be read by hand, e.g. packed objects), instead of code lines
+function renderEditorNote(text) {
+    editorCode.replaceChildren();
+    const p = document.createElement("p");
+    p.className = "editor__note";
+    p.textContent = text;
+    editorCode.appendChild(p);
+}
+// ---- click any file to open it in the editor (view only) ------------
+function openFileViewer(file, side, row) {
+    ++editSeqGen; // cancel the auto-edit or a prior view
+    viewerFile = file;
+    viewerSide = side;
+    editorLang = langOf(file);
+    const { lines, changed } = fileLines(file, side);
+    editorName.textContent = file;
+    editorUnsaved.style.opacity = "0"; // viewing, nothing unsaved
+    editorSave.classList.remove("show");
+    renderEditorLines(lines, { changed });
+    growEditorFrom(row);
+}
+// open a .git internal file in the same editor: readable ones (HEAD, config)
+// show their contents; the rest show a note describing what they're for
+function openGitFile(path, row) {
+    const node = gitFileByPath.get(path);
+    if (!node)
+        return;
+    ++editSeqGen;
+    viewerFile = path;
+    viewerSide = "local";
+    editorName.textContent = node.name;
+    editorUnsaved.style.opacity = "0";
+    editorSave.classList.remove("show");
+    if (node.content != null) {
+        editorLang = "txt";
+        renderEditorLines(node.content.split("\n"));
+    }
+    else {
+        renderEditorNote(node.desc ?? "This file isn't meant to be read by hand.");
+    }
+    growEditorFrom(row);
 }
 // fold the open viewer back into its file row
 function closeFileViewer() {
@@ -1898,16 +1924,28 @@ function wireFileViewer() {
     };
     onList(treeList, "local");
     onList(remoteList, "remote");
-    // clicking any expandable row (a folder, or a .git file) toggles what's under
-    // it. stopPropagation keeps it from also tripping the companion's outside-click
-    // dismissal, so the tree is interactive on its own terms.
+    // a folder click toggles it open/closed; a .git file click opens it in the
+    // editor. stopPropagation keeps either from also tripping the companion's
+    // outside-click dismissal, so the tree is interactive on its own terms.
+    // (project files carry data-file and are handled by onList above.)
     treeList.addEventListener("click", (e) => {
-        const row = e.target.closest(".is-expandable");
-        if (!row || !row.dataset.path)
+        const t = e.target;
+        const folder = t.closest(".is-folder[data-path]");
+        if (folder) {
+            e.stopPropagation();
+            const path = folder.dataset.path;
+            setNodeOpen(path, !treeOpen.has(path));
             return;
-        e.stopPropagation();
-        const path = row.dataset.path;
-        setNodeOpen(path, !treeOpen.has(path));
+        }
+        const gitFile = t.closest(".is-gitfile[data-path]");
+        if (gitFile) {
+            e.stopPropagation();
+            const path = gitFile.dataset.path;
+            if (viewerFile === path)
+                closeFileViewer();
+            else
+                openGitFile(path, gitFile);
+        }
     });
     editorEl.addEventListener("click", (e) => {
         if (viewerFile == null)
@@ -2357,6 +2395,18 @@ const GIT_TREE = [
 // which tree folders/files are open, by path. The project root starts open.
 const treeOpen = new Set(["root"]);
 const isFolder = (n) => Array.isArray(n.children);
+// flat index of every .git *file* by its path, so a click can open it in the
+// editor. Built once from the static GIT_TREE.
+const gitFileByPath = new Map();
+(function indexGit(nodes, parent) {
+    for (const n of nodes) {
+        const p = `${parent}/${n.name}`;
+        if (isFolder(n))
+            indexGit(n.children ?? [], p);
+        else
+            gitFileByPath.set(p, n);
+    }
+})(GIT_TREE, ".git");
 // open/close a tree node by path: flips its row + the subwrap that follows it,
 // and (for folders) swaps the closed folder icon for an open one. Animations
 // ride the class change, so we never re-render to toggle.
