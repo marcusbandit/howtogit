@@ -547,6 +547,29 @@ body.is-learning .landing-notes {
 .note--tree .note__arrow { width: 5.4rem; height: 3.4rem; }
 .note--tree .note__label { text-align: left; }
 
+/* remote callout: sits just left of the remote panel, arrow pointing right at it.
+   Unlike the landing notes it isn't gated to the centred stage; JS toggles
+   .is-shown while you're on the push stage (right after git remote add). */
+.note--remote {
+  right: clamp(15rem, 27vw, 27rem);
+  top: 14%;
+  width: clamp(11rem, 16vw, 15rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  text-align: right;
+  z-index: 6;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.5s ease, visibility 0.5s;
+}
+.note--remote.is-shown { opacity: 1; visibility: visible; }
+.note--remote .note__arrow { width: 5.8rem; height: 3.8rem; }
+/* the arrow inks itself on each time the callout is shown */
+.note--remote.is-shown .note__arrow path:nth-of-type(1) { animation: landing-draw 0.55s ease 0.15s both; }
+.note--remote.is-shown .note__arrow path:nth-of-type(2) { animation: landing-draw 0.35s ease 0.6s both; }
+
 /* ---- curiosity companion: a persistent bottom-right voice ------------- */
 /* the questions a beginner actually asks, in their own voice; tap one and its
    answer unfolds (and, if it's about a real thing on the board, an arrow inks
@@ -857,10 +880,6 @@ body.is-learning .landing-notes {
   caret-color: var(--pen-red);
 }
 #cmd::selection { background: rgba(176, 125, 43, 0.24); }
-/* on submit, JS adds .advancing so the field width glides (the typed command
-   collapses, then the next command's ghost scales it back open a beat later).
-   The class is dropped on the next keystroke so typing still resizes instantly. */
-#cmd.advancing { transition: width 0.4s var(--ease-settle); }
 .cli__ink {
   position: absolute;
   left: 0;

@@ -205,6 +205,17 @@ this will be useful if you wanna come back later</p>
     </div>
   </div>
 
+  <!-- callout for the remote panel: inks in when the remote is added, pointing
+       at it, so the panel that slid in across the board reads as connected to the
+       command you just ran. Shown only on the push stage (wired in app.ts). -->
+  <div id="remote-note" class="note note--remote" aria-hidden="true">
+    <p class="note__label">here's the remote: a copy of your repo, kept online</p>
+    <svg class="note__arrow" viewBox="0 0 96 72" aria-hidden="true">
+      <path class="note-stroke" pathLength="1" d="M8 10 C 38 20, 64 38, 88 58" />
+      <path class="note-stroke" pathLength="1" d="M88 58 L75 56 M88 58 L83 45" />
+    </svg>
+  </div>
+
   <!-- the curiosity companion: a persistent bottom-right voice that asks the
        questions a beginner actually has and answers them, pointing at the real
        thing on the board. Driven by the step machine's `curiosity` data and

@@ -155,6 +155,7 @@ const timelineEl = need("timeline");
 const companionEl = need("companion");
 const companionList = need("companion-list");
 const companionArrows = need("companion-arrows");
+const remoteNoteEl = need("remote-note");
 const brandRule = needSel(".brand__rule");
 const cliRule = needSel(".cli__rule");
 const model = {
@@ -441,12 +442,27 @@ function branchAnchor(b) {
         return null;
     return isProjected(b) ? nodePos(tip.col + 1, b.lane) : { x: tip.x, y: tip.y };
 }
-function drawRefs() {
+// the freshly-branched lane traces on, then settles to its dashed "ghost" look.
+// doBranch awaits projectedDrawDone so the step's busy lock covers the trace.
+let projectedDrawDone = Promise.resolve();
+async function traceProjected(t) {
+    // trace the stub up to where the first commit will land, then the ghost node
+    // outline, like every other drawn thing. drawOn leaves a path solid, so put
+    // the dashes back afterward to keep the "not real yet" look.
+    await drawOn(t.stub, { duration: 380, nibGroup: gNib, color: t.color });
+    t.stub.style.strokeDasharray = t.dash;
+    await drawOn(t.ghost, { duration: 520, nibGroup: gNib, color: t.color });
+    t.ghost.style.strokeDasharray = t.dash;
+}
+// drawRefs(animateBranch) traces the named branch's freshly-projected lane on;
+// every other caller passes nothing and the lane just appears (already drawn).
+function drawRefs(animateBranch) {
     // ticks + dashed branch stubs: cheap, redraw each time
     if (refTicks)
         refTicks.remove();
     refTicks = S.el("g");
     gLabels.appendChild(refTicks);
+    let toTrace = null;
     const wanted = new Set();
     for (const [name, b] of Object.entries(model.branches)) {
         const tip = nodeById(b.tip);
@@ -461,25 +477,30 @@ function drawRefs() {
             //   branched, nothing staged -> loose dashes (LINE.ghost)
             //   staged on the branch      -> tighter dashes (LINE.staged)
             const st = b.staged ? LINE.staged : LINE.ghost;
-            refTicks.appendChild(S.el("path", {
+            const stub = S.el("path", {
                 d: connectorPath(tip, { x: a.x, y: a.y, r: NODE_R }, 21),
                 class: "edge-stroke",
                 stroke: b.color,
                 "stroke-width": EDGE_W,
                 "stroke-dasharray": st.dash,
                 opacity: st.opacity,
-            }));
-            const ghost = b.shape === "square"
+            });
+            refTicks.appendChild(stub);
+            const ghostD = b.shape === "square"
                 ? S.squarePath(a.x, a.y, NODE_R * 1.7, 23)
                 : S.circlePath(a.x, a.y, NODE_R, 23);
-            refTicks.appendChild(S.el("path", {
-                d: ghost,
+            const ghost = S.el("path", {
+                d: ghostD,
                 class: "node-stroke",
                 stroke: b.color,
                 "stroke-width": NODE_W,
                 "stroke-dasharray": st.dash,
                 opacity: st.opacity,
-            }));
+            });
+            refTicks.appendChild(ghost);
+            if (animateBranch === name && !instant && !S.prefersReduced) {
+                toTrace = { stub, ghost, color: b.color, dash: st.dash };
+            }
         }
         refTicks.appendChild(S.el("path", {
             d: S.linePath(a.x, a.y - NODE_R - 2, a.x, a.y - NODE_R - 22, 5, 0.6),
@@ -505,6 +526,10 @@ function drawRefs() {
             fadeOutRemove(g, 200);
             refPills.delete(name);
         }
+    }
+    // only doBranch passes animateBranch; kick off the trace it will await
+    if (animateBranch !== undefined) {
+        projectedDrawDone = toTrace ? traceProjected(toTrace) : Promise.resolve();
     }
 }
 function caption(text, cx, y, delay, faint = false) {
@@ -697,7 +722,8 @@ async function doBranch(arg) {
         lane: -(idx + 1),
         tip: model.head,
     };
-    drawRefs();
+    drawRefs(name); // trace the new lane on (the nib draws the stub + ghost node)
+    await projectedDrawDone;
 }
 // switch HEAD onto a branch; new commits will land on its lane
 async function doCheckout(arg) {
@@ -1275,6 +1301,13 @@ function showStep(i) {
         positionStage(false);
     }
     updateInk();
+    updateRemoteNote();
+}
+// the remote callout rides in with the remote panel on the push stage (right
+// after git remote add slides the panel in), then leaves as you move on, so the
+// panel that appeared far across the board reads as connected to your command
+function updateRemoteNote() {
+    remoteNoteEl.classList.toggle("is-shown", stepIndex === stepIdx("push"));
 }
 // ---- command line: live highlight + ghost suggestion ----------------
 function esc(s) {
@@ -1597,9 +1630,9 @@ form.addEventListener("submit", async (e) => {
     // stays put until the demonstration edit runs after the first git add attempt
     if (stepIndex === stepIdx("add2"))
         editDemoPending = true;
-    // clear the just-typed command at once; the next command scales in a beat later
+    // clear the just-typed command at once; the field snaps to its smallest, and
+    // the next command's ghost appears a beat later
     ink.innerHTML = "";
-    cmd.classList.add("advancing");
     cmd.style.width = "6ch";
     tabhint.classList.remove("show");
     // the companion steps back while the action happens; it returns at the end of
@@ -1642,7 +1675,6 @@ form.addEventListener("submit", async (e) => {
     }
 });
 cmd.addEventListener("input", () => {
-    cmd.classList.remove("advancing"); // typing resizes the field instantly, no glide
     clearNudge();
     updateInk();
 });
