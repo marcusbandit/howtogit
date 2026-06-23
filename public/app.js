@@ -156,6 +156,9 @@ const companionEl = need("companion");
 const companionList = need("companion-list");
 const companionArrows = need("companion-arrows");
 const remoteNoteEl = need("remote-note");
+const feedbackEl = need("feedback");
+const feedbackText = need("feedback-text");
+const feedbackScrim = need("feedback-scrim");
 const brandRule = needSel(".brand__rule");
 const cliRule = needSel(".cli__rule");
 const model = {
@@ -1619,6 +1622,45 @@ function shake() {
     void form.offsetWidth;
     form.classList.add("shake");
 }
+// ---- prominent command feedback (errors + the "nothing to stage" notice) ----
+let feedbackTimer = 0;
+function clearFeedbackTimer() {
+    if (feedbackTimer) {
+        window.clearTimeout(feedbackTimer);
+        feedbackTimer = 0;
+    }
+}
+function shakeFeedback() {
+    feedbackEl.classList.remove("shake");
+    void feedbackEl.offsetWidth;
+    feedbackEl.classList.add("shake");
+}
+// a bad / mistyped command: a red error that shakes and clears itself
+function showError(text) {
+    clearFeedbackTimer();
+    feedbackText.textContent = text;
+    feedbackEl.classList.remove("feedback--block");
+    feedbackScrim.classList.remove("show");
+    feedbackEl.classList.add("show");
+    shakeFeedback();
+    shake(); // the field shakes too
+    feedbackTimer = window.setTimeout(hideFeedback, 2600);
+}
+// a valid command that can't do anything yet (nothing to stage): an intrusive
+// notice with a dimming scrim that the user dismisses by pressing anything
+function showBlock(text) {
+    clearFeedbackTimer();
+    feedbackText.textContent = text;
+    feedbackEl.classList.add("feedback--block", "show");
+    feedbackScrim.classList.add("show");
+    shakeFeedback();
+    shake();
+}
+function hideFeedback() {
+    clearFeedbackTimer();
+    feedbackEl.classList.remove("show", "feedback--block");
+    feedbackScrim.classList.remove("show");
+}
 // true only while the stage is gliding off the landing into its docked spot, so
 // the lesson-height re-measure at the end of the swap glides too, instead of
 // snapping mid-glide and making the command line jump.
@@ -1673,7 +1715,9 @@ function rejectStaging() {
     cmd.value = "";
     ink.innerHTML = "";
     tabhint.classList.remove("show");
-    showInfo("Nothing has changed yet, so there's nothing to stage. (press anything)");
+    // an intrusive notice (with a scrim) instead of a faint line; the user presses
+    // anything to make it go away, which runs the demonstration
+    showBlock("Nothing's changed yet, so there's nothing to stage.");
     if (dismissDemoHandler)
         return;
     dismissDemoHandler = (e) => {
@@ -1688,6 +1732,7 @@ function rejectStaging() {
 }
 // "for the demo I'll do it for you": play the index.html edit, then re-prompt
 async function runEditDemo() {
+    hideFeedback(); // drop the "nothing to stage" notice + its scrim
     clearNudge();
     showInfo("No worries. For the demo, I'll make a small change to index.html for you.");
     await sleep(1100); // a beat to read
@@ -1723,8 +1768,8 @@ form.addEventListener("submit", async (e) => {
     }
     const step = steps[stepIndex];
     if (!step.test(input)) {
-        showNudge(/^git\b/i.test(input) ? step.hint : "Every git command starts with  git");
-        shake();
+        // invalid command: a real, prominent error (it shakes + clears itself)
+        showError(/^git\b/i.test(input) ? step.hint : "Every git command starts with  git");
         return;
     }
     // add2, before the demonstration: you can't stage when nothing has changed.
@@ -1791,6 +1836,7 @@ form.addEventListener("submit", async (e) => {
     }
 });
 cmd.addEventListener("input", () => {
+    hideFeedback(); // typing dismisses a lingering error
     clearNudge();
     updateInk();
 });
@@ -3060,6 +3106,7 @@ async function seekTo(target) {
         awaitingDismiss = false;
         clearDismissDemo();
         clearNudge();
+        hideFeedback();
         // cancel any in-flight field morph so the underline/ink land at the seek state
         cliMorphing = false;
         cliAwaitingTextIn = false;

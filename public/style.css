@@ -966,6 +966,61 @@ body.is-learning .landing-notes {
   80% { transform: translateX(3px); }
 }
 
+/* ---- prominent command feedback (errors + the "nothing to stage" notice) --- */
+/* Centred, on-paper, unmissable. Two modes: a red error for a bad command (no
+   scrim, clears itself), and an intrusive "block" notice with a dimming scrim
+   for a valid command that can't do anything yet (you press anything to go on). */
+.feedback {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  z-index: 30;
+  pointer-events: none;            /* clicks fall through to the dismiss handler */
+  max-width: min(90vw, 32rem);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s;
+}
+.feedback.show { opacity: 1; visibility: visible; }
+.feedback__card {
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+  line-height: 1.12;
+  text-align: center;
+  color: var(--pen-red);
+  background: var(--paper);
+  padding: 1rem 1.7rem 1.1rem;
+  /* a hand-drawn-looking rounded rectangle, tilted a touch off-square */
+  border: 2.6px solid currentColor;
+  border-radius: 255px 14px 225px 16px / 16px 225px 14px 255px;
+  box-shadow: 0 12px 34px rgba(20, 16, 12, 0.22);
+  transform: rotate(-1.3deg);
+}
+.feedback--block .feedback__card { color: #b07d2b; } /* a valid-but-no-op moment */
+:root[data-theme="dark"] .feedback--block .feedback__card { color: #e0a94e; }
+.feedback.shake .feedback__card { animation: notice-shake 0.5s ease; }
+@keyframes notice-shake {
+  0%, 100% { transform: rotate(-1.3deg) translateX(0); }
+  15% { transform: rotate(-3deg) translateX(-9px); }
+  32% { transform: rotate(1deg) translateX(9px); }
+  50% { transform: rotate(-2.2deg) translateX(-6px); }
+  68% { transform: rotate(0.6deg) translateX(5px); }
+  84% { transform: rotate(-1.6deg) translateX(-3px); }
+}
+.feedback__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: rgba(20, 16, 12, 0.34);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.25s ease, visibility 0.25s;
+}
+.feedback__scrim.show { opacity: 1; visibility: visible; pointer-events: auto; }
+
 /* ---- file tree (left) ---------------------------------------------- */
 /* Compact corner state. This is where the tree lives LATER, once a file
    editor takes the main spot. Ink on paper, no card. */
@@ -1687,7 +1742,7 @@ body.is-learning .landing-notes {
 @media (prefers-reduced-motion: reduce) {
   #stage, .lesson { transition: none; }
   .theme-toggle:hover .bulb { transform: none; }
-  .shake, .tree__list li.is-new, .tree__list li.is-edited, .tree__list li.is-pushed-now { animation: none; }
+  .shake, .feedback.shake .feedback__card, .tree__list li.is-new, .tree__list li.is-edited, .tree__list li.is-pushed-now { animation: none; }
   /* no draw-on; the underline just appears/leaves on hover */
   .f__underline { transition: none; }
 }

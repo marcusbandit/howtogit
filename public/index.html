@@ -182,6 +182,14 @@
     </div>
   </section>
 
+  <!-- prominent command feedback: a red error for a bad/mistyped command, or the
+       intrusive "nothing to stage" notice (with a dimming scrim). Centred so it's
+       the thing you notice; dismissed by pressing anything. Driven by app.ts. -->
+  <div class="feedback__scrim" id="feedback-scrim" aria-hidden="true"></div>
+  <div id="feedback" class="feedback" aria-hidden="true" aria-live="assertive">
+    <p class="feedback__card" id="feedback-text"></p>
+  </div>
+
   <!-- landing-only hover strip: on the first screen the timeline hides until you
        hover here, then fades in with a friendly note (see CSS gating). -->
   <div class="tl-zone" aria-hidden="true"></div>
