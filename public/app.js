@@ -1424,6 +1424,8 @@ function analyze(typed, atoms) {
     return { html, ghost, chunk, invalid };
 }
 function updateInk() {
+    if (cliMorphing)
+        return; // a field morph owns the underline + width right now
     const typed = cmd.value;
     const atoms = currentAtoms();
     const a = atoms
@@ -1440,6 +1442,17 @@ function updateInk() {
     cmd.style.width = `${Math.max(full, 6) + 1}ch`;
     syncCliRule();
     ink.style.transform = `translateX(${-cmd.scrollLeft}px)`;
+    // state 3 -> 4: a transition cleared the field, now fade the new command in
+    if (cliAwaitingTextIn) {
+        cliAwaitingTextIn = false;
+        ink.style.transition = "none";
+        ink.style.opacity = "0";
+        void ink.offsetWidth;
+        requestAnimationFrame(() => {
+            ink.style.transition = "opacity .22s ease";
+            ink.style.opacity = "1";
+        });
+    }
     tabhint.classList.toggle("show", suggestActive && typed.trim().length > 0);
     renderActivePart();
     // live tip: flag a non-origin remote nickname the moment it diverges
@@ -1455,18 +1468,110 @@ function updateInk() {
 }
 // redraw the underline as a fresh hand-drawn line at the field's real width,
 // so it never gets stretched out of shape when the command is long
-function syncCliRule() {
-    const field = cmd.parentElement;
-    if (!field)
-        return;
-    const w = Math.max(40, Math.round(field.clientWidth));
+// ---- the command-line underline: one fixed-point hand-drawn rule ----------
+// A FIXED number of points with constant vertical wobble, so the same line can
+// be drawn at any width and morphed between widths by just spreading the points
+// horizontally. No horizontal stretch (the old linePath rescaled its wobble and
+// looked squashed), and no points popping in/out as the width changes.
+const CLI_RULE_N = 18;
+const CLI_RULE_AMP = 3.4;
+const cliRuleOffsets = (() => {
+    // a tiny deterministic PRNG so the wobble is identical every load
+    let s = 0x9e3779b9 | 0;
+    const rand = () => {
+        s = (s + 0x6d2b79f5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const offs = [];
+    for (let i = 0; i <= CLI_RULE_N; i++) {
+        const t = i / CLI_RULE_N;
+        const env = Math.sin(t * Math.PI); // no wander at the two ends
+        offs.push((rand() * 2 - 1) * CLI_RULE_AMP * env + env * CLI_RULE_AMP * 0.4);
+    }
+    return offs;
+})();
+function cliRulePath(w) {
+    const x1 = 3, x2 = Math.max(x1 + 1, w - 3), y = 7;
+    const pts = [];
+    for (let i = 0; i <= CLI_RULE_N; i++) {
+        const t = i / CLI_RULE_N;
+        pts.push([x1 + (x2 - x1) * t, y + cliRuleOffsets[i]]);
+    }
+    return S.smooth(pts, false);
+}
+function drawCliRuleAt(w) {
     cliRule.setAttribute("viewBox", `0 0 ${w} 12`);
     cliRule.replaceChildren(S.el("path", {
-        d: S.linePath(3, 7, w - 3, 7, 4, 0.7),
+        d: cliRulePath(w),
         class: "edge-stroke",
         stroke: COLORS.ink,
         "stroke-width": 2,
     }));
+}
+function syncCliRule() {
+    const field = cmd.parentElement;
+    if (!field)
+        return;
+    drawCliRuleAt(Math.max(40, Math.round(field.clientWidth)));
+}
+// ---- the 4-state field transition on Enter --------------------------------
+// 1 before-filled -> animate just the text away -> 2 before-empty -> morph the
+// underline into the next command's width -> 3 after-empty -> the new text fades
+// in later (via updateInk) -> 4 after-filled. Morphing the underline while the
+// field is empty avoids the squashed/stretched look of rescaling a drawn line.
+let cliMorphing = false; // the underline is mid-morph: updateInk must not fight it
+let cliAwaitingTextIn = false; // text was animated out; next updateInk fades it in
+// the px width the field will have once it holds a command of `chars` characters
+function fieldWidthForChars(chars) {
+    const prev = cmd.style.width;
+    cmd.style.width = `${Math.max(chars, 6) + 1}ch`;
+    const w = cmd.parentElement?.clientWidth ?? cmd.clientWidth;
+    cmd.style.width = prev; // revert before any paint happens
+    return Math.max(40, Math.round(w));
+}
+function morphField(fromW, toW, dur) {
+    return new Promise((resolve) => {
+        const start = performance.now();
+        const tick = (now) => {
+            const t = Math.min(1, (now - start) / dur);
+            const e = 1 - Math.pow(1 - t, 3); // ease-out
+            const w = fromW + (toW - fromW) * e;
+            cmd.style.width = `${w}px`;
+            drawCliRuleAt(Math.round(w));
+            if (t < 1)
+                requestAnimationFrame(tick);
+            else
+                resolve();
+        };
+        requestAnimationFrame(tick);
+    });
+}
+async function advanceCli(nextChars) {
+    if (S.prefersReduced || instant) {
+        ink.innerHTML = "";
+        cmd.style.width = `${Math.max(nextChars, 6) + 1}ch`;
+        syncCliRule();
+        return;
+    }
+    const startW = Math.max(40, Math.round(cmd.parentElement?.clientWidth ?? 0));
+    const endW = fieldWidthForChars(nextChars);
+    cliMorphing = true;
+    cliAwaitingTextIn = true;
+    tabhint.classList.remove("show");
+    // 1 -> 2: animate just the text away, quickly (the underline stays put)
+    ink.style.transition = "opacity .14s ease, transform .16s ease";
+    ink.style.opacity = "0";
+    ink.style.transform = "translateY(-5px)";
+    await sleep(150);
+    ink.innerHTML = "";
+    ink.style.transform = "none";
+    // 2 -> 3: morph the underline (and the field) into the next command's width
+    await morphField(startW, endW, 320);
+    cliMorphing = false;
+    // 3 -> 4: handled the next time updateInk runs (showStep, a beat later), which
+    // sets the new command and fades the ink back in (see cliAwaitingTextIn there)
 }
 // Tab completes only the next atom (one word, or one url segment)
 function acceptNextWord() {
@@ -1630,11 +1735,11 @@ form.addEventListener("submit", async (e) => {
     // stays put until the demonstration edit runs after the first git add attempt
     if (stepIndex === stepIdx("add2"))
         editDemoPending = true;
-    // clear the just-typed command at once; the field snaps to its smallest, and
-    // the next command's ghost appears a beat later
-    ink.innerHTML = "";
-    cmd.style.width = "6ch";
-    tabhint.classList.remove("show");
+    // the 4-state field transition: animate the typed command away, morph the
+    // underline into the next command's width while empty, then the new command's
+    // ghost fades in a beat later (when showStep -> updateInk runs)
+    const nextChars = stepIndex < steps.length ? canonical(steps[stepIndex]).length : 6;
+    void advanceCli(nextChars);
     // the companion steps back while the action happens; it returns at the end of
     // the paced sequence to explain what just appeared
     setCompanion(null, "post");
@@ -2942,6 +3047,11 @@ async function seekTo(target) {
         awaitingDismiss = false;
         clearDismissDemo();
         clearNudge();
+        // cancel any in-flight field morph so the underline/ink land at the seek state
+        cliMorphing = false;
+        cliAwaitingTextIn = false;
+        ink.style.opacity = "1";
+        ink.style.transform = "none";
         resetBoard();
         if (target <= 0) {
             stage.classList.remove("is-docked");
