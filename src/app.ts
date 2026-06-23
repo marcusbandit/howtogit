@@ -1144,7 +1144,7 @@ const steps: Step[] = [
     hint: "Send your commit up:  git push -u origin main",
     teach: {
       goal: "Send it to the remote",
-      why: "Upload your commit so the remote has it too. This is the first time your work leaves your computer — the remote now holds a copy of your tree.",
+      why: "Upload your commit so the remote has it too. This is the first time your work leaves your computer. The remote now holds a copy of your tree.",
       parts: [
         { t: "push", tone: "cmd", why: "upload your commits to the remote" },
         {
@@ -1222,12 +1222,12 @@ const steps: Step[] = [
       A(".", "val", { free: true }),
     ],
     test: (s) => /^git\s+add\s+(\.|-a|-A|--all)$/i.test(s),
-    hint: "Stage your change with  git add .",
+    hint: "Stage your changes with  git add .",
     teach: {
-      goal: "Stage your change",
-      why: "You edited index.html on the feature branch. Stage it so it goes in the next commit.",
+      goal: "Stage your changes",
+      why: "Staging picks what goes into the next commit. You're on the feature branch now. Go ahead and try it.",
       parts: [
-        { t: "add", tone: "cmd", why: "stage the change you just made" },
+        { t: "add", tone: "cmd", why: "stage your changes for the next commit" },
         {
           t: ".  /  -A",
           tone: "val",
@@ -1721,10 +1721,63 @@ function normalize(raw: string): string {
   return raw.trim().replace(/\s+/g, " ");
 }
 
+// ---- the "you can't stage nothing" demonstration (feature-branch flow) -----
+// After checkout, index.html has NOT changed yet. The first time the user tries
+// to stage, we reject it ("nothing to stage"), let them dismiss it with anything
+// (key or click), then say we'll demonstrate, play the index.html edit, and
+// re-prompt the stage so the second attempt goes through.
+let editDemoPending = false; // at add2, before the demonstration edit has run
+let awaitingDismiss = false; // the "nothing to stage" note is up, awaiting any input
+let dismissDemoHandler: ((e: Event) => void) | null = null;
+
+function clearDismissDemo(): void {
+  if (!dismissDemoHandler) return;
+  document.removeEventListener("keydown", dismissDemoHandler, true);
+  document.removeEventListener("click", dismissDemoHandler, true);
+  dismissDemoHandler = null;
+}
+// reject a premature stage, then arm: the next key OR click runs the demo edit
+function rejectStaging(): void {
+  awaitingDismiss = true;
+  cmd.value = "";
+  ink.innerHTML = "";
+  tabhint.classList.remove("show");
+  showInfo("Nothing has changed yet, so there's nothing to stage. (press anything)");
+  if (dismissDemoHandler) return;
+  dismissDemoHandler = (e: Event) => {
+    if (e instanceof KeyboardEvent) e.preventDefault(); // swallow Enter/Esc so it doesn't also act
+    clearDismissDemo();
+    awaitingDismiss = false;
+    void runEditDemo();
+  };
+  document.addEventListener("keydown", dismissDemoHandler, true);
+  document.addEventListener("click", dismissDemoHandler, true);
+}
+// "for the demo I'll do it for you": play the index.html edit, then re-prompt
+async function runEditDemo(): Promise<void> {
+  clearNudge();
+  showInfo("No worries. For the demo, I'll make a small change to index.html for you.");
+  await sleep(1100); // a beat to read
+  busy = true;
+  try {
+    await playEditSequence();
+    editDemoPending = false; // index.html is genuinely changed now
+    await refreshRepo();
+    renderRemoteTree();
+    updateLayout();
+  } finally {
+    busy = false;
+  }
+  showInfo("Now stage it for real:  git add .");
+  updateInk(); // bring the git add ghost back
+  if (!isPhone) cmd.focus();
+}
+
 let busy = false;
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (busy) return;
+  if (awaitingDismiss) return; // the dismiss handler drives what happens next
   const input = normalize(cmd.value);
   if (!input) return;
 
@@ -1741,6 +1794,13 @@ form.addEventListener("submit", async (e) => {
     return;
   }
 
+  // add2, before the demonstration: you can't stage when nothing has changed.
+  // Reject it; dismissing (anything) triggers the demo edit, then re-prompts.
+  if (step.key === "add2" && editDemoPending) {
+    rejectStaging();
+    return;
+  }
+
   clearNudge();
   closeFileViewer(); // a new command changes the board: dismiss any open file
   const arg = step.extract ? step.extract(input) : undefined;
@@ -1749,6 +1809,14 @@ form.addEventListener("submit", async (e) => {
   stepIndex++;
   persisted.step = stepIndex;
   savePersisted(); // a normal reload resumes right here, with your words
+  // arriving at add2 (checkout just finished): the file hasn't changed yet, so it
+  // stays put until the demonstration edit runs after the first git add attempt
+  if (stepIndex === stepIdx("add2")) editDemoPending = true;
+  // clear the just-typed command at once; the next command scales in a beat later
+  ink.innerHTML = "";
+  cmd.classList.add("advancing");
+  cmd.style.width = "6ch";
+  tabhint.classList.remove("show");
   // the companion steps back while the action happens; it returns at the end of
   // the paced sequence to explain what just appeared
   setCompanion(null, "post");
@@ -1784,11 +1852,10 @@ form.addEventListener("submit", async (e) => {
   } finally {
     busy = false;
   }
-  // landing on the feature branch means "you edited index.html": play it out
-  if (stepIndex === stepIdx("add2")) void playEditSequence();
 });
 
 cmd.addEventListener("input", () => {
+  cmd.classList.remove("advancing"); // typing resizes the field instantly, no glide
   clearNudge();
   updateInk();
 });
@@ -1895,7 +1962,10 @@ let pushedBefore = new Set<string>(); // files already on the remote last render
 // real git via the snapshot; the still-simulated branch edit + remote add the
 // "modified on the branch" / "pushed" overlays on top, until those are real too.
 function overlaidState(file: string, base: FileState): FileState {
-  if (file === EDIT_FILE && stepIndex === stepIdx("add2")) return "modified";
+  // index.html only reads as "modified" once the demonstration edit has run; until
+  // then (right after checkout) it's unchanged, so it keeps its real pushed state.
+  if (file === EDIT_FILE && stepIndex === stepIdx("add2") && !editDemoPending)
+    return "modified";
   if (file === EDIT_FILE && stepIndex === stepIdx("commit2")) return "staged";
   if (base === "committed" && isPushed(file)) return "pushed";
   return base;
@@ -2094,7 +2164,7 @@ function renderFileTree(): void {
   const model = localModel();
   renderTree(localTree, model);
   lastGitPresent = !!snap?.inited;
-  wasEditing = stepIndex === stepIdx("add2");
+  wasEditing = stepIndex === stepIdx("add2") && !editDemoPending;
   pushedBefore = new Set(
     model.files.filter((f) => f.state === "pushed").map((f) => f.name),
   );
@@ -2371,7 +2441,7 @@ function fileLines(
   if (file === EDIT_FILE) {
     const hasEdit =
       side === "local"
-        ? stepIndex >= stepIdx("add2")
+        ? stepIndex >= stepIdx("add2") && !editDemoPending
         : stepIndex > stepIdx("push2");
     if (hasEdit) {
       const lines = EDIT_LINES.slice();
@@ -3252,6 +3322,11 @@ async function seekTo(target: number): Promise<void> {
   // `busy` or `instant` stuck true and freeze every future command + seek.
   try {
     closeEditor(); // a seek cancels any in-flight edit and hides the editor
+    // a seek shows resolved states: drop any pending edit-demo + its dismiss arming
+    editDemoPending = false;
+    awaitingDismiss = false;
+    clearDismissDemo();
+    clearNudge();
     resetBoard();
     if (target <= 0) {
       stage.classList.remove("is-docked");
