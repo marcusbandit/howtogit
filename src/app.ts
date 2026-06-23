@@ -1231,18 +1231,29 @@ const steps: Step[] = [
     key: "checkout",
     atoms: [
       A("git", "cmd", { sep: "" }),
-      A("checkout", "cmd"),
+      A("switch", "cmd"),
       A("feature", "val", { free: true }),
     ],
-    test: (s) => /^git\s+checkout\s+\S+$/i.test(s),
+    test: (s) => /^git\s+switch\s+\S+$/i.test(s),
     extract: (s) => s.split(/\s+/)[2] ?? "feature",
-    hint: "Switch to it:  git checkout feature",
+    hint: "Switch to it:  git switch feature",
     teach: {
       goal: "Switch to the branch",
       why: "Move onto the branch. A branch only becomes its own line of history once you make a commit on it.",
       parts: [
-        { t: "checkout", tone: "cmd", why: "move HEAD onto another branch" },
+        { t: "switch", tone: "cmd", why: "move HEAD onto another branch" },
         { t: "feature", tone: "val", why: "the branch to switch to" },
+      ],
+    },
+    curiosity: {
+      cmd: "git switch feature",
+      // the question a beginner has the instant they meet switch: they've seen
+      // checkout everywhere. Answer it here instead of cluttering the lesson.
+      post: [
+        {
+          q: "wait, what about <b>git checkout</b>? i've seen that everywhere",
+          a: "you'll see <b>git checkout</b> a lot, it's older and still works. git split its jobs into two clearer commands: <b>git switch</b> for changing branches (what you just did) and <b>git restore</b> for files. for switching, they do the same thing.",
+        },
       ],
     },
     run: doCheckout,
@@ -1303,17 +1314,17 @@ const steps: Step[] = [
     key: "checkout-main",
     atoms: [
       A("git", "cmd", { sep: "" }),
-      A("checkout", "cmd"),
+      A("switch", "cmd"),
       A("main", "val", { free: true }),
     ],
-    test: (s) => /^git\s+checkout\s+main$/i.test(s),
+    test: (s) => /^git\s+switch\s+main$/i.test(s),
     extract: (s) => s.split(/\s+/)[2] ?? "main",
-    hint: "Go back to main first:  git checkout main",
+    hint: "Go back to main first:  git switch main",
     teach: {
       goal: "Switch back to main",
       why: "You merge into the branch you're standing on, so move onto main before bringing the feature in.",
       parts: [
-        { t: "checkout", tone: "cmd", why: "move HEAD back onto main" },
+        { t: "switch", tone: "cmd", why: "move HEAD back onto main" },
         {
           t: "main",
           tone: "val",
@@ -3302,9 +3313,11 @@ const TIMELINE_TASKS: { label: string; keys: string[] }[] = [
   { label: "Branch HEAD", keys: ["branch", "checkout", "add2", "commit2"] },
   { label: "Merge to HEAD", keys: ["checkout-main", "merge", "push2"] },
 ];
-// a command label for a sub-step, e.g. "checkout-main" -> "git checkout"
+// a command label for a sub-step, e.g. "commit2" -> "git commit". The checkout*
+// keys are kept internally but now teach (and label) the modern "git switch".
 function cmdLabel(key: string): string {
-  return `git ${key.replace(/[-\d].*$/, "")}`;
+  const sub = key.replace(/[-\d].*$/, "");
+  return `git ${sub === "checkout" ? "switch" : sub}`;
 }
 interface TLStop {
   group: HTMLElement;
