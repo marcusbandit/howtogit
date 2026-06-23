@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- howtogit.dev favicon: a hand-inked "g" on a paper tile with the
+       wordmark's blue underline. Self-contained (carries its own paper
+       background) so it reads on light or dark browser chrome, and built
+       in the site's ink-on-paper idiom: a frozen version of the "boil"
+       warp roughens the strokes the same way the live graph does. -->
+  <defs>
+    <filter id="rough" x="-15%" y="-15%" width="130%" height="130%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="1.5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <radialGradient id="paper" cx="50%" cy="42%" r="75%">
+      <stop offset="38%" stop-color="#efe7d2"/>
+      <stop offset="100%" stop-color="#e6dabb"/>
+    </radialGradient>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/></filter>
+  </defs>
+
+  <rect x="0" y="0" width="32" height="32" rx="7.5" fill="url(#paper)"/>
+  <rect x="0" y="0" width="32" height="32" rx="7.5" fill="#000" opacity="0.05" filter="url(#grain)"/>
+
+  <g filter="url(#rough)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- bowl of a handwritten single-story g -->
+    <path d="M 19.5 12.2
+             C 19.5 14.96 17.26 17.2 14.5 17.2
+             C 11.74 17.2 9.5 14.96 9.5 12.2
+             C 9.5 9.44 11.74 7.2 14.5 7.2
+             C 17.26 7.2 19.5 9.44 19.5 12.2 Z"
+          stroke="#2a2521" stroke-width="3"/>
+    <!-- stem + open descender tail -->
+    <path d="M 19.7 7.6
+             C 20.2 11 20 14.6 19.7 18
+             C 19.4 21.4 18.5 23.8 15.5 24.2
+             C 13.2 24.5 11.3 23.5 10.7 21.6"
+          stroke="#2a2521" stroke-width="3"/>
+    <!-- the wordmark's blue underline squiggle -->
+    <path d="M 7 26.8 C 11 25.9 14 27.6 18 26.8 S 24 26.1 25.5 26.8"
+          stroke="#2e5c9e" stroke-width="2.6"/>
+  </g>
+</svg>
