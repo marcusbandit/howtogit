@@ -280,6 +280,24 @@ function drawOn(pathEl, opts = {}) {
 }
 // when true, drawing happens with no animation (used for timeline replay)
 let instant = false;
+// ---- tempo: one rhythm for the whole experience --------------------
+// The overwhelm was never the amount of content, it was every piece of a step
+// landing on the same beat. So reveals are spaced by a shared BEAT, and each
+// step carries a "weight": a brand-new idea breathes (full beat), a familiar
+// repeat moves quicker (half a beat). Tune the whole feel with one number.
+// Timeline seeks (instant) and reduced motion skip pacing entirely.
+const BEAT = 520; // ms — the base unit of breathing room
+const FAMILIAR = new Set(["add2", "commit2", "checkout-main", "push2"]);
+function stepWeight(key) {
+    return FAMILIAR.has(key) ? 0.5 : 1;
+}
+// a paced pause of `beats` BEATs, scaled by `weight`. Resolves immediately
+// during a seek or under reduced motion, so neither waits on the clock.
+function beat(beats = 1, weight = 1) {
+    if (instant || S.prefersReduced)
+        return Promise.resolve();
+    return new Promise((r) => setTimeout(r, Math.round(BEAT * beats * weight)));
+}
 // ---- small animation helpers ---------------------------------------
 function animateIn(node, delay = 0) {
     if (instant || S.prefersReduced)
@@ -1512,28 +1530,39 @@ form.addEventListener("submit", async (e) => {
     stepIndex++;
     persisted.step = stepIndex;
     savePersisted(); // a normal reload resumes right here, with your words
-    // advance the lesson + ghost immediately, before the drawing animates
-    showStep(stepIndex);
-    updateTimeline();
-    // the companion steps back while the action happens, then returns to explain
-    // what just appeared (its "post" set points at the now-real thing)
+    // the companion steps back while the action happens; it returns at the end of
+    // the paced sequence to explain what just appeared
     setCompanion(null, "post");
-    // hold `busy` across the WHOLE step — drawing AND the real-git replay — so a
-    // second Enter or a timeline click can't run a concurrent replay on the
-    // shared in-memory fs. finally guarantees the lock is released even if the
-    // replay throws (otherwise the UI would freeze).
+    // Pace the reveal so the pieces of a step arrive one after another instead of
+    // all on the same beat. A brand-new concept breathes; a familiar repeat moves
+    // quicker. `busy` is held across the WHOLE sequence — drawing, the real-git
+    // replay, AND the beats — so a second Enter or a timeline click can't run a
+    // concurrent replay on the shared in-memory fs. finally guarantees the lock is
+    // released even if a step throws (otherwise the UI would freeze).
+    const w = stepWeight(step.key);
     busy = true;
     try {
+        // 1) the board draws the action: the ink is the star, you watch it happen.
+        //    The current lesson stays put through the draw rather than jumping ahead.
         await step.run(arg);
         centerOnHead();
         if (stepIndex >= steps.length)
             showEndState();
         if (step.key === "commit")
             lastCommitMsg = arg ?? lastCommitMsg; // replay with the real message
+        // 2) a beat, then the file tree catches up to the new repo state
+        await beat(0.6, w);
         await refreshRepo(); // real git -> tree + states
         renderRemoteTree();
         renderRemoteGraph();
         updateLayout();
+        // 3) a beat, then the next lesson + timeline settle in, no longer competing
+        //    with the drawing
+        await beat(0.9, w);
+        showStep(stepIndex);
+        updateTimeline();
+        // 4) a final beat, then the companion offers "what just happened"
+        await beat(0.7, w);
         syncCompanion();
     }
     finally {
@@ -2862,7 +2891,9 @@ function typeLandingCallout() {
             window.setTimeout(step, 24);
         }
     };
-    window.setTimeout(step, 800);
+    // hold off until the command line has had a beat to itself, then type the
+    // callout in step with the tree's arrow drawing on (see the landing CSS)
+    window.setTimeout(step, 1500);
 }
 // ---- the curiosity companion -----------------------------------------
 // A persistent bottom-right voice. It renders the current step's questions for
@@ -3196,12 +3227,13 @@ let companionPrimed = false; // has the first landing reveal happened yet?
 function syncCompanion() {
     companionEl.classList.toggle("is-landing", stepIndex === 0);
     if (stepIndex === 0) {
-        // first load: let the area fade in in step with the rest of the intro
+        // first load: the companion is the LAST thing to arrive, well after the
+        // command line, the file tree and the welcome line have each had their beat
         if (!companionPrimed && !S.prefersReduced) {
-            companionEl.style.transitionDelay = "2.4s";
+            companionEl.style.transitionDelay = "3.8s";
             window.setTimeout(() => {
                 companionEl.style.transitionDelay = "";
-            }, 3200);
+            }, 4800);
         }
         companionPrimed = true;
         setCompanion("init", "pre");

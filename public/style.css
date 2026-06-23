@@ -710,41 +710,47 @@ body.is-learning .landing-notes {
 @keyframes companion-erase { to { stroke-dashoffset: -1; } }
 
 /* ---- landing intro: the first screen draws itself in ----------------- */
-/* the file tree fades in ~0.5s after load. Opacity only: its is-focus state
-   carries a translateY(-50%) for centring that a transform animation would
-   clobber. */
-#filetree { animation: landing-fade 0.7s ease 0.5s both; }
-@keyframes landing-fade { from { opacity: 0; } to { opacity: 1; } }
+/* The first screen is the heaviest moment, so it gets the most breathing room:
+   each piece arrives a clear beat after the last instead of all at once. The
+   command line leads; the supporting cast (tree, callout, welcome, roadmap,
+   companion) follows one beat at a time. Keep these delays in step with the JS
+   that types the callout (~1.5s) and fades the companion in (~3.8s) in app.ts. */
 
 /* the hook and the command line (one element, reused across every step) rise
-   gently into place first; the rest of the page draws itself in around them */
-#stage.is-centered .lesson__goal { animation: landing-rise 0.6s var(--ease-settle) 0.05s both; }
-#stage.is-centered #cli         { animation: landing-rise 0.6s var(--ease-settle) 0.2s both; }
+   gently into place first, on their own, before anything else appears */
+#stage.is-centered .lesson__goal { animation: landing-rise 0.6s var(--ease-settle) 0.1s both; }
+#stage.is-centered #cli         { animation: landing-rise 0.6s var(--ease-settle) 0.3s both; }
 @keyframes landing-rise {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: none; }
 }
 
-/* the callout arrows ink themselves on (paths carry pathLength="1", so the dash
-   maths is exact); shaft first, then the arrowhead */
+/* a beat later: the file tree fades in. Opacity only: its is-focus state carries
+   a translateY(-50%) for centring that a transform animation would clobber. */
+#filetree { animation: landing-fade 0.7s ease 0.9s both; }
+@keyframes landing-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* a beat later: the callout arrow inks itself on (paths carry pathLength="1", so
+   the dash maths is exact); shaft first, then the arrowhead, in step with the
+   callout text typing in */
 .note-stroke { stroke-dasharray: 1; }
-.note--tree .note__arrow path:nth-of-type(1) { animation: landing-draw 0.55s ease 0.65s both; }
-.note--tree .note__arrow path:nth-of-type(2) { animation: landing-draw 0.35s ease 1.05s both; }
+.note--tree .note__arrow path:nth-of-type(1) { animation: landing-draw 0.55s ease 1.5s both; }
+.note--tree .note__arrow path:nth-of-type(2) { animation: landing-draw 0.35s ease 1.95s both; }
 @keyframes landing-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 
-/* the clone note and the roadmap wipe on left-to-right, like ink being laid */
-#stage.is-centered .landing__clone { animation: landing-wipe 0.9s var(--ease-settle) 1.4s both; }
-#stage.is-centered .landing__road  { animation: landing-wipe 0.9s var(--ease-settle) 1.8s both; }
+/* a beat later: the welcome line, then a beat after that the roadmap, each
+   wiping on left-to-right like ink being laid */
+#stage.is-centered .landing__clone { animation: landing-wipe 0.9s var(--ease-settle) 2.6s both; }
+#stage.is-centered .landing__road  { animation: landing-wipe 0.9s var(--ease-settle) 3.3s both; }
 @keyframes landing-wipe {
   from { clip-path: inset(0 100% 0 0); }
   to   { clip-path: inset(0 -4% 0 0); }
 }
 
-/* the companion inks itself in last: on first load its area fades in (JS adds
-   .is-visible with a matching delay) and then the intro flourish's down-arrow
-   draws on, just after the area appears */
-.companion.is-landing .companion__intro-arrow path:nth-of-type(1) { animation: landing-draw 0.5s ease 2.55s both; }
-.companion.is-landing .companion__intro-arrow path:nth-of-type(2) { animation: landing-draw 0.3s ease 2.9s both; }
+/* last of all, after the rest has settled: the companion's area fades in (JS adds
+   .is-visible with a matching ~3.8s delay) and its intro down-arrow draws on */
+.companion.is-landing .companion__intro-arrow path:nth-of-type(1) { animation: landing-draw 0.5s ease 4s both; }
+.companion.is-landing .companion__intro-arrow path:nth-of-type(2) { animation: landing-draw 0.3s ease 4.35s both; }
 
 @media (prefers-reduced-motion: reduce) {
   #filetree,
