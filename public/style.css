@@ -457,10 +457,10 @@ body.is-learning .landing-notes {
 .landing__clone {
   font-family: var(--hand);
   font-weight: 600;
-  font-size: clamp(1.2rem, 2.7vw, 1.55rem);
-  line-height: 1.15;
+  font-size: clamp(1.55rem, 3.6vw, 2.1rem);
+  line-height: 1.18;
   color: var(--ink);
-  max-width: min(40rem, 90vw);
+  max-width: min(46rem, 92vw);
 }
 .landing__road {
   display: flex;
@@ -472,10 +472,10 @@ body.is-learning .landing-notes {
 .road-chip {
   font-family: var(--hand);
   font-weight: 700;
-  font-size: 1.2rem;
+  font-size: 1.55rem;
   line-height: 1;
   color: var(--ink-soft);
-  padding: 0.14rem 0.7rem 0.22rem;
+  padding: 0.18rem 0.85rem 0.28rem;
   border: 2px solid var(--ink-soft);
   /* an uneven, hand-drawn ink box */
   border-radius: 14px 10px 17px 8px / 9px 16px 10px 15px;
@@ -484,7 +484,7 @@ body.is-learning .landing-notes {
 .road-chip--clone { color: var(--ink-soft); border-style: dashed; }
 .road-sep {
   font-family: var(--hand);
-  font-size: 1.2rem;
+  font-size: 1.55rem;
   color: var(--ink-soft);
   opacity: 0.5;
 }
@@ -740,8 +740,15 @@ body.is-learning .landing-notes {
    that types the callout (~1.5s) and fades the companion in (~3.8s) in app.ts. */
 
 /* the hook and the command line (one element, reused across every step) rise
-   gently into place first, on their own, before anything else appears */
-#stage.is-centered .lesson__goal { animation: landing-rise 0.6s var(--ease-settle) 0.1s both; }
+   gently into place first, on their own, before anything else appears.
+   On the landing the hook is the warmest thing on the page, so blow it up big
+   and welcoming here; the docked steps keep the compact size so the graph has
+   room once you're past the front door. */
+#stage.is-centered .lesson__goal {
+  font-size: clamp(2.8rem, 7vw, 4.6rem);
+  line-height: 1.04;
+  animation: landing-rise 0.6s var(--ease-settle) 0.1s both;
+}
 #stage.is-centered #cli         { animation: landing-rise 0.6s var(--ease-settle) 0.3s both; }
 @keyframes landing-rise {
   from { opacity: 0; transform: translateY(10px); }
