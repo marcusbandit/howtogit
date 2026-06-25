@@ -1021,13 +1021,9 @@ body.is-learning .landing-notes {
   }
 }
 
-/* a beat later: the welcome line, then a beat after that the roadmap, each
-   wiping on left-to-right like ink being laid */
+/* a beat later: the welcome line wipes on left-to-right like ink being laid */
 #stage.is-centered .landing__clone {
   animation: landing-wipe 0.9s var(--ease-settle) 2.6s both;
-}
-#stage.is-centered .landing__road {
-  animation: landing-wipe 0.9s var(--ease-settle) 3.3s both;
 }
 @keyframes landing-wipe {
   from {
@@ -1035,6 +1031,28 @@ body.is-learning .landing-notes {
   }
   to {
     clip-path: inset(0 -4% 0 0);
+  }
+}
+/* then the roadmap: instead of wiping the whole strip on as one, each chip (and
+   the chevron between) bobs in on its own, one at a time, left to right. Every
+   child carries its own --i (0,1,2... set in the HTML), so the delay is
+   base + i*step: pure math, add or drop a chip and the cascade still spaces
+   itself evenly. */
+#stage.is-centered .landing__road > * {
+  animation: bob-in 0.5s var(--ease-settle) calc(3.3s + var(--i) * 0.07s) both;
+}
+@keyframes bob-in {
+  0% {
+    opacity: 0;
+    transform: translateY(9px) scale(0.92);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -1054,7 +1072,7 @@ body.is-learning .landing-notes {
   .note__arrow path,
   .companion__intro-arrow path,
   #stage.is-centered .landing__clone,
-  #stage.is-centered .landing__road {
+  #stage.is-centered .landing__road > * {
     animation: none;
   }
   .companion {

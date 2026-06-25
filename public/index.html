@@ -53,7 +53,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=landing40" />
+  <link rel="stylesheet" href="style.css?v=landing41" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -168,16 +168,18 @@
          git init; they melt away when the stage docks). See .landing in CSS. -->
     <div class="landing" id="landing" aria-hidden="true">
       <p class="landing__clone">Most folks come to git wanting to clone a project.<br>We'll get there together, right after this.</p>
+      <!-- the --i index on each child drives the staggered bob-in (see
+           .landing__road > * in style.css): delay = base + i*step, left to right. -->
       <nav class="landing__road" aria-label="what you'll learn">
-        <span class="road-chip road-chip--now">init</span>
-        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
-        <span class="road-chip">commit</span>
-        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
-        <span class="road-chip">branch</span>
-        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
-        <span class="road-chip">push</span>
-        <span class="road-sep" aria-hidden="true">&rsaquo;</span>
-        <span class="road-chip road-chip--clone">clone</span>
+        <span class="road-chip road-chip--now" style="--i: 0">init</span>
+        <span class="road-sep" aria-hidden="true" style="--i: 1">&rsaquo;</span>
+        <span class="road-chip" style="--i: 2">commit</span>
+        <span class="road-sep" aria-hidden="true" style="--i: 3">&rsaquo;</span>
+        <span class="road-chip" style="--i: 4">branch</span>
+        <span class="road-sep" aria-hidden="true" style="--i: 5">&rsaquo;</span>
+        <span class="road-chip" style="--i: 6">push</span>
+        <span class="road-sep" aria-hidden="true" style="--i: 7">&rsaquo;</span>
+        <span class="road-chip road-chip--clone" style="--i: 8">clone</span>
       </nav>
     </div>
   </section>
@@ -246,6 +248,6 @@ this will be useful if you wanna come back later</p>
        thing it's talking about (the .git/ row, a node, a tag). Pixel-space. -->
   <svg id="companion-arrows" class="companion-arrows" aria-hidden="true"></svg>
 
-  <script type="module" src="app.js?v=landing40"></script>
+  <script type="module" src="app.js?v=landing41"></script>
 </body>
 </html>
