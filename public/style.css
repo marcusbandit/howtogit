@@ -530,15 +530,16 @@ body.is-learning .landing-notes {
    It just fades: in on the landing, out the moment git init docks. */
 .lesson__cue {
   position: absolute;
-  bottom: 100%; /* sit directly above the command line, never over it */
-  left: 50%;
-  transform: translateX(-50%);
+  left: 100%; /* sit just to the right of the field, arrow pointing back at it */
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 0.05rem;
-  margin-bottom: 0.35rem;
+  gap: 0.4rem;
+  margin-left: 0.7rem;
   color: var(--pen-red);
+  white-space: nowrap;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.4s ease;
@@ -549,13 +550,13 @@ body.is-learning .landing-notes {
 .lesson__cue-label {
   font-family: var(--hand);
   font-weight: 700;
-  font-size: 1.35rem;
+  font-size: 1.7rem;
   line-height: 1;
   transform: rotate(-4deg);
 }
 .lesson__cue-arrow {
-  width: 2.1rem;
-  height: 1.9rem;
+  width: 3rem;
+  height: 1.56rem;
   overflow: visible;
   animation: cue-bob 1.7s ease-in-out infinite;
 }
@@ -569,10 +570,10 @@ body.is-learning .landing-notes {
 @keyframes cue-bob {
   0%,
   100% {
-    transform: translateY(0);
+    transform: translateX(0);
   }
   50% {
-    transform: translateY(4px);
+    transform: translateX(-4px);
   }
 }
 
@@ -680,10 +681,13 @@ body.is-learning .landing-notes {
 .note__label {
   font-family: var(--hand);
   font-weight: 600;
-  font-size: clamp(1.1rem, 2.3vw, 1.5rem);
-  line-height: 1.12;
+  font-size: clamp(1.45rem, 3vw, 1.95rem);
+  line-height: 1.14;
   color: var(--ink-soft);
   pointer-events: auto; /* selectable */
+  /* balance the lines so it breaks at natural phrase points instead of stranding
+     a lone word ("...files, the" / "ones...") at a line end */
+  text-wrap: balance;
 }
 .note__arrow {
   display: block;
@@ -698,22 +702,25 @@ body.is-learning .landing-notes {
   opacity: 0.85;
 }
 
-/* file-tree callout: sits to the right of the focused tree, arrow pointing back */
+/* file-tree callout: sits to the RIGHT of the focused tree, beside the file
+   list, arrow on its left pointing back at the files. Kept low enough to clear
+   the big centred headline above. */
 .note--tree {
-  left: clamp(18.5rem, 20vw, 23rem);
-  top: 42%;
-  width: clamp(11rem, 15vw, 14rem);
+  left: clamp(12rem, 15vw, 17rem);
+  top: 49%;
+  width: clamp(19rem, 27vw, 25rem);
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-}
-.note--tree .note__arrow {
-  width: 5.4rem;
-  height: 3.4rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
 }
 .note--tree .note__label {
   text-align: left;
+}
+.note--tree .note__arrow {
+  flex: 0 0 auto;
+  width: 4.6rem;
+  height: 3rem;
 }
 
 /* remote callout: sits just left of the remote panel, arrow pointing right at it.
@@ -722,7 +729,7 @@ body.is-learning .landing-notes {
 .note--remote {
   right: clamp(15rem, 27vw, 27rem);
   top: 14%;
-  width: clamp(11rem, 16vw, 15rem);
+  width: clamp(13rem, 18vw, 17rem);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1166,18 +1173,11 @@ body.is-learning .landing-notes {
 
 /* ---- command line with highlight + ghost overlay ------------------- */
 #cli {
-  position: relative; /* anchors the landing "start here" cue above it */
   display: flex;
   justify-content: center;
-  /* the landing opens a gap above the field for the cue; ease it shut on dock */
-  transition: margin-top 0.55s var(--ease-settle);
-}
-/* on the landing, open a gap above the field so the cue has room to sit there */
-#stage.is-centered #cli {
-  margin-top: 3.2rem;
 }
 .cli__field {
-  position: relative;
+  position: relative; /* anchors the landing "Type here!" cue to its right */
   display: inline-block;
 }
 

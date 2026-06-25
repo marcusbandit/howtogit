@@ -53,7 +53,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=landing41" />
+  <link rel="stylesheet" href="style.css?v=landing45" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -145,21 +145,22 @@
       <div class="lesson__parts" id="parts"></div>
     </div>
     <form id="cli" autocomplete="off" spellcheck="false">
-      <!-- landing-only "start here" cue: a hand-drawn arrow sitting just above the
-           command line, pointing down at it. Gated to #stage.is-centered in CSS. -->
-      <div class="lesson__cue" id="landing-cue" aria-hidden="true">
-        <span class="lesson__cue-label">start here</span>
-        <svg class="lesson__cue-arrow" viewBox="0 0 44 40" aria-hidden="true">
-          <path class="cue-stroke" d="M21 3 C 17 13, 25 17, 21 30" />
-          <path class="cue-stroke" d="M13 23 L21 33 L29 22" />
-        </svg>
-      </div>
       <span class="cli__field">
         <span class="cli__ink" id="ink" aria-hidden="true"></span>
         <input id="cmd" name="cmd" type="text" inputmode="text" autocapitalize="none"
                autocorrect="off" aria-label="git command" />
         <svg class="cli__rule" aria-hidden="true" viewBox="0 0 100 10" preserveAspectRatio="none"></svg>
         <span class="cli__tab" id="tabhint" aria-hidden="true">⇥ tab to finish the line</span>
+        <!-- landing-only cue: a hand-drawn arrow just to the right of the field,
+             pointing left at it. Anchored to .cli__field; gated to
+             #stage.is-centered in CSS. -->
+        <div class="lesson__cue" id="landing-cue" aria-hidden="true">
+          <svg class="lesson__cue-arrow" viewBox="0 0 50 26" aria-hidden="true">
+            <path class="cue-stroke" d="M46 13 C 36 8, 24 19, 7 13" />
+            <path class="cue-stroke" d="M15 7 L6 13 L15 19" />
+          </svg>
+          <span class="lesson__cue-label">Type here!</span>
+        </div>
       </span>
     </form>
     <p class="nudge" id="nudge" aria-live="assertive"></p>
@@ -207,9 +208,10 @@ this will be useful if you wanna come back later</p>
   <div id="landing-notes" class="landing-notes" aria-hidden="true">
     <!-- points back at the focused file tree on the left -->
     <div class="note note--tree">
-      <svg class="note__arrow" viewBox="0 0 96 60" aria-hidden="true">
-        <path class="note-stroke" pathLength="1" d="M90 10 C 62 16, 32 28, 8 48" />
-        <path class="note-stroke" pathLength="1" d="M8 48 L21 46 M8 48 L14 37" />
+      <!-- a curved, hand-drawn arrow swooping back-left at the file list -->
+      <svg class="note__arrow" viewBox="0 0 66 44" aria-hidden="true">
+        <path class="note-stroke" pathLength="1" d="M60 8 C 50 31, 30 34, 10 23" />
+        <path class="note-stroke" pathLength="1" d="M20 15 L8 23 L19 33" />
       </svg>
       <p class="note__label" data-text="these are your project's files, the ones on your computer"></p>
     </div>
@@ -248,6 +250,6 @@ this will be useful if you wanna come back later</p>
        thing it's talking about (the .git/ row, a node, a tag). Pixel-space. -->
   <svg id="companion-arrows" class="companion-arrows" aria-hidden="true"></svg>
 
-  <script type="module" src="app.js?v=landing41"></script>
+  <script type="module" src="app.js?v=landing45"></script>
 </body>
 </html>
