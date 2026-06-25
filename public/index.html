@@ -53,7 +53,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css?v=landing36" />
+  <link rel="stylesheet" href="style.css?v=landing37" />
 </head>
 <body>
   <!-- paper grain: real fractal noise, kept faint -->
@@ -63,6 +63,23 @@
       <feColorMatrix type="saturate" values="0" />
     </filter>
     <rect width="100%" height="100%" filter="url(#paper-grain)" />
+  </svg>
+
+  <!-- dither: a whisper-faint, fully-opaque noise laid over the page to break the
+       central radial vignette out of its 8-bit contour bands (the gradient runs
+       between two near-black tones, so each step spans a wide visible ring). This
+       is NOT the grain: the grain's noise has a textured alpha, which leaves gaps,
+       but dithering needs EVERY pixel nudged. The two feColorMatrix passes do that:
+       saturate 0 greys the noise, then the matrix forces alpha to a constant 1, so
+       the whole field is opaque. At ~2% opacity it reads only as the stipple that
+       smooths the gradient, not as added grain. See .dither in style.css. -->
+  <svg class="dither" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <filter id="dither-noise" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="1" stitchTiles="stitch" />
+      <feColorMatrix type="saturate" values="0" />
+      <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0 1" />
+    </filter>
+    <rect width="100%" height="100%" filter="url(#dither-noise)" />
   </svg>
 
   <header class="brand">
@@ -246,6 +263,6 @@ this will be useful if you wanna come back later</p>
        thing it's talking about (the .git/ row, a node, a tag). Pixel-space. -->
   <svg id="companion-arrows" class="companion-arrows" aria-hidden="true"></svg>
 
-  <script type="module" src="app.js?v=landing36"></script>
+  <script type="module" src="app.js?v=landing37"></script>
 </body>
 </html>

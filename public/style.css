@@ -1,22 +1,22 @@
 :root {
   /* paper & ink */
-  --paper:    #efe7d2;
-  --paper-lo: #e6dabb;   /* shaded edge for the vignette */
-  --ink:      #2a2521;
+  --paper: #efe7d2;
+  --paper-lo: #e6dabb; /* shaded edge for the vignette */
+  --ink: #2a2521;
   --ink-soft: #7a7060;
 
   /* pen colours — one per branch */
-  --pen-blue:  #2e5c9e;  /* main */
-  --pen-red:   #c0492f;  /* feature */
-  --pen-green: #3f7a4e;  /* extra branches */
+  --pen-blue: #2e5c9e; /* main */
+  --pen-red: #c0492f; /* feature */
+  --pen-green: #3f7a4e; /* extra branches */
   --pen-remote: #6b5ca5; /* the remote / mini-graph purple */
-  --pencil:    #8e8473;
+  --pencil: #8e8473;
 
   --grid: rgba(42, 37, 33, 0.05);
 
   --hand: "Caveat", "Segoe Script", cursive;
   --mono: "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --ui:   "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --ui: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
 
   --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -30,16 +30,16 @@
    still read as "ink" on dark paper. data-theme is set on <html> before
    first paint by the inline script in <head>. */
 :root[data-theme="dark"] {
-  --paper:    #211c17;
+  --paper: #211c17;
   --paper-lo: #14110c;
-  --ink:      #ece2cd;
+  --ink: #ece2cd;
   --ink-soft: #9b8f78;
 
-  --pen-blue:   #6ea7e6;
-  --pen-red:    #e8825f;
-  --pen-green:  #69bd82;
+  --pen-blue: #6ea7e6;
+  --pen-red: #e8825f;
+  --pen-green: #69bd82;
   --pen-remote: #ab9be4;
-  --pencil:     #b6a98f;
+  --pencil: #b6a98f;
 
   --grid: rgba(236, 226, 205, 0.06);
 
@@ -53,36 +53,56 @@
    pixel up or down a hair regardless of how dark it is: it reads as grain AND it
    dithers the central vignette, whose two near-black stops would otherwise band
    into visible 8-bit contours across the dark paper. Neutral, so no white push. */
-:root[data-theme="dark"] .grain { mix-blend-mode: normal; opacity: 0.04; }
+:root[data-theme="dark"] .grain {
+  mix-blend-mode: darken;
+  opacity: 0.04;
+}
 /* the make-believe editor has a hardcoded cream surface — darken it */
 :root[data-theme="dark"] .editor {
   background: #2a241b;
   box-shadow: 0 18px 42px -18px rgba(0, 0, 0, 0.7);
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 /* on-brand text selection: a learner can grab any label to ask a chatbot,
    and the highlight reads as a warm marker swipe over the paper rather than
    default browser blue (reuses the amber of the just-edited file flash). */
-::selection { background: rgba(176, 125, 43, 0.28); }
+::selection {
+  background: rgba(176, 125, 43, 0.28);
+}
 
-html, body { height: 100%; }
+html,
+body {
+  height: 100%;
+}
 
 body {
   min-height: 100dvh;
   background-color: var(--paper);
   background-image:
-    radial-gradient(120vmax 90vmax at 50% 42%, transparent 38%, var(--paper-lo) 100%),
+    radial-gradient(
+      120vmax 90vmax at 50% 42%,
+      transparent 38%,
+      var(--paper-lo) 100%
+    ),
     radial-gradient(var(--grid) 1.2px, transparent 1.6px);
-  background-size: 100% 100%, 30px 30px;
+  background-size:
+    100% 100%,
+    30px 30px;
   background-position: center, center;
   color: var(--ink);
   font-family: var(--ui);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
   position: relative;
-  transition: background-color 0.45s ease, color 0.45s ease;
+  transition:
+    background-color 0.45s ease,
+    color 0.45s ease;
 }
 
 /* ---- paper grain --------------------------------------------------- */
@@ -95,6 +115,23 @@ body {
   mix-blend-mode: multiply;
   pointer-events: none;
   z-index: 5;
+}
+
+/* dither: an opaque, high-frequency noise field at a whisper of opacity, so it
+   nudges every pixel a level or two and breaks the body's radial vignette out of
+   its visible 8-bit bands. Plain source-over (no blend mode) is deliberate: it
+   adds the same small stipple to dark and light pixels alike, where soft-light /
+   overlay would die in the near-blacks (exactly where the banding lives). Kept
+   below the grain; at this opacity it's invisible on content and on flat colour,
+   and only shows as the smoothing of the gradient. opacity is the dial. */
+.dither {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.025;
+  pointer-events: none;
+  z-index: 4;
 }
 
 /* ---- brand --------------------------------------------------------- */
@@ -141,7 +178,9 @@ body {
   opacity: 0;
   transform: translateY(-4px) rotate(-1.6deg);
   transform-origin: left center;
-  transition: opacity .22s ease, transform .32s cubic-bezier(.16, 1, .3, 1);
+  transition:
+    opacity 0.22s ease,
+    transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }
 .brand.is-armed .brand__restart {
@@ -176,27 +215,50 @@ body {
   overflow: visible;
   transition: transform 0.3s var(--ease-settle);
 }
-.theme-toggle:hover .bulb { transform: rotate(-5deg) scale(1.07); }
-.bulb__glass, .bulb__base, .bulb__filament, .bulb__rays {
+.theme-toggle:hover .bulb {
+  transform: rotate(-5deg) scale(1.07);
+}
+.bulb__glass,
+.bulb__base,
+.bulb__filament,
+.bulb__rays {
   fill: none;
   stroke: currentColor;
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.bulb__glass { transition: fill 0.35s ease; }
-.bulb__rays { transition: opacity 0.35s ease; }
-.bulb__filament { opacity: 0.5; }
+.bulb__glass {
+  transition: fill 0.35s ease;
+}
+.bulb__rays {
+  transition: opacity 0.35s ease;
+}
+.bulb__filament {
+  opacity: 0.5;
+}
 
 /* lit state (light mode, the default): warm glow, rays out, bright filament */
-:root:not([data-theme="dark"]) .theme-toggle { color: #c79a3a; }
-:root:not([data-theme="dark"]) .bulb__glass { fill: rgba(199, 154, 58, 0.22); }
-:root:not([data-theme="dark"]) .bulb__rays { opacity: 0.9; }
-:root:not([data-theme="dark"]) .bulb__filament { opacity: 0.95; }
+:root:not([data-theme="dark"]) .theme-toggle {
+  color: #c79a3a;
+}
+:root:not([data-theme="dark"]) .bulb__glass {
+  fill: rgba(199, 154, 58, 0.22);
+}
+:root:not([data-theme="dark"]) .bulb__rays {
+  opacity: 0.9;
+}
+:root:not([data-theme="dark"]) .bulb__filament {
+  opacity: 0.95;
+}
 
 /* unlit state (dark mode): no rays, no glow, a dim grey outline */
-:root[data-theme="dark"] .bulb__rays { opacity: 0; }
-:root[data-theme="dark"] .theme-toggle:hover { color: var(--ink); }
+:root[data-theme="dark"] .bulb__rays {
+  opacity: 0;
+}
+:root[data-theme="dark"] .theme-toggle:hover {
+  color: var(--ink);
+}
 
 /* ---- work-in-progress badge (top right, tucked under the toggle) --- */
 .wip {
@@ -232,11 +294,31 @@ body {
      out instead of hitting a hard cut. The solid band is the central ~66%
      (BOX_FRAC in app.ts); keep --box-fade in sync with (1 - BOX_FRAC) / 2. */
   --box-fade: 17%;
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--box-fade), #000 calc(100% - var(--box-fade)), transparent 100%);
-          mask-image: linear-gradient(to right, transparent 0, #000 var(--box-fade), #000 calc(100% - var(--box-fade)), transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--box-fade),
+    #000 calc(100% - var(--box-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--box-fade),
+    #000 calc(100% - var(--box-fade)),
+    transparent 100%
+  );
 }
-.node-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.edge-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.node-stroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.edge-stroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 /* caption above the floated-up remote mini-graph, so it reads as the remote */
 .remote-graph-label {
   font-family: var(--mono);
@@ -252,13 +334,25 @@ body {
   font-weight: 700;
   font-size: 21px;
 }
-.tag-box { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.tag-box {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 /* HEAD reads as "ink": follow the themed --ink so it lightens in dark mode
    instead of staying near-black on dark paper. Overrides the baked attrs. */
-.pill--head .tag-box { stroke: var(--ink); }
-.pill--head .tag { fill: var(--ink); }
+.pill--head .tag-box {
+  stroke: var(--ink);
+}
+.pill--head .tag {
+  fill: var(--ink);
+}
 /* ref pills (HEAD / branch names) glide to follow commits instead of fading */
-.ref-pill { transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease; }
+.ref-pill {
+  transition:
+    transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.4s ease;
+}
 .commit-msg {
   font-family: var(--hand);
   font-weight: 500;
@@ -279,7 +373,9 @@ body {
   align-items: center;
   gap: 1.1rem;
   padding: 0 1.2rem;
-  transition: top 0.95s var(--ease-settle), opacity 0.4s ease;
+  transition:
+    top 0.95s var(--ease-settle),
+    opacity 0.4s ease;
   pointer-events: none;
 }
 
@@ -294,7 +390,9 @@ body.is-learning .landing-notes {
   pointer-events: none !important;
   transition: opacity 0.4s ease;
 }
-#stage > * { pointer-events: auto; }
+#stage > * {
+  pointer-events: auto;
+}
 
 /* ---- the lesson (what + why + the parts of the command) ------------ */
 .lesson {
@@ -329,7 +427,9 @@ body.is-learning .landing-notes {
   font-style: italic;
   max-width: min(42rem, 88vw);
 }
-.lesson__note[hidden] { display: none; }
+.lesson__note[hidden] {
+  display: none;
+}
 /* one part at a time: the chip for the token the cursor is in, then its meaning.
    The strip is a clipped window and captions scroll vertically to replace one
    another. min-height keeps a stable line so the layout never jumps. */
@@ -341,7 +441,10 @@ body.is-learning .landing-notes {
   font-size: clamp(0.92rem, 2vw, 1.05rem);
 }
 /* on the landing the parts caption is empty, so don't reserve its line */
-.lesson__parts:empty { min-height: 0; margin-top: 0; }
+.lesson__parts:empty {
+  min-height: 0;
+  margin-top: 0;
+}
 .part {
   display: flex;
   justify-content: center;
@@ -370,24 +473,79 @@ body.is-learning .landing-notes {
   border-radius: 0.35rem;
   white-space: nowrap;
 }
-.part .tok--cmd  { color: var(--pen-blue);  background: rgba(46, 92, 158, 0.10); }
-.part .tok--flag { color: var(--pen-red);   background: rgba(192, 73, 47, 0.10); }
-.part .tok--val  { color: var(--pen-green); background: rgba(63, 122, 78, 0.12); }
-.part .why { min-width: 0; text-align: left; color: var(--ink-soft); }
+.part .tok--cmd {
+  color: var(--pen-blue);
+  background: rgba(46, 92, 158, 0.1);
+}
+.part .tok--flag {
+  color: var(--pen-red);
+  background: rgba(192, 73, 47, 0.1);
+}
+.part .tok--val {
+  color: var(--pen-green);
+  background: rgba(63, 122, 78, 0.12);
+}
+.part .why {
+  min-width: 0;
+  text-align: left;
+  color: var(--ink-soft);
+}
 /* scroll directions. -up = advancing: the old line exits the top while the new
    one rises in from below. -down = the caret moved back: old exits the bottom,
    new drops in from above. Same curve + duration so they move as one strip. */
-.part--in-up    { animation: partScrollInUp    0.36s cubic-bezier(0.33, 0, 0.2, 1) both; }
-.part--in-down  { animation: partScrollInDown  0.36s cubic-bezier(0.33, 0, 0.2, 1) both; }
-.part--out-up   { animation: partScrollOutUp   0.36s cubic-bezier(0.33, 0, 0.2, 1) both; }
-.part--out-down { animation: partScrollOutDown 0.36s cubic-bezier(0.33, 0, 0.2, 1) both; }
-@keyframes partScrollInUp    { from { transform: translateY(115%); }  to { transform: translateY(0); } }
-@keyframes partScrollInDown  { from { transform: translateY(-115%); } to { transform: translateY(0); } }
-@keyframes partScrollOutUp   { from { transform: translateY(0); } to { transform: translateY(-115%); } }
-@keyframes partScrollOutDown { from { transform: translateY(0); } to { transform: translateY(115%); } }
+.part--in-up {
+  animation: partScrollInUp 0.36s cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+.part--in-down {
+  animation: partScrollInDown 0.36s cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+.part--out-up {
+  animation: partScrollOutUp 0.36s cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+.part--out-down {
+  animation: partScrollOutDown 0.36s cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+@keyframes partScrollInUp {
+  from {
+    transform: translateY(115%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes partScrollInDown {
+  from {
+    transform: translateY(-115%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes partScrollOutUp {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-115%);
+  }
+}
+@keyframes partScrollOutDown {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(115%);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .part, .part--out,
-  .part--in-up, .part--in-down, .part--out-up, .part--out-down { animation: none; }
+  .part,
+  .part--out,
+  .part--in-up,
+  .part--in-down,
+  .part--out-up,
+  .part--out-down {
+    animation: none;
+  }
 }
 
 /* ---- landing (only on the centred first screen, before git init) ----
@@ -401,7 +559,7 @@ body.is-learning .landing-notes {
    It just fades: in on the landing, out the moment git init docks. */
 .lesson__cue {
   position: absolute;
-  bottom: 100%;          /* sit directly above the command line, never over it */
+  bottom: 100%; /* sit directly above the command line, never over it */
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -414,7 +572,9 @@ body.is-learning .landing-notes {
   pointer-events: none;
   transition: opacity 0.4s ease;
 }
-#stage.is-centered .lesson__cue { opacity: 1; }
+#stage.is-centered .lesson__cue {
+  opacity: 1;
+}
 .lesson__cue-label {
   font-family: var(--hand);
   font-weight: 700;
@@ -436,8 +596,13 @@ body.is-learning .landing-notes {
   stroke-linejoin: round;
 }
 @keyframes cue-bob {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(4px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(4px);
+  }
 }
 
 /* clone note + roadmap, pulled below the command line but OUT of #stage's flow
@@ -460,7 +625,10 @@ body.is-learning .landing-notes {
   pointer-events: none;
   transition: opacity 0.4s ease;
 }
-#stage.is-centered .landing { opacity: 1; pointer-events: auto; }
+#stage.is-centered .landing {
+  opacity: 1;
+  pointer-events: auto;
+}
 .landing__clone {
   font-family: var(--hand);
   font-weight: 600;
@@ -487,8 +655,14 @@ body.is-learning .landing-notes {
   /* an uneven, hand-drawn ink box */
   border-radius: 14px 10px 17px 8px / 9px 16px 10px 15px;
 }
-.road-chip--now { color: var(--pen-blue); border-color: var(--pen-blue); }
-.road-chip--clone { color: var(--ink-soft); border-style: dashed; }
+.road-chip--now {
+  color: var(--pen-blue);
+  border-color: var(--pen-blue);
+}
+.road-chip--clone {
+  color: var(--ink-soft);
+  border-style: dashed;
+}
 .road-sep {
   font-family: var(--hand);
   font-size: 1.55rem;
@@ -496,7 +670,9 @@ body.is-learning .landing-notes {
   opacity: 0.5;
 }
 @media (prefers-reduced-motion: reduce) {
-  .lesson__cue-arrow { animation: none; }
+  .lesson__cue-arrow {
+    animation: none;
+  }
 }
 
 /* ---- landing annotations (only on the centred first screen) ----------
@@ -519,19 +695,29 @@ body.is-learning .landing-notes {
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.45s ease, visibility 0.45s;
+  transition:
+    opacity 0.45s ease,
+    visibility 0.45s;
 }
-#stage.is-centered ~ .landing-notes { opacity: 1; visibility: visible; }
-.note { position: fixed; }
+#stage.is-centered ~ .landing-notes {
+  opacity: 1;
+  visibility: visible;
+}
+.note {
+  position: fixed;
+}
 .note__label {
   font-family: var(--hand);
   font-weight: 600;
   font-size: clamp(1.1rem, 2.3vw, 1.5rem);
   line-height: 1.12;
   color: var(--ink-soft);
-  pointer-events: auto;            /* selectable */
+  pointer-events: auto; /* selectable */
 }
-.note__arrow { display: block; overflow: visible; }
+.note__arrow {
+  display: block;
+  overflow: visible;
+}
 .note-stroke {
   fill: none;
   stroke: var(--pen-red);
@@ -551,8 +737,13 @@ body.is-learning .landing-notes {
   align-items: flex-start;
   gap: 0.15rem;
 }
-.note--tree .note__arrow { width: 5.4rem; height: 3.4rem; }
-.note--tree .note__label { text-align: left; }
+.note--tree .note__arrow {
+  width: 5.4rem;
+  height: 3.4rem;
+}
+.note--tree .note__label {
+  text-align: left;
+}
 
 /* remote callout: sits just left of the remote panel, arrow pointing right at it.
    Unlike the landing notes it isn't gated to the centred stage; JS toggles
@@ -569,13 +760,25 @@ body.is-learning .landing-notes {
   z-index: 6;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.5s ease, visibility 0.5s;
+  transition:
+    opacity 0.5s ease,
+    visibility 0.5s;
 }
-.note--remote.is-shown { opacity: 1; visibility: visible; }
-.note--remote .note__arrow { width: 5.8rem; height: 3.8rem; }
+.note--remote.is-shown {
+  opacity: 1;
+  visibility: visible;
+}
+.note--remote .note__arrow {
+  width: 5.8rem;
+  height: 3.8rem;
+}
 /* the arrow inks itself on each time the callout is shown */
-.note--remote.is-shown .note__arrow path:nth-of-type(1) { animation: landing-draw 0.55s ease 0.15s both; }
-.note--remote.is-shown .note__arrow path:nth-of-type(2) { animation: landing-draw 0.35s ease 0.6s both; }
+.note--remote.is-shown .note__arrow path:nth-of-type(1) {
+  animation: landing-draw 0.55s ease 0.15s both;
+}
+.note--remote.is-shown .note__arrow path:nth-of-type(2) {
+  animation: landing-draw 0.35s ease 0.6s both;
+}
 
 /* ---- curiosity companion: a persistent bottom-right voice ------------- */
 /* the questions a beginner actually asks, in their own voice; tap one and its
@@ -584,7 +787,7 @@ body.is-learning .landing-notes {
    say "what just happened", not only "what's about to". */
 .companion {
   position: fixed;
-  right: clamp(2.5rem, 5vw, 5rem);   /* sit in from the edge for breathing room */
+  right: clamp(2.5rem, 5vw, 5rem); /* sit in from the edge for breathing room */
   bottom: clamp(2rem, 7vh, 5rem);
   /* one fixed width for both states: focusing grows the type, not the box, so
      the wrap width never changes and the answer text doesn't reflow/jump */
@@ -593,12 +796,17 @@ body.is-learning .landing-notes {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  pointer-events: none;     /* only the questions opt back in */
+  pointer-events: none; /* only the questions opt back in */
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.45s ease, visibility 0.45s;
+  transition:
+    opacity 0.45s ease,
+    visibility 0.45s;
 }
-.companion.is-visible { opacity: 1; visibility: visible; }
+.companion.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
 /* the "i'll explain things over here" flourish only belongs on the centred
    landing; once we've docked it has done its job and goes. It's a whiteboard
    note sitting in the open space above the questions, with a long arrow dropping
@@ -610,7 +818,9 @@ body.is-learning .landing-notes {
   margin-bottom: 0.3rem;
   transform: translateX(-9rem);
 }
-.companion:not(.is-landing) .companion__intro { display: none; }
+.companion:not(.is-landing) .companion__intro {
+  display: none;
+}
 .companion__intro-label {
   font-family: var(--hand);
   font-weight: 600;
@@ -621,9 +831,17 @@ body.is-learning .landing-notes {
   margin: 0 auto;
   text-wrap: balance;
 }
-.companion__intro-arrow { display: block; margin: 0.1rem auto 0; width: 2.4rem; height: 11rem; overflow: visible; }
+.companion__intro-arrow {
+  display: block;
+  margin: 0.1rem auto 0;
+  width: 2.4rem;
+  height: 11rem;
+  overflow: visible;
+}
 
-.companion__qa + .companion__qa { margin-top: 0.4rem; }
+.companion__qa + .companion__qa {
+  margin-top: 0.4rem;
+}
 /* a question is a bare, tappable line: hand-drawn caret + the words */
 .companion__q {
   display: flex;
@@ -634,7 +852,7 @@ body.is-learning .landing-notes {
   background: none;
   border: none;
   cursor: pointer;
-  pointer-events: auto;     /* the area is see-through; the question is not */
+  pointer-events: auto; /* the area is see-through; the question is not */
   text-align: left;
   font-family: var(--hand);
   font-weight: 700;
@@ -642,11 +860,19 @@ body.is-learning .landing-notes {
   line-height: 1.18;
   color: var(--ink-soft);
   /* the felt motion on click is the question GROWING, not a menu dropping */
-  transition: color 0.25s ease, font-size 0.4s var(--ease-settle), transform 0.4s var(--ease-settle);
+  transition:
+    color 0.25s ease,
+    font-size 0.4s var(--ease-settle),
+    transform 0.4s var(--ease-settle);
   transform-origin: left center;
 }
-.companion__q:hover { color: var(--ink); }
-.companion__q b { color: var(--pen-red); font-weight: 700; }
+.companion__q:hover {
+  color: var(--ink);
+}
+.companion__q b {
+  color: var(--pen-red);
+  font-weight: 700;
+}
 /* the caret inks red and swings down a quarter-turn when its answer is open */
 .companion__caret {
   flex: none;
@@ -655,15 +881,23 @@ body.is-learning .landing-notes {
   transform: rotate(0deg);
   transition: transform 0.4s var(--ease-settle);
 }
-.companion__caret .note-stroke { stroke: var(--pen-red); stroke-width: 2; fill: none; }
-.companion__q[aria-expanded="true"] .companion__caret { transform: rotate(90deg); }
+.companion__caret .note-stroke {
+  stroke: var(--pen-red);
+  stroke-width: 2;
+  fill: none;
+}
+.companion__q[aria-expanded="true"] .companion__caret {
+  transform: rotate(90deg);
+}
 /* the answer slides open by animating its grid row from 0fr to 1fr, then the
    text drifts up into place */
 .companion__a-wrap {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transition: grid-template-rows 0.45s var(--ease-settle), opacity 0.3s ease 0.05s;
+  transition:
+    grid-template-rows 0.45s var(--ease-settle),
+    opacity 0.3s ease 0.05s;
 }
 .companion__a-wrap > .companion__a {
   overflow: hidden;
@@ -683,10 +917,13 @@ body.is-learning .landing-notes {
   font-size: 0.95rem;
   line-height: 1.45;
   color: var(--ink-soft);
-  padding: 0.25rem 0 0.4rem 1.3rem;   /* indent under the caret */
-  pointer-events: auto;               /* selectable */
+  padding: 0.25rem 0 0.4rem 1.3rem; /* indent under the caret */
+  pointer-events: auto; /* selectable */
 }
-.companion__a b { color: var(--ink); font-weight: 600; }
+.companion__a b {
+  color: var(--ink);
+  font-weight: 600;
+}
 
 /* ---- focus / learn mode --------------------------------------------- */
 /* clicking a question pulls it into focus: the chosen question grows and
@@ -729,7 +966,11 @@ body.is-learning .landing-notes {
   stroke-dashoffset: 1;
   animation: companion-draw 0.55s var(--ease-settle) forwards;
 }
-@keyframes companion-draw { to { stroke-dashoffset: 0; } }
+@keyframes companion-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
 /* retract by continuing the SAME direction the pen travelled (offset 0 -> -1),
    so the line erases from its tail toward the target rather than rewinding */
 .companion-arrows path.is-erasing {
@@ -737,7 +978,11 @@ body.is-learning .landing-notes {
   stroke-dashoffset: 0;
   animation: companion-erase 0.5s var(--ease-settle) forwards;
 }
-@keyframes companion-erase { to { stroke-dashoffset: -1; } }
+@keyframes companion-erase {
+  to {
+    stroke-dashoffset: -1;
+  }
+}
 
 /* ---- landing intro: the first screen draws itself in ----------------- */
 /* The first screen is the heaviest moment, so it gets the most breathing room:
@@ -756,38 +1001,80 @@ body.is-learning .landing-notes {
   line-height: 1.04;
   animation: landing-rise 0.6s var(--ease-settle) 0.1s both;
 }
-#stage.is-centered #cli         { animation: landing-rise 0.6s var(--ease-settle) 0.3s both; }
+#stage.is-centered #cli {
+  animation: landing-rise 0.6s var(--ease-settle) 0.3s both;
+}
 @keyframes landing-rise {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* a beat later: the file tree fades in. Opacity only: its is-focus state carries
    a translateY(-50%) for centring that a transform animation would clobber. */
-#filetree { animation: landing-fade 0.7s ease 0.9s both; }
-@keyframes landing-fade { from { opacity: 0; } to { opacity: 1; } }
+#filetree {
+  animation: landing-fade 0.7s ease 0.9s both;
+}
+@keyframes landing-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 
 /* a beat later: the callout arrow inks itself on (paths carry pathLength="1", so
    the dash maths is exact); shaft first, then the arrowhead, in step with the
    callout text typing in */
-.note-stroke { stroke-dasharray: 1; }
-.note--tree .note__arrow path:nth-of-type(1) { animation: landing-draw 0.55s ease 1.5s both; }
-.note--tree .note__arrow path:nth-of-type(2) { animation: landing-draw 0.35s ease 1.95s both; }
-@keyframes landing-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.note-stroke {
+  stroke-dasharray: 1;
+}
+.note--tree .note__arrow path:nth-of-type(1) {
+  animation: landing-draw 0.55s ease 1.5s both;
+}
+.note--tree .note__arrow path:nth-of-type(2) {
+  animation: landing-draw 0.35s ease 1.95s both;
+}
+@keyframes landing-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
 
 /* a beat later: the welcome line, then a beat after that the roadmap, each
    wiping on left-to-right like ink being laid */
-#stage.is-centered .landing__clone { animation: landing-wipe 0.9s var(--ease-settle) 2.6s both; }
-#stage.is-centered .landing__road  { animation: landing-wipe 0.9s var(--ease-settle) 3.3s both; }
+#stage.is-centered .landing__clone {
+  animation: landing-wipe 0.9s var(--ease-settle) 2.6s both;
+}
+#stage.is-centered .landing__road {
+  animation: landing-wipe 0.9s var(--ease-settle) 3.3s both;
+}
 @keyframes landing-wipe {
-  from { clip-path: inset(0 100% 0 0); }
-  to   { clip-path: inset(0 -4% 0 0); }
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 -4% 0 0);
+  }
 }
 
 /* last of all, after the rest has settled: the companion's area fades in (JS adds
    .is-visible with a matching ~3.8s delay) and its intro down-arrow draws on */
-.companion.is-landing .companion__intro-arrow path:nth-of-type(1) { animation: landing-draw 0.5s ease 4s both; }
-.companion.is-landing .companion__intro-arrow path:nth-of-type(2) { animation: landing-draw 0.3s ease 4.35s both; }
+.companion.is-landing .companion__intro-arrow path:nth-of-type(1) {
+  animation: landing-draw 0.5s ease 4s both;
+}
+.companion.is-landing .companion__intro-arrow path:nth-of-type(2) {
+  animation: landing-draw 0.3s ease 4.35s both;
+}
 
 @media (prefers-reduced-motion: reduce) {
   #filetree,
@@ -796,21 +1083,38 @@ body.is-learning .landing-notes {
   .note__arrow path,
   .companion__intro-arrow path,
   #stage.is-centered .landing__clone,
-  #stage.is-centered .landing__road { animation: none; }
-  .companion { transition: none; }
+  #stage.is-centered .landing__road {
+    animation: none;
+  }
+  .companion {
+    transition: none;
+  }
   .companion__q,
   .companion__a-wrap,
   .companion__a-wrap > .companion__a,
   .companion__caret,
-  .tree__subwrap { transition: none; }
-  .tree__list .tree__subitem { opacity: 1; }
-  .tree__list li.is-revealing { animation: none; }
-  .companion-arrows path.is-drawing { animation: none; stroke-dashoffset: 0; }
-  .companion-arrows path.is-erasing { animation: none; }
+  .tree__subwrap {
+    transition: none;
+  }
+  .tree__list .tree__subitem {
+    opacity: 1;
+  }
+  .tree__list li.is-revealing {
+    animation: none;
+  }
+  .companion-arrows path.is-drawing {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .companion-arrows path.is-erasing {
+    animation: none;
+  }
 }
 
 /* ---- landing timeline: hidden until you hover its strip --------------- */
-.tl-zone { display: none; }
+.tl-zone {
+  display: none;
+}
 #stage.is-centered ~ .tl-zone {
   display: block;
   position: fixed;
@@ -827,9 +1131,13 @@ body.is-learning .landing-notes {
   pointer-events: none;
   transition: opacity 0.4s ease;
 }
-#stage.is-centered ~ .tl-zone:hover ~ #timeline { opacity: 1; }
+#stage.is-centered ~ .tl-zone:hover ~ #timeline {
+  opacity: 1;
+}
 
-.tl-found { display: none; }
+.tl-found {
+  display: none;
+}
 #stage.is-centered ~ .tl-found {
   display: block;
   position: fixed;
@@ -843,37 +1151,50 @@ body.is-learning .landing-notes {
   font-size: clamp(1.15rem, 2.5vw, 1.55rem);
   line-height: 1.1;
   text-align: center;
-  white-space: pre-line;            /* honour the line break in the markup */
+  white-space: pre-line; /* honour the line break in the markup */
   color: var(--pen-green);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease;
 }
-#stage.is-centered ~ .tl-zone:hover ~ .tl-found { opacity: 1; }
+#stage.is-centered ~ .tl-zone:hover ~ .tl-found {
+  opacity: 1;
+}
 
 /* phones: the fixed annotations don't fit the narrow layout, so skip them
    and just leave the timeline visible as usual */
 @media (max-width: 760px) {
   #stage.is-centered ~ .landing-notes,
   #stage.is-centered ~ .tl-zone,
-  #stage.is-centered ~ .tl-found { display: none; }
-  #stage.is-centered ~ #timeline { opacity: 1; pointer-events: auto; }
+  #stage.is-centered ~ .tl-found {
+    display: none;
+  }
+  #stage.is-centered ~ #timeline {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /* ---- command line with highlight + ghost overlay ------------------- */
 #cli {
-  position: relative;        /* anchors the landing "start here" cue above it */
+  position: relative; /* anchors the landing "start here" cue above it */
   display: flex;
   justify-content: center;
   /* the landing opens a gap above the field for the cue; ease it shut on dock */
   transition: margin-top 0.55s var(--ease-settle);
 }
 /* on the landing, open a gap above the field so the cue has room to sit there */
-#stage.is-centered #cli { margin-top: 3.2rem; }
-.cli__field { position: relative; display: inline-block; }
+#stage.is-centered #cli {
+  margin-top: 3.2rem;
+}
+.cli__field {
+  position: relative;
+  display: inline-block;
+}
 
 /* the input and the overlay must share identical text metrics */
-.cli__ink, #cmd {
+.cli__ink,
+#cmd {
   font-family: var(--mono);
   font-size: var(--cli-size);
   font-weight: 400;
@@ -885,15 +1206,17 @@ body.is-learning .landing-notes {
 #cmd {
   position: relative;
   z-index: 1;
-  width: 9ch;                    /* set per step in JS to fit the command */
+  width: 9ch; /* set per step in JS to fit the command */
   max-width: min(90vw, 80rem);
   border: none;
   background: transparent;
   outline: none;
-  color: transparent;            /* real text is painted by the overlay */
+  color: transparent; /* real text is painted by the overlay */
   caret-color: var(--pen-red);
 }
-#cmd::selection { background: rgba(176, 125, 43, 0.24); }
+#cmd::selection {
+  background: rgba(176, 125, 43, 0.24);
+}
 .cli__ink {
   position: absolute;
   left: 0;
@@ -905,20 +1228,44 @@ body.is-learning .landing-notes {
   overflow: hidden;
 }
 /* typed text is coloured to match the part chips in the lesson */
-.hl-cmd   { color: var(--pen-blue);  font-weight: 700; }
-.hl-flag  { color: var(--pen-red); }
-.hl-val   { color: var(--pen-green); }
+.hl-cmd {
+  color: var(--pen-blue);
+  font-weight: 700;
+}
+.hl-flag {
+  color: var(--pen-red);
+}
+.hl-val {
+  color: var(--pen-green);
+}
 /* in dark mode the bright pens glow against the dark field; calm them by
    muting toward the soft ink grey (less saturation, less glow). Light mode
    keeps its pens exactly as they are. */
-:root[data-theme="dark"] .hl-cmd  { color: color-mix(in srgb, var(--pen-blue)  68%, var(--ink-soft)); }
-:root[data-theme="dark"] .hl-flag { color: color-mix(in srgb, var(--pen-red)   68%, var(--ink-soft)); }
-:root[data-theme="dark"] .hl-val  { color: color-mix(in srgb, var(--pen-green) 68%, var(--ink-soft)); }
-.hl-rest  { color: var(--ink); }
-.hl-ghost { color: var(--ink-soft); opacity: 0.42; }
+:root[data-theme="dark"] .hl-cmd {
+  color: color-mix(in srgb, var(--pen-blue) 68%, var(--ink-soft));
+}
+:root[data-theme="dark"] .hl-flag {
+  color: color-mix(in srgb, var(--pen-red) 68%, var(--ink-soft));
+}
+:root[data-theme="dark"] .hl-val {
+  color: color-mix(in srgb, var(--pen-green) 68%, var(--ink-soft));
+}
+.hl-rest {
+  color: var(--ink);
+}
+.hl-ghost {
+  color: var(--ink-soft);
+  opacity: 0.42;
+}
 /* a wrong character in a fixed word: harsh error red, the word underlined */
-.hl-err     { color: #e5231a; font-weight: 700; }
-.hl-invalid { text-decoration: underline wavy #e5231a; text-decoration-skip-ink: none; }
+.hl-err {
+  color: #e5231a;
+  font-weight: 700;
+}
+.hl-invalid {
+  text-decoration: underline wavy #e5231a;
+  text-decoration-skip-ink: none;
+}
 
 .cli__rule {
   position: absolute;
@@ -931,8 +1278,12 @@ body.is-learning .landing-notes {
 /* the under-line of the command field follows themed --ink (same colour as the
    lesson goal headers) instead of a baked near-black, so it stays bright in dark
    mode; thicken it a touch there so it reads like a confident marker stroke. */
-.cli__rule path { stroke: var(--ink); }
-:root[data-theme="dark"] .cli__rule path { stroke-width: 2.8; }
+.cli__rule path {
+  stroke: var(--ink);
+}
+:root[data-theme="dark"] .cli__rule path {
+  stroke-width: 2.8;
+}
 /* contextual hint, absolutely placed so it never shifts the centred input */
 .cli__tab {
   position: absolute;
@@ -949,7 +1300,9 @@ body.is-learning .landing-notes {
   pointer-events: none;
   user-select: none;
 }
-.cli__tab.show { opacity: 0.5; }
+.cli__tab.show {
+  opacity: 0.5;
+}
 
 /* error / guidance line */
 .nudge {
@@ -962,7 +1315,9 @@ body.is-learning .landing-notes {
   transition: opacity 0.25s ease;
   text-align: center;
 }
-.nudge.show { opacity: 0.92; }
+.nudge.show {
+  opacity: 0.92;
+}
 /* the origin heads-up: a real note, not a faint whisper */
 .nudge.info {
   color: #b07d2b;
@@ -971,13 +1326,26 @@ body.is-learning .landing-notes {
 }
 
 /* a gentle "nope" nudge when the command isn't right yet */
-.shake { animation: shake 0.4s ease; }
+.shake {
+  animation: shake 0.4s ease;
+}
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-5px) rotate(-0.4deg); }
-  40% { transform: translateX(5px) rotate(0.4deg); }
-  60% { transform: translateX(-3px); }
-  80% { transform: translateX(3px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-5px) rotate(-0.4deg);
+  }
+  40% {
+    transform: translateX(5px) rotate(0.4deg);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
 }
 
 /* ---- prominent command feedback (errors + the "nothing to stage" notice) --- */
@@ -990,13 +1358,18 @@ body.is-learning .landing-notes {
   top: 42%;
   transform: translate(-50%, -50%);
   z-index: 30;
-  pointer-events: none;            /* clicks fall through to the dismiss handler */
+  pointer-events: none; /* clicks fall through to the dismiss handler */
   max-width: min(90vw, 32rem);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.18s ease, visibility 0.18s;
+  transition:
+    opacity 0.18s ease,
+    visibility 0.18s;
 }
-.feedback.show { opacity: 1; visibility: visible; }
+.feedback.show {
+  opacity: 1;
+  visibility: visible;
+}
 .feedback__card {
   font-family: var(--hand);
   font-weight: 700;
@@ -1012,16 +1385,35 @@ body.is-learning .landing-notes {
   box-shadow: 0 12px 34px rgba(20, 16, 12, 0.22);
   transform: rotate(-1.3deg);
 }
-.feedback--block .feedback__card { color: #b07d2b; } /* a valid-but-no-op moment */
-:root[data-theme="dark"] .feedback--block .feedback__card { color: #e0a94e; }
-.feedback.shake .feedback__card { animation: notice-shake 0.5s ease; }
+.feedback--block .feedback__card {
+  color: #b07d2b;
+} /* a valid-but-no-op moment */
+:root[data-theme="dark"] .feedback--block .feedback__card {
+  color: #e0a94e;
+}
+.feedback.shake .feedback__card {
+  animation: notice-shake 0.5s ease;
+}
 @keyframes notice-shake {
-  0%, 100% { transform: rotate(-1.3deg) translateX(0); }
-  15% { transform: rotate(-3deg) translateX(-9px); }
-  32% { transform: rotate(1deg) translateX(9px); }
-  50% { transform: rotate(-2.2deg) translateX(-6px); }
-  68% { transform: rotate(0.6deg) translateX(5px); }
-  84% { transform: rotate(-1.6deg) translateX(-3px); }
+  0%,
+  100% {
+    transform: rotate(-1.3deg) translateX(0);
+  }
+  15% {
+    transform: rotate(-3deg) translateX(-9px);
+  }
+  32% {
+    transform: rotate(1deg) translateX(9px);
+  }
+  50% {
+    transform: rotate(-2.2deg) translateX(-6px);
+  }
+  68% {
+    transform: rotate(0.6deg) translateX(5px);
+  }
+  84% {
+    transform: rotate(-1.6deg) translateX(-3px);
+  }
 }
 .feedback__scrim {
   position: fixed;
@@ -1031,9 +1423,15 @@ body.is-learning .landing-notes {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.25s ease, visibility 0.25s;
+  transition:
+    opacity 0.25s ease,
+    visibility 0.25s;
 }
-.feedback__scrim.show { opacity: 1; visibility: visible; pointer-events: auto; }
+.feedback__scrim.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
 
 /* ---- file tree (left) ---------------------------------------------- */
 /* Compact corner state. This is where the tree lives LATER, once a file
@@ -1049,9 +1447,11 @@ body.is-learning .landing-notes {
   color: var(--ink);
   /* selectable: a learner should be able to grab a filename and ask about it */
   transition:
-    top 0.6s var(--ease-settle), left 0.6s var(--ease-settle),
+    top 0.6s var(--ease-settle),
+    left 0.6s var(--ease-settle),
     width 0.6s var(--ease-settle),
-    font-size 0.6s var(--ease-settle), transform 0.6s var(--ease-settle);
+    font-size 0.6s var(--ease-settle),
+    transform 0.6s var(--ease-settle);
 }
 
 /* Focus state: while there's nothing to edit yet, the tree IS the subject,
@@ -1064,8 +1464,13 @@ body.is-learning .landing-notes {
   width: fit-content;
   font-size: 1.55rem;
 }
-.tree.is-focus .tree__title { font-size: 0.98rem; margin-bottom: 1.1rem; }
-.tree.is-focus .d--git .f__note { font-size: 0.95rem; }
+.tree.is-focus .tree__title {
+  font-size: 0.98rem;
+  margin-bottom: 1.1rem;
+}
+.tree.is-focus .d--git .f__note {
+  font-size: 0.95rem;
+}
 
 /* Paired state: once a remote exists, the local tree sits on the left and the
    remote on the right, with the graph between them. */
@@ -1075,7 +1480,9 @@ body.is-learning .landing-notes {
   width: clamp(12rem, 16vw, 15rem);
   font-size: 1.12rem;
 }
-#filetree.is-paired { left: clamp(2rem, 11vw, 12rem); }
+#filetree.is-paired {
+  left: clamp(2rem, 11vw, 12rem);
+}
 
 #remotetree {
   top: 42%;
@@ -1087,9 +1494,12 @@ body.is-learning .landing-notes {
   opacity: 0;
   pointer-events: none;
   transition:
-    opacity 0.55s var(--ease-settle), transform 0.55s var(--ease-settle),
-    top 0.6s var(--ease-settle), right 0.6s var(--ease-settle),
-    width 0.6s var(--ease-settle), font-size 0.6s var(--ease-settle);
+    opacity 0.55s var(--ease-settle),
+    transform 0.55s var(--ease-settle),
+    top 0.6s var(--ease-settle),
+    right 0.6s var(--ease-settle),
+    width 0.6s var(--ease-settle),
+    font-size 0.6s var(--ease-settle);
 }
 #remotetree.is-shown {
   opacity: 1;
@@ -1105,8 +1515,13 @@ body.is-learning .landing-notes {
   width: clamp(19rem, 28vw, 26rem);
   font-size: 1.55rem;
 }
-#remotetree.is-focus .tree__title { font-size: 0.98rem; margin-bottom: 1.1rem; }
-#remotetree.is-focus .d--git .f__note { font-size: 0.95rem; }
+#remotetree.is-focus .tree__title {
+  font-size: 0.98rem;
+  margin-bottom: 1.1rem;
+}
+#remotetree.is-focus .d--git .f__note {
+  font-size: 0.95rem;
+}
 .remote-empty {
   color: var(--ink-soft);
   font-style: italic;
@@ -1130,7 +1545,9 @@ body.is-learning .landing-notes {
   margin-bottom: 0.7rem;
   padding-left: 0.1rem;
 }
-.tree__list { list-style: none; }
+.tree__list {
+  list-style: none;
+}
 .tree__list li {
   display: flex;
   align-items: baseline;
@@ -1141,14 +1558,28 @@ body.is-learning .landing-notes {
 }
 /* a row is only as wide as its own content, so hover/click land on the file,
    not the empty space stretching off to the right */
-.tree__list li:not(.tree__subwrap) { width: max-content; max-width: 100%; }
+.tree__list li:not(.tree__subwrap) {
+  width: max-content;
+  max-width: 100%;
+}
 /* the underline dips below the name into the next row; lift the hovered row so
    it paints over the file beneath instead of being clipped by it */
 .tree__list li.is-openable:hover,
-.tree__list li.is-expandable:hover { z-index: 2; }
-.tree__list .d > .f__name { color: var(--ink); font-weight: 700; }
-.tree__list .f { padding-left: 0.9rem; }
-.f__name { white-space: nowrap; position: relative; display: inline-block; }
+.tree__list li.is-expandable:hover {
+  z-index: 2;
+}
+.tree__list .d > .f__name {
+  color: var(--ink);
+  font-weight: 700;
+}
+.tree__list .f {
+  padding-left: 0.9rem;
+}
+.f__name {
+  white-space: nowrap;
+  position: relative;
+  display: inline-block;
+}
 
 /* ---- sketched file/heading icons ---------------------------------- */
 .ic {
@@ -1165,16 +1596,35 @@ body.is-learning .landing-notes {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.ic--html { color: #e0652f; }
-.ic--css  { color: var(--pen-blue); }
-.ic--js   { color: #c79a3a; }
-.ic--folder, .ic--computer, .ic--cloud { color: var(--ink-soft); }
-.tree__title { display: flex; align-items: center; gap: 0.45rem; }
-.tree__title .ic { width: 1.3rem; height: 1.3rem; }
+.ic--html {
+  color: #e0652f;
+}
+.ic--css {
+  color: var(--pen-blue);
+}
+.ic--js {
+  color: #c79a3a;
+}
+.ic--folder,
+.ic--computer,
+.ic--cloud {
+  color: var(--ink-soft);
+}
+.tree__title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.tree__title .ic {
+  width: 1.3rem;
+  height: 1.3rem;
+}
 
 /* files open in the editor on click; the name carries a sketched underline that
    draws on (left->right) on hover and erases (right->left) when you leave */
-.tree__list li.is-openable { cursor: pointer; }
+.tree__list li.is-openable {
+  cursor: pointer;
+}
 .f__underline {
   position: absolute;
   left: 0;
@@ -1197,48 +1647,107 @@ body.is-learning .landing-notes {
   vector-effect: non-scaling-stroke;
 }
 .tree__list li.is-openable:hover .f__underline,
-.tree__list li.is-expandable:hover .f__underline { clip-path: inset(-6px -2px -6px -2px); }
-.f__mark { font-weight: 700; font-size: 1em; }
-.f--untracked .f__name { color: var(--ink-soft); }
-.f--untracked .f__mark { color: var(--ink-soft); }
-.f--modified  .f__name { color: #b07d2b; }
-.f--modified  .f__mark { color: #b07d2b; }
-.f--modified  .f__note {
-  font-family: var(--ui); font-size: 0.78rem; font-style: italic;
-  color: #b07d2b; opacity: 0.85;
+.tree__list li.is-expandable:hover .f__underline {
+  clip-path: inset(-6px -2px -6px -2px);
 }
-.f--staged    .f__name { color: var(--pen-green); }
-.f--staged    .f__mark { color: var(--pen-green); }
-.f--committed .f__name { color: var(--ink); }
-.f--committed .f__mark { color: var(--pen-blue); }
+.f__mark {
+  font-weight: 700;
+  font-size: 1em;
+}
+.f--untracked .f__name {
+  color: var(--ink-soft);
+}
+.f--untracked .f__mark {
+  color: var(--ink-soft);
+}
+.f--modified .f__name {
+  color: #b07d2b;
+}
+.f--modified .f__mark {
+  color: #b07d2b;
+}
+.f--modified .f__note {
+  font-family: var(--ui);
+  font-size: 0.78rem;
+  font-style: italic;
+  color: #b07d2b;
+  opacity: 0.85;
+}
+.f--staged .f__name {
+  color: var(--pen-green);
+}
+.f--staged .f__mark {
+  color: var(--pen-green);
+}
+.f--committed .f__name {
+  color: var(--ink);
+}
+.f--committed .f__mark {
+  color: var(--pen-blue);
+}
 /* committed but not yet on the remote — nudge toward pushing */
 .f--committed .f__note {
-  font-family: var(--ui); font-size: 0.78rem; font-style: italic;
-  color: #b07d2b; opacity: 0.9;
+  font-family: var(--ui);
+  font-size: 0.78rem;
+  font-style: italic;
+  color: #b07d2b;
+  opacity: 0.9;
 }
 /* pushed: double-check + remote purple says "this is safely on the remote" */
-.f--pushed .f__name { color: var(--ink); }
-.f--pushed .f__mark { color: var(--pen-remote); letter-spacing: -0.18em; padding-right: 0.12em; }
+.f--pushed .f__name {
+  color: var(--ink);
+}
+.f--pushed .f__mark {
+  color: var(--pen-remote);
+  letter-spacing: -0.18em;
+  padding-right: 0.12em;
+}
 .f--pushed .f__note {
-  font-family: var(--ui); font-size: 0.78rem; font-style: italic;
-  color: var(--pen-remote); opacity: 0.85;
+  font-family: var(--ui);
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--pen-remote);
+  opacity: 0.85;
 }
 /* a file just edited: a quick warm highlight so the change is noticed */
-.tree__list li.is-edited { animation: edit-pulse 0.9s ease both; border-radius: 6px; }
+.tree__list li.is-edited {
+  animation: edit-pulse 0.9s ease both;
+  border-radius: 6px;
+}
 @keyframes edit-pulse {
-  0%   { background: rgba(176, 125, 43, 0); }
-  25%  { background: rgba(176, 125, 43, 0.22); }
-  100% { background: rgba(176, 125, 43, 0); }
+  0% {
+    background: rgba(176, 125, 43, 0);
+  }
+  25% {
+    background: rgba(176, 125, 43, 0.22);
+  }
+  100% {
+    background: rgba(176, 125, 43, 0);
+  }
 }
 /* a file just pushed: the same flash, in the remote's purple */
-.tree__list li.is-pushed-now { animation: push-pulse 0.9s ease both; border-radius: 6px; }
-@keyframes push-pulse {
-  0%   { background: rgba(107, 92, 165, 0); }
-  25%  { background: rgba(107, 92, 165, 0.24); }
-  100% { background: rgba(107, 92, 165, 0); }
+.tree__list li.is-pushed-now {
+  animation: push-pulse 0.9s ease both;
+  border-radius: 6px;
 }
-.d--git { opacity: 0.72; }
-.d--git .f__name { color: var(--pen-red); font-style: italic; }
+@keyframes push-pulse {
+  0% {
+    background: rgba(107, 92, 165, 0);
+  }
+  25% {
+    background: rgba(107, 92, 165, 0.24);
+  }
+  100% {
+    background: rgba(107, 92, 165, 0);
+  }
+}
+.d--git {
+  opacity: 0.72;
+}
+.d--git .f__name {
+  color: var(--pen-red);
+  font-style: italic;
+}
 .d--git .f__note {
   font-family: var(--ui);
   font-size: 0.78rem;
@@ -1247,42 +1756,65 @@ body.is-learning .landing-notes {
 }
 /* every folder is clickable to open/close; the cursor + a hover lift say so, and
    the folder icon itself swaps closed->open (no chevron) */
-.tree__list li.is-expandable { cursor: pointer; }
-.tree__list li.is-expandable:hover { opacity: 1; }
+.tree__list li.is-expandable {
+  cursor: pointer;
+}
+.tree__list li.is-expandable:hover {
+  opacity: 1;
+}
 .tree__list li.is-folder.is-open > .f__name,
-.tree__list li.d.is-open > .f__name { /* keep the open folder's name colour as-is */ }
+.tree__list li.d.is-open > .f__name {
+  /* keep the open folder's name colour as-is */
+}
 
 /* nested, openable contents. Scoped under .tree__list so these beat the generic
    `.tree__list li` rules (which would otherwise force display:flex and kill the
    collapse). Each subwrap adds one indent step; nesting compounds naturally. */
 .tree__list .tree__subwrap {
   display: grid;
-  grid-template-rows: 0fr;          /* collapses to zero height (no empty gap) */
+  grid-template-rows: 0fr; /* collapses to zero height (no empty gap) */
   /* `.tree__list li` forces align-items:baseline; restore the grid default so
      the inner stretches to the 0fr track and actually clips when collapsed.
      overflow:hidden guarantees the clip even if the inner overflows the track. */
   align-items: stretch;
   overflow: hidden;
-  padding: 0 0 0 1.15rem;           /* one indent step per level */
+  padding: 0 0 0 1.15rem; /* one indent step per level */
   /* an even ease (not the front-loaded --ease-settle) so collapse/expand reads
      as a smooth slide of the whole open subtree, not a snap. */
   transition: grid-template-rows 0.42s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.tree__list .tree__subwrap.is-open { grid-template-rows: 1fr; }
+.tree__list .tree__subwrap.is-open {
+  grid-template-rows: 1fr;
+}
 /* When fully open, let content bleed past the box so the LAST row's hover
    underline (which dips ~6px below it) isn't clipped at the subwrap's bottom
    edge. While collapsed/animating (no .is-open) overflow stays hidden so the
    collapse still clips to zero. Both the grid container and its inner clip. */
 .tree__list .tree__subwrap.is-open,
-.tree__list .tree__subwrap.is-open > .tree__sub { overflow: visible; }
-.tree__list .tree__subwrap--root { padding-left: 0.9rem; }
+.tree__list .tree__subwrap.is-open > .tree__sub {
+  overflow: visible;
+}
+.tree__list .tree__subwrap--root {
+  padding-left: 0.9rem;
+}
 /* no own padding: it would keep the collapsed 0fr track ~5px open (a residual
    gap). The rows carry their own vertical padding for spacing. */
-.tree__list .tree__sub { list-style: none; overflow: hidden; min-height: 0; margin: 0; padding: 0; }
+.tree__list .tree__sub {
+  list-style: none;
+  overflow: hidden;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
 /* indentation comes from the subwraps, so flatten inner rows' own padding */
-.tree__list .tree__sub .f { padding-left: 0; }
+.tree__list .tree__sub .f {
+  padding-left: 0;
+}
 /* base opacity 1 so a row that isn't animating is simply visible. */
-.tree__list .tree__subitem { padding: 0.1rem 0; opacity: 1; }
+.tree__list .tree__subitem {
+  padding: 0.1rem 0;
+  opacity: 1;
+}
 /* opening a folder writes its contents on, staggered and RECURSIVE: app.ts adds
    .is-revealing to every row the open reveals (nested folders included), in
    visual order via --ri, so the whole subtree cascades in rather than blinking.
@@ -1292,8 +1824,14 @@ body.is-learning .landing-notes {
   animation: git-write 0.5s var(--ease-settle) backwards;
   animation-delay: calc(var(--ri, 0) * 0.045s);
 }
-.tree__list .tree__subitem .f__name { color: var(--ink-soft); font-weight: 600; font-style: normal; }
-.tree__list .tree__subitem .ic { opacity: 0.7; }
+.tree__list .tree__subitem .f__name {
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-style: normal;
+}
+.tree__list .tree__subitem .ic {
+  opacity: 0.7;
+}
 .tree__list .tree__subitem .f__note {
   font-family: var(--ui);
   font-size: 0.72rem;
@@ -1301,24 +1839,46 @@ body.is-learning .landing-notes {
   color: var(--ink-soft);
   opacity: 0.8;
 }
-.tree__empty .f__note { font-style: italic; opacity: 0.65; }
+.tree__empty .f__note {
+  font-style: italic;
+  opacity: 0.65;
+}
 /* the descriptive labels stay quiet so the tree reads as names; on row hover the
    relevant one fades + slides in. The hide rule uses :not(:hover) so it outranks
    the per-state note rules (and on hover the note reverts to its own opacity).
    Marks (the ·/✓ status) are untouched and always show. Click a file for more. */
-.tree__list .f__note { transition: opacity 0.22s ease, transform 0.3s var(--ease-settle); }
-.tree__list li:not(:hover) > .f__note { opacity: 0; transform: translateX(-6px); }
+.tree__list .f__note {
+  transition:
+    opacity 0.22s ease,
+    transform 0.3s var(--ease-settle);
+}
+.tree__list li:not(:hover) > .f__note {
+  opacity: 0;
+  transform: translateX(-6px);
+}
 /* the .git/ line writes itself on, left to right, then slides into place.
    `backwards` (not `both`): the row reverts to its plain base after animating,
    so it holds NO transform/clip-path — both would persist as a stacking context
    (a held transform computes to a matrix, clip-path stays non-none) and stop the
    hover underline from layering over the next row. Base opacity is 1 (below), so
    reverting to base leaves the row fully visible. */
-.tree__list li.is-new { animation: git-write 0.7s var(--ease-settle) backwards; }
+.tree__list li.is-new {
+  animation: git-write 0.7s var(--ease-settle) backwards;
+}
 @keyframes git-write {
-  from { clip-path: inset(0 100% 0 0); opacity: 0; transform: translateX(-14px); }
-  55%  { opacity: 1; }
-  to   { clip-path: inset(0 0 0 0); opacity: 1; transform: translateX(0); }
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* ---- the file editor (opens / edits / saves on the feature branch) ---- */
@@ -1349,19 +1909,34 @@ body.is-learning .landing-notes {
   overflow: hidden;
   /* JS drives the grow/shrink transform + opacity inline (it animates out of and
      back into the file's line in the tree); this is just an idle fallback */
-  transition: opacity 0.42s var(--ease-settle), transform 0.42s var(--ease-settle);
+  transition:
+    opacity 0.42s var(--ease-settle),
+    transform 0.42s var(--ease-settle);
 }
 .editor__bar {
   display: flex;
   align-items: center;
   gap: 0.45rem;
   padding: 0.55rem 0.9rem 0.45rem;
-  border-bottom: 1.6px dashed rgba(42, 37, 33, 0.2);   /* a torn-note divider, not a chrome bar */
-  cursor: pointer;   /* the bar is a close affordance */
+  border-bottom: 1.6px dashed rgba(42, 37, 33, 0.2); /* a torn-note divider, not a chrome bar */
+  cursor: pointer; /* the bar is a close affordance */
 }
 /* a little sketched pin/thumbtack where the window dots used to be */
-.editor__pin { width: 1.05rem; height: 1.05rem; flex: none; overflow: visible; }
-.editor__pin .note-stroke { stroke: var(--pen-red); stroke-width: 1.5; fill: none; stroke-dasharray: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+.editor__pin {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: none;
+  overflow: visible;
+}
+.editor__pin .note-stroke {
+  stroke: var(--pen-red);
+  stroke-width: 1.5;
+  fill: none;
+  stroke-dasharray: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
 .editor__name {
   font-family: var(--mono);
   font-size: 0.84rem;
@@ -1382,9 +1957,16 @@ body.is-learning .landing-notes {
   color: var(--ink-soft);
   opacity: 0.5;
   padding: 0.1rem 0.25rem;
-  transition: opacity 0.2s ease, color 0.2s ease, transform 0.2s var(--ease-settle);
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s var(--ease-settle);
 }
-.editor__close:hover { opacity: 1; color: var(--pen-red); transform: rotate(90deg); }
+.editor__close:hover {
+  opacity: 1;
+  color: var(--pen-red);
+  transform: rotate(90deg);
+}
 .editor__unsaved {
   color: var(--pen-red);
   font-size: 0.9rem;
@@ -1400,9 +1982,14 @@ body.is-learning .landing-notes {
   color: var(--pen-green);
   opacity: 0;
   transform: translateY(-3px);
-  transition: opacity 0.25s ease, transform 0.3s var(--ease-settle);
+  transition:
+    opacity 0.25s ease,
+    transform 0.3s var(--ease-settle);
 }
-.editor__save.show { opacity: 1; transform: none; }
+.editor__save.show {
+  opacity: 1;
+  transform: none;
+}
 .editor__code {
   padding: 0.7rem 0 0.9rem;
   font-family: var(--mono);
@@ -1435,7 +2022,9 @@ body.is-learning .landing-notes {
   max-width: 32rem;
   border-bottom: 1.5px dashed rgba(122, 112, 96, 0.35);
 }
-.editor__line.is-active { background: rgba(46, 92, 158, 0.09); }
+.editor__line.is-active {
+  background: rgba(46, 92, 158, 0.09);
+}
 .editor__num {
   width: 1.4rem;
   flex: 0 0 auto;
@@ -1451,7 +2040,10 @@ body.is-learning .landing-notes {
   background: rgba(63, 122, 78, 0.13);
   box-shadow: inset 3px 0 0 var(--pen-green);
 }
-.editor__line.is-changed .editor__num { color: var(--pen-green); opacity: 0.9; }
+.editor__line.is-changed .editor__num {
+  color: var(--pen-green);
+  opacity: 0.9;
+}
 
 /* the one content line worth looking at in a .git note: a warm marker band +
    gutter, reusing the on-brand amber (same hue as the just-edited flash) */
@@ -1465,9 +2057,13 @@ body.is-learning .landing-notes {
 }
 /* a hand-drawn marker-pen swipe over the important word(s) of a note */
 .hl {
-  background: linear-gradient(101deg,
-    rgba(176, 125, 43, 0) 1.5%, rgba(176, 125, 43, 0.38) 5%,
-    rgba(176, 125, 43, 0.34) 95%, rgba(176, 125, 43, 0) 98.5%);
+  background: linear-gradient(
+    101deg,
+    rgba(176, 125, 43, 0) 1.5%,
+    rgba(176, 125, 43, 0.38) 5%,
+    rgba(176, 125, 43, 0.34) 95%,
+    rgba(176, 125, 43, 0) 98.5%
+  );
   padding: 0.04em 0.2em;
   border-radius: 0.6em 0.8em 0.55em 0.7em;
   color: var(--ink);
@@ -1476,9 +2072,13 @@ body.is-learning .landing-notes {
   box-decoration-break: clone;
 }
 :root[data-theme="dark"] .hl {
-  background: linear-gradient(101deg,
-    rgba(214, 168, 92, 0) 1.5%, rgba(214, 168, 92, 0.34) 5%,
-    rgba(214, 168, 92, 0.3) 95%, rgba(214, 168, 92, 0) 98.5%);
+  background: linear-gradient(
+    101deg,
+    rgba(214, 168, 92, 0) 1.5%,
+    rgba(214, 168, 92, 0.34) 5%,
+    rgba(214, 168, 92, 0.3) 95%,
+    rgba(214, 168, 92, 0) 98.5%
+  );
 }
 /* the muted "we'll get to this later" footnote under a note's body/contents */
 .editor__later {
@@ -1493,13 +2093,22 @@ body.is-learning .landing-notes {
   border-top: 1.5px dashed rgba(122, 112, 96, 0.3);
   max-width: 32rem;
 }
-.editor__later::before { content: "↳ "; font-style: normal; opacity: 0.6; }
+.editor__later::before {
+  content: "↳ ";
+  font-style: normal;
+  opacity: 0.6;
+}
 /* the bar + the prose follow the card's content width (set by the code lines)
    rather than contributing to it: long sentences wrap to the card instead of
    stretching it, while a config url line is free to make the card wider. The
    note (note-only files) is NOT here: it stays the width driver and wraps at its
    own max-width. */
-.editor__bar, .editor__explain, .editor__later { width: 0; min-width: 100%; }
+.editor__bar,
+.editor__explain,
+.editor__later {
+  width: 0;
+  min-width: 100%;
+}
 /* the index's friendly list: a filename + its real state, coloured the same way
    the file tree colours states (green staged, blue committed) so they read as
    one language. The state word sits to the right and updates step to step. */
@@ -1512,21 +2121,52 @@ body.is-learning .landing-notes {
   font-family: var(--mono);
   font-size: 0.92rem;
 }
-.editor__idx-tag { font-family: var(--ui); font-size: 0.8rem; font-style: italic; opacity: 0.9; }
-.editor__idx--staged    { color: var(--pen-green); }
-.editor__idx--committed { color: var(--pen-blue); }
-.editor__idx--modified  { color: #b07d2b; }
+.editor__idx-tag {
+  font-family: var(--ui);
+  font-size: 0.8rem;
+  font-style: italic;
+  opacity: 0.9;
+}
+.editor__idx--staged {
+  color: var(--pen-green);
+}
+.editor__idx--committed {
+  color: var(--pen-blue);
+}
+.editor__idx--modified {
+  color: #b07d2b;
+}
 
 /* syntax highlighting palette (kept within the inked colour set) */
-.sx-tag     { color: var(--pen-blue); }
-.sx-attr    { color: #b07d2b; }
-.sx-str     { color: var(--pen-green); }
-.sx-kw      { color: var(--pen-blue); font-weight: 700; }
-.sx-fn      { color: var(--pen-remote, #6b5ca5); }
-.sx-num     { color: var(--pen-red); }
-.sx-comment { color: var(--ink-soft); font-style: italic; }
-.sx-val     { color: var(--ink); }
-.sx-punct   { color: var(--ink-soft); }
+.sx-tag {
+  color: var(--pen-blue);
+}
+.sx-attr {
+  color: #b07d2b;
+}
+.sx-str {
+  color: var(--pen-green);
+}
+.sx-kw {
+  color: var(--pen-blue);
+  font-weight: 700;
+}
+.sx-fn {
+  color: var(--pen-remote, #6b5ca5);
+}
+.sx-num {
+  color: var(--pen-red);
+}
+.sx-comment {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+.sx-val {
+  color: var(--ink);
+}
+.sx-punct {
+  color: var(--ink-soft);
+}
 
 .editor__caret {
   display: inline-block;
@@ -1538,8 +2178,14 @@ body.is-learning .landing-notes {
   animation: editor-blink 0.9s steps(1) infinite;
 }
 @keyframes editor-blink {
-  0%, 49.9% { opacity: 1; }
-  50%, 100% { opacity: 0; }
+  0%,
+  49.9% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
 }
 
 /* ---- timeline (bottom) --------------------------------------------- */
@@ -1552,12 +2198,18 @@ body.is-learning .landing-notes {
   display: flex;
   align-items: flex-start;
   gap: 0;
-  --tl-row: 0.95rem;   /* common dot centre-line height for every stop + link */
+  --tl-row: 0.95rem; /* common dot centre-line height for every stop + link */
   /* so it fades in (not pops) when the stage docks off the landing */
   transition: opacity 0.4s ease;
 }
-.tl-group { display: flex; align-items: flex-start; gap: 0; flex: 0 0 auto; }
-.tl-item, .tl-substep {
+.tl-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  flex: 0 0 auto;
+}
+.tl-item,
+.tl-substep {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1570,17 +2222,31 @@ body.is-learning .landing-notes {
   font-family: var(--mono);
   font-size: 0.8rem;
   color: var(--ink-soft);
-  transition: color 0.2s ease, transform 0.2s ease;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
 }
-.tl-substep { font-size: 0.66rem; }
-.tl-label { white-space: nowrap; }
-.tl-item:hover, .tl-substep:hover { color: var(--ink); transform: translateY(-1px); }
+.tl-substep {
+  font-size: 0.66rem;
+}
+.tl-label {
+  white-space: nowrap;
+}
+.tl-item:hover,
+.tl-substep:hover {
+  color: var(--ink);
+  transform: translateY(-1px);
+}
 .tl-item:focus-visible,
-.tl-substep:focus-visible { outline: 2px solid var(--pen-blue); outline-offset: 3px; border-radius: 6px; }
+.tl-substep:focus-visible {
+  outline: 2px solid var(--pen-blue);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
 .tl-dot {
   width: 0.85rem;
   height: 0.85rem;
-  margin: calc((var(--tl-row) - 0.85rem) / 2) 0;  /* centre on the row line */
+  margin: calc((var(--tl-row) - 0.85rem) / 2) 0; /* centre on the row line */
   border-radius: 50%;
   border: 2px solid var(--ink-soft);
   background: var(--paper);
@@ -1589,20 +2255,29 @@ body.is-learning .landing-notes {
 .tl-dot--sub {
   width: 0.56rem;
   height: 0.56rem;
-  margin: calc((var(--tl-row) - 0.56rem) / 2) 0;  /* same centre-line, smaller */
+  margin: calc((var(--tl-row) - 0.56rem) / 2) 0; /* same centre-line, smaller */
 }
 .tl-link {
   width: clamp(1.6rem, 4vw, 2.6rem);
   height: 2px;
   background: var(--ink-soft);
   opacity: 0.4;
-  margin-top: calc(var(--tl-row) / 2 - 1px);   /* sit on the dot centre-line */
+  margin-top: calc(var(--tl-row) / 2 - 1px); /* sit on the dot centre-line */
   flex: 0 0 auto;
 }
-.tl-link--sub { width: clamp(0.9rem, 2vw, 1.5rem); opacity: 0.3; }
-.tl-item.is-done, .tl-substep.is-done { color: var(--ink); }
+.tl-link--sub {
+  width: clamp(0.9rem, 2vw, 1.5rem);
+  opacity: 0.3;
+}
+.tl-item.is-done,
+.tl-substep.is-done {
+  color: var(--ink);
+}
 .tl-item.is-done .tl-dot,
-.tl-substep.is-done .tl-dot { border-color: var(--pen-blue); background: var(--pen-blue); }
+.tl-substep.is-done .tl-dot {
+  border-color: var(--pen-blue);
+  background: var(--pen-blue);
+}
 /* a milestone you're working through reads as "in progress": solid red. Its
    sub-steps still pick out the exact current command with a hollow red ring.
    When all its commands are done the milestone flips to the solid blue done. */
@@ -1616,7 +2291,11 @@ body.is-learning .landing-notes {
   background: var(--paper);
   box-shadow: 0 0 0 3px rgba(192, 73, 47, 0.2);
 }
-.tl-item.is-current, .tl-substep.is-current { color: var(--ink); font-weight: 700; }
+.tl-item.is-current,
+.tl-substep.is-current {
+  color: var(--ink);
+  font-weight: 700;
+}
 
 /* sub-row: an expand/compact accordion. A 0fr<->1fr grid animates to the exact
    content width (so the collapse is never a sudden snap), and the inner layer
@@ -1626,7 +2305,9 @@ body.is-learning .landing-notes {
   grid-template-columns: 0fr;
   transition: grid-template-columns 0.5s var(--ease-settle);
 }
-.tl-group.is-expanded .tl-sub { grid-template-columns: 1fr; }
+.tl-group.is-expanded .tl-sub {
+  grid-template-columns: 1fr;
+}
 .tl-sub-inner {
   display: flex;
   align-items: flex-start;
@@ -1638,7 +2319,9 @@ body.is-learning .landing-notes {
 .tl-sub-inner > * {
   opacity: 0;
   transform: translateX(-10px);
-  transition: opacity 0.25s ease, transform 0.35s var(--ease-settle);
+  transition:
+    opacity 0.25s ease,
+    transform 0.35s var(--ease-settle);
 }
 .tl-group.is-expanded .tl-sub-inner > * {
   opacity: 1;
@@ -1660,10 +2343,15 @@ body.is-learning .landing-notes {
   line-height: 0;
   color: var(--ink-soft);
   opacity: 0.6;
-  transition: color 0.3s var(--ease-settle), opacity 0.3s ease,
-              transform 0.3s var(--ease-settle), text-shadow 0.3s ease;
+  transition:
+    color 0.3s var(--ease-settle),
+    opacity 0.3s ease,
+    transform 0.3s var(--ease-settle),
+    text-shadow 0.3s ease;
 }
-.tl-item--complete:hover .tl-star { opacity: 0.85; }
+.tl-item--complete:hover .tl-star {
+  opacity: 0.85;
+}
 .tl-item--complete.is-done .tl-star {
   color: #c79a3a;
   opacity: 1;
@@ -1685,8 +2373,13 @@ body.is-learning .landing-notes {
   }
 
   /* lighter chrome in the corners */
-  .brand { top: 0.7rem; left: 0.9rem; }
-  .brand__word { font-size: clamp(1.5rem, 8vw, 2rem); }
+  .brand {
+    top: 0.7rem;
+    left: 0.9rem;
+  }
+  .brand__word {
+    font-size: clamp(1.5rem, 8vw, 2rem);
+  }
   .theme-toggle {
     top: 0.55rem;
     right: 0.7rem;
@@ -1709,37 +2402,63 @@ body.is-learning .landing-notes {
     max-height: 34vh;
     overflow: hidden;
   }
-  #filetree { left: 0.8rem !important; }
+  #filetree {
+    left: 0.8rem !important;
+  }
   #remotetree {
     left: auto !important;
     right: 0.8rem !important;
     /* opacity / pointer-events still controlled by .is-shown */
   }
   .tree.is-focus .tree__title,
-  .tree__title { font-size: 0.66rem; margin-bottom: 0.4rem; }
+  .tree__title {
+    font-size: 0.66rem;
+    margin-bottom: 0.4rem;
+  }
   .tree.is-focus .d--git .f__note,
   .d--git .f__note,
   .f--modified .f__note,
   .f--committed .f__note,
-  .f--pushed .f__note { font-size: 0.66rem; }
-  .tree__list li { padding: 0.1rem 0; line-height: 1.25; }
+  .f--pushed .f__note {
+    font-size: 0.66rem;
+  }
+  .tree__list li {
+    padding: 0.1rem 0;
+    line-height: 1.25;
+  }
 
   /* the editor sits centred and narrower so it fits the phone width */
   .editor {
     top: 38%;
-    max-width: 92vw;       /* stay content-driven, just don't exceed the screen */
+    max-width: 92vw; /* stay content-driven, just don't exceed the screen */
     min-width: 0;
     font-size: 0.78rem;
   }
-  .editor__code { font-size: 0.74rem; overflow-x: auto; }   /* tiny screens: scroll a long line, never clip */
+  .editor__code {
+    font-size: 0.74rem;
+    overflow-x: auto;
+  } /* tiny screens: scroll a long line, never clip */
 
   /* lesson + command line stay inside the viewport */
-  #stage { padding: 0 0.8rem; gap: 0.8rem; }
-  .lesson { max-width: 100%; }
-  .lesson__why { max-width: 90vw; }
-  #cmd { max-width: 88vw; }
-  .nudge { font-size: 1.15rem; }
-  .nudge.info { font-size: 1.35rem; }
+  #stage {
+    padding: 0 0.8rem;
+    gap: 0.8rem;
+  }
+  .lesson {
+    max-width: 100%;
+  }
+  .lesson__why {
+    max-width: 90vw;
+  }
+  #cmd {
+    max-width: 88vw;
+  }
+  .nudge {
+    font-size: 1.15rem;
+  }
+  .nudge.info {
+    font-size: 1.35rem;
+  }
 
   /* timeline scrolls sideways once the run gets long */
   .timeline {
@@ -1750,13 +2469,28 @@ body.is-learning .landing-notes {
     justify-content: flex-start;
     -webkit-overflow-scrolling: touch;
   }
-  .tl-label { display: none; }
+  .tl-label {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #stage, .lesson { transition: none; }
-  .theme-toggle:hover .bulb { transform: none; }
-  .shake, .feedback.shake .feedback__card, .tree__list li.is-new, .tree__list li.is-edited, .tree__list li.is-pushed-now { animation: none; }
+  #stage,
+  .lesson {
+    transition: none;
+  }
+  .theme-toggle:hover .bulb {
+    transform: none;
+  }
+  .shake,
+  .feedback.shake .feedback__card,
+  .tree__list li.is-new,
+  .tree__list li.is-edited,
+  .tree__list li.is-pushed-now {
+    animation: none;
+  }
   /* no draw-on; the underline just appears/leaves on hover */
-  .f__underline { transition: none; }
+  .f__underline {
+    transition: none;
+  }
 }
