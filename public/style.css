@@ -45,8 +45,15 @@
 
   color-scheme: dark;
 }
-/* the faint paper grain multiplies to nothing on dark; switch it to screen */
-:root[data-theme="dark"] .grain { mix-blend-mode: screen; opacity: 0.05; }
+/* On dark the grain has two jobs and one blend must do both. multiply is
+   invisible here (dark x grey stays dark); screen bleached the page (it pushes
+   the noise toward white, a pale film over the palette); soft-light keys off the
+   base luminance, so in near-black regions it barely perturbs anything. A plain
+   low-opacity normal blend lays an even, high-frequency speckle that nudges every
+   pixel up or down a hair regardless of how dark it is: it reads as grain AND it
+   dithers the central vignette, whose two near-black stops would otherwise band
+   into visible 8-bit contours across the dark paper. Neutral, so no white push. */
+:root[data-theme="dark"] .grain { mix-blend-mode: normal; opacity: 0.04; }
 /* the make-believe editor has a hardcoded cream surface — darken it */
 :root[data-theme="dark"] .editor {
   background: #2a241b;
