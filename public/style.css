@@ -1,7 +1,6 @@
 :root {
   /* paper & ink */
   --paper: #efe7d2;
-  --paper-lo: #e6dabb; /* shaded edge for the vignette */
   --ink: #2a2521;
   --ink-soft: #7a7060;
 
@@ -31,7 +30,6 @@
    first paint by the inline script in <head>. */
 :root[data-theme="dark"] {
   --paper: #211c17;
-  --paper-lo: #14110c;
   --ink: #ece2cd;
   --ink-soft: #9b8f78;
 
@@ -45,14 +43,10 @@
 
   color-scheme: dark;
 }
-/* On dark the grain has two jobs and one blend must do both. multiply is
-   invisible here (dark x grey stays dark); screen bleached the page (it pushes
-   the noise toward white, a pale film over the palette); soft-light keys off the
-   base luminance, so in near-black regions it barely perturbs anything. A plain
-   low-opacity normal blend lays an even, high-frequency speckle that nudges every
-   pixel up or down a hair regardless of how dark it is: it reads as grain AND it
-   dithers the central vignette, whose two near-black stops would otherwise band
-   into visible 8-bit contours across the dark paper. Neutral, so no white push. */
+/* On dark, multiply is invisible (dark x grey stays dark) and screen bleached the
+   page (it pushes the noise toward white, a pale film over the palette). darken
+   keeps whichever is darker per pixel, so the grain only ever deepens the paper,
+   never lightens it: texture with no white push. */
 :root[data-theme="dark"] .grain {
   mix-blend-mode: darken;
   opacity: 0.04;
@@ -84,17 +78,11 @@ body {
 body {
   min-height: 100dvh;
   background-color: var(--paper);
-  background-image:
-    radial-gradient(
-      120vmax 90vmax at 50% 42%,
-      transparent 38%,
-      var(--paper-lo) 100%
-    ),
-    radial-gradient(var(--grid) 1.2px, transparent 1.6px);
-  background-size:
-    100% 100%,
-    30px 30px;
-  background-position: center, center;
+  /* just the faint grid dots over flat paper; no centre vignette (it banded on
+     the near-black dark palette and read better without it). */
+  background-image: radial-gradient(var(--grid) 1.2px, transparent 1.6px);
+  background-size: 30px 30px;
+  background-position: center;
   color: var(--ink);
   font-family: var(--ui);
   -webkit-font-smoothing: antialiased;
@@ -115,23 +103,6 @@ body {
   mix-blend-mode: multiply;
   pointer-events: none;
   z-index: 5;
-}
-
-/* dither: an opaque, high-frequency noise field at a whisper of opacity, so it
-   nudges every pixel a level or two and breaks the body's radial vignette out of
-   its visible 8-bit bands. Plain source-over (no blend mode) is deliberate: it
-   adds the same small stipple to dark and light pixels alike, where soft-light /
-   overlay would die in the near-blacks (exactly where the banding lives). Kept
-   below the grain; at this opacity it's invisible on content and on flat colour,
-   and only shows as the smoothing of the gradient. opacity is the dial. */
-.dither {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.025;
-  pointer-events: none;
-  z-index: 4;
 }
 
 /* ---- brand --------------------------------------------------------- */
