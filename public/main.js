@@ -14,7 +14,7 @@ import { chapters, MAIN_FILE, choices, choiceKey, valueFor } from "./story.js";
 import { exec, replayTo, finishBeat } from "./engine.js";
 import { showIntro, introSeen, whyGithub } from "./intro.js";
 import { explain } from "./explain.js";
-import { circlePath, linePath, smooth, drawOn, el, prefersReduced } from "./sketch.js";
+import { circlePath, linePath, drawOn, el, prefersReduced } from "./sketch.js";
 const $ = (s) => document.querySelector(s);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 /* a quiet "explain" next to a command. It opens one shared panel beside the
@@ -1277,6 +1277,16 @@ function layoutOf(host, cols) {
 }
 /* frame: an in-between drawing while the layout glides from the old spacing
  * to the new one; it draws only commits that were already there, inks nothing */
+/* a line between lanes turns one rounded corner. Branching off, it leaves its
+ * commit straight up (or down) and then runs along the new lane; merging back,
+ * it runs along its own lane first and then drops into the merge commit. */
+function laneEdge(px, py, cx, cy, branching) {
+    const d = Math.sign(cy - py);
+    const r = Math.max(4, Math.min(14, Math.abs(cy - py) - 12, (cx - px) / 2 - 13));
+    if (branching)
+        return `M ${px} ${py + 12 * d} L ${px} ${cy - r * d} Q ${px} ${cy} ${px + r} ${cy} L ${cx - 13} ${cy}`;
+    return `M ${px + 13} ${py} L ${cx - r} ${py} Q ${cx} ${py} ${cx} ${py + r * d} L ${cx} ${cy - 12 * d}`;
+}
 function drawStrip(id, cols, frame) {
     const [rid, dk] = id.split(":");
     const r = w.repos[rid];
@@ -1372,8 +1382,7 @@ function drawStrip(id, cols, frame) {
                 return;
             const pl = L.get(p);
             const px = x(p), py = laneY(pl.lane);
-            const d = py === cy ? linePath(px + 13, py, cx - 13, cy, seed(cid) + pi)
-                : smooth([[px + 10, py], [px + (cx - px) * 0.55, py + (cy - py) * 0.15], [cx - 12, cy]]);
+            const d = py === cy ? linePath(px + 13, py, cx - 13, cy, seed(cid) + pi) : laneEdge(px, py, cx, cy, me.lane > pl.lane);
             const col = colorOf(pi === 1 ? L.get(p).br : me.br);
             const path = el("path", { d, class: "edge", stroke: col, "data-to": cid });
             gEdges.append(path);
