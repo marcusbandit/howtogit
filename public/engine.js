@@ -3,7 +3,7 @@
 import * as G from "./model.js";
 import { run } from "./cli.js";
 import { chapters, autoBeat } from "./story.js";
-export const authorOf = (who) => (who === "sam" ? "Sam" : "You");
+export const authorOf = (who) => (who === "albert" ? "Albert" : "You");
 export function exec(w, cmd, who, desk) {
     const r = run(w, { repo: who, desk, author: authorOf(who) }, cmd);
     if (/\[rejected\]/.test(r.out))

@@ -1,7 +1,7 @@
 /* model.ts: a small, faithful git.
  *
  * The lesson needs three repositories that talk to each other (your computer,
- * GitHub, Sam's computer), pull requests, conflicts and worktrees. Everything
+ * GitHub, Albert's computer), pull requests, conflicts and worktrees. Everything
  * here behaves the way real git does for the commands the lesson covers:
  * commits are immutable snapshots with parents, branches are names pointing at
  * commits, the index (staging area) sits between your files and the next
@@ -77,8 +77,8 @@ export function freshWorld(): World {
     commits: {},
     repos: {},
     folder: {
-      "recipe.md":
-        "# Grandma's pancakes\n\n- 2 eggs\n- 1 cup flour\n- 1 cup milk\n\nMix everything, then fry in buter.\n",
+      "pancakes.md":
+        "# Pancakes\n\n- 2 eggs\n- 1 cup flour\n- 1 cup milk\n\nMix everything, then fry in buter.\n",
       "shopping.txt": "eggs\nflour\n",
     },
     prs: [],

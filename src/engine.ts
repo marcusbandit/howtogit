@@ -4,9 +4,9 @@ import * as G from "./model.js";
 import { run, type Result } from "./cli.js";
 import { chapters, autoBeat } from "./story.js";
 
-export const authorOf = (who: "you" | "sam") => (who === "sam" ? "Sam" : "You");
+export const authorOf = (who: "you" | "albert") => (who === "albert" ? "Albert" : "You");
 
-export function exec(w: G.World, cmd: string, who: "you" | "sam", desk: number): Result {
+export function exec(w: G.World, cmd: string, who: "you" | "albert", desk: number): Result {
   const r = run(w, { repo: who, desk, author: authorOf(who) }, cmd);
   if (/\[rejected\]/.test(r.out)) w.vars.rejected = "1";
   return r;
