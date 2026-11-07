@@ -10,7 +10,7 @@
     "dev": "tsc && wrangler dev",
     "start": "tsc && wrangler dev",
     "deploy": "tsc && wrangler deploy",
-    "vendor": "bash scripts/vendor-isogit.sh"
+    "check": "tsc && node scripts/check-story.mjs"
   },
   "devDependencies": {
     "buffer": "6.0.3",

@@ -1,4 +1,4 @@
-/* sketch.ts — the "drawn by hand" engine.
+/* sketch.ts: the "drawn by hand" engine.
  *
  * Everything you see on the board is ink: geometry is generated true, then
  * roughened (points nudged off the ideal path and smoothed) so it reads as a
@@ -57,7 +57,7 @@ export function smooth(points: Point[], close = false): string {
 }
 
 /* a hand-drawn ring: sampled around the circle, radius jittered, left a hair
- * open and overshooting — the way nobody ever closes a circle cleanly */
+ * open and overshooting, the way nobody ever closes a circle cleanly */
 export function circlePath(cx: number, cy: number, r: number, seed = 1, roughness = 1): string {
   const rand = rng(seed);
   const steps = Math.max(14, Math.round(r * 0.55));

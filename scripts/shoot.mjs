@@ -7,7 +7,8 @@
  * folders, click files, open a companion question, …), then writes a PNG.
  *
  * Usage:
- *   node scripts/shoot.mjs --step 3 --out /tmp/commit.png
+ *   node scripts/shoot.mjs --q "ch=3&b=2&mode=command" --full --out /tmp/x.png
+ *   node scripts/shoot.mjs --step 3 --out /tmp/commit.png   (chapter 3, first step)
  *   node scripts/shoot.mjs --step 1 --out /tmp/git.png \
  *        --do "document.querySelector('[data-path=\".git\"]').click()" --wait 900
  *   node scripts/shoot.mjs --step 3 --out /tmp/head.png \
@@ -44,7 +45,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const CHROME = process.env.CHROME_BIN || "google-chrome-stable";
 const port = Number(args.port && args.port !== "0" ? args.port : await freePort());
 
-const url = `${URL_BASE}/?step=${STEP}`;
+const url = `${URL_BASE}/?${args.q ?? `ch=${STEP}`}`;
+const FULL = !!args.full;
 const chrome = spawn(CHROME, [
   "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
   `--remote-debugging-port=${port}`, "--force-device-scale-factor=2",
@@ -78,6 +80,8 @@ try {
   const send = rpc(ws);
   await send("Page.enable");
   await send("Runtime.enable");
+  // a real viewport size: Chrome's window can't go below ~500px wide, so phones need emulation
+  await send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceScaleFactor: 2, mobile: W < 600 });
   await send("Page.navigate", { url });
   // wait for the app to settle (the landing intro + first render)
   await sleep(2500);
@@ -91,7 +95,13 @@ try {
     const v = result.result?.value;
     console.log(typeof v === "string" ? v : JSON.stringify(v));
   }
-  const shot = await send("Page.captureScreenshot", { format: "png" });
+  let clip;
+  if (FULL) {
+    const m = await send("Page.getLayoutMetrics");
+    const cs = m.result.cssContentSize;
+    clip = { x: 0, y: 0, width: W, height: Math.min(cs.height, 6000), scale: 1 };
+  }
+  const shot = await send("Page.captureScreenshot", { format: "png", ...(clip ? { clip, captureBeyondViewport: true } : {}) });
   writeFileSync(OUT, Buffer.from(shot.result.data, "base64"));
   console.log(`shot -> ${OUT} (step=${STEP})`);
 } catch (e) {
