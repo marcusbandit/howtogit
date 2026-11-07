@@ -1515,7 +1515,9 @@ function fitEditor() {
     ta.style.height = "auto";
     ta.style.height = `${ta.scrollHeight + line}px`;
 }
-function renderResolver(text, readOnly) {
+/* the conflict picker: choosing a side only previews it in the file below;
+ * nothing is kept until Save file, and Start over brings the conflict back */
+function renderResolver(text, readOnly, picked = "") {
     const box = $("#resolver");
     const m = text.match(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n([\s\S]*?)>>>>>>> [^\n]*\n?/);
     if (!m || readOnly) {
@@ -1524,19 +1526,26 @@ function renderResolver(text, readOnly) {
         return;
     }
     box.hidden = false;
-    box.innerHTML = `<p class="resolver__k">Git found two versions of the same line. Which one stays?</p>
+    const opt = (key, cls, label, code) => `<button type="button" class="pick ${cls} ${picked === key ? "is-picked" : ""}" data-pick="${key}" aria-pressed="${picked === key}"><span>${label}</span><code>${code}</code></button>`;
+    box.innerHTML = `<p class="resolver__k">The same line, changed two ways. Which should the report say?</p>
     <div class="resolver__opts">
-      <button type="button" class="pick" data-pick="mine"><span>Your version</span><code>${esc(m[1].trim())}</code></button>
-      <button type="button" class="pick pick--friend" data-pick="theirs"><span>Albert's version</span><code>${esc(m[2].trim())}</code></button>
-      <button type="button" class="pick pick--both" data-pick="both"><span>Keep both</span><code>${esc(m[1].trim())}<br>${esc(m[2].trim())}</code></button>
+      ${opt("mine", "", "Your version", esc(m[1].trim()))}
+      ${opt("theirs", "pick--friend", "Albert's version", esc(m[2].trim()))}
+      ${opt("both", "pick--both", "Keep both lines", `${esc(m[1].trim())}<br>${esc(m[2].trim())}`)}
     </div>
-    <p class="resolver__raw">Below is the file as git left it. The <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> lines are git's marks; you can also fix it by hand.</p>`;
+    <p class="resolver__raw">${picked ? `Previewing your pick in the file below. Happy with it? Press <b>Save file</b>. <button type="button" class="resolver__reset" data-reset>Start over</button>`
+        : "The file below is how git left it: your version between <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> and <code>=======</code>, Albert's between <code>=======</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>. Pick above, or fix it by hand."}</p>`;
     box.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => {
-        const ta = $("#editor-text");
         const keep = b.dataset.pick === "mine" ? m[1] : b.dataset.pick === "theirs" ? m[2] : m[1] + m[2];
-        ta.value = ta.value.replace(m[0], () => keep);
-        saveEditor(true);
+        $("#editor-text").value = text.replace(m[0], () => keep);
+        fitEditor();
+        renderResolver(text, readOnly, b.dataset.pick);
     }));
+    box.querySelector("[data-reset]")?.addEventListener("click", () => {
+        $("#editor-text").value = text;
+        fitEditor();
+        renderResolver(text, readOnly);
+    });
 }
 function saveEditor(close) {
     if (!edit || edit.place !== "you")

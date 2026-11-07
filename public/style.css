@@ -920,3 +920,15 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .t-coach.is-hint { color: #ffc28a; background: rgba(255, 194, 138, .1); }
 .t-coach code { font-family: var(--mono); font-size: 12px; background: rgba(255,255,255,.08); padding: 0 4px; border-radius: 4px; }
 .term__in input::placeholder { color: #8d8270; }
+/* the clash, shown in the lesson before you open the file */
+.clash { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+.clash__side { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; border: 2px solid var(--pen-blue); background: color-mix(in srgb, var(--pen-blue) 7%, var(--card)); }
+.clash__side--friend { border-color: var(--friend); background: color-mix(in srgb, var(--friend) 7%, var(--card)); }
+.clash__side i { font-style: normal; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.clash__side code { font-family: var(--mono); font-size: 14px; }
+.clash__vs { font: 600 20px var(--hand); color: var(--ink-soft); }
+/* picker: a chosen side is marked, nothing saved yet */
+.pick.is-picked { box-shadow: 0 0 0 3px var(--accent); }
+.resolver__reset { background: none; border: 0; color: var(--accent-deep); font-weight: 700; text-decoration: underline; padding: 0 2px; }
+.clash { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.clash__side code { white-space: normal; word-break: break-word; }
