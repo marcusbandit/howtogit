@@ -451,6 +451,7 @@ function renderLesson() {
     const fresh = justDone && !instant;
     const atStart = flatIndex(ci, bi) === 0;
     const box = $("#lesson");
+    const oldH = box.getBoundingClientRect().height;
     box.innerHTML = `
     <p class="kicker"><span>Chapter ${ci + 1} of ${chapters.length}</span> <b>${esc(ch.title)}</b></p>
     ${ch.goal ? `<p class="goal">Goal: ${esc(ch.goal)}</p>` : ""}
@@ -473,6 +474,7 @@ function renderLesson() {
       <button type="button" class="btn btn--next" data-next ${beatDone ? "" : "disabled"}>${bi + 1 < total ? "Next" : "Next chapter"} <span aria-hidden="true">→</span></button>`}
     </div>`;
     wireLesson();
+    easeHeight(box, oldH);
     if (xpFor && !document.body.contains(xpFor))
         closeExplain();
     const term = box.querySelector(".term__out");
@@ -830,8 +832,40 @@ function slideHere(before, place, wait = 0) {
         }
     });
 }
+/* content that grows or shrinks eases to its new height instead of snapping
+ * (fast: 240 ms); the element clips while it moves */
+function easeHeight(node, from) {
+    if (instant || prefersReduced || !from)
+        return;
+    const to = node.getBoundingClientRect().height;
+    if (Math.abs(to - from) < 2)
+        return;
+    node.getAnimations().filter((a) => a.id === "ease-h").forEach((a) => a.cancel());
+    node.classList.add("is-easing");
+    const a = node.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
+    a.id = "ease-h";
+    a.finished.then(() => node.classList.remove("is-easing"), () => node.classList.remove("is-easing"));
+}
+/* places that move because something above them changed float to their new
+ * spot, and places that grew or shrank ease to their new height */
+function floatPlaces(before) {
+    if (instant || prefersReduced)
+        return;
+    document.querySelectorAll("#world .place[data-place]").forEach((p) => {
+        const was = before.get(p.dataset.place);
+        if (!was || p.classList.contains("is-new"))
+            return;
+        const now = p.getBoundingClientRect();
+        const dy = was.top - now.top;
+        if (Math.abs(dy) > 1)
+            p.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 380, easing: "cubic-bezier(.2,.8,.2,1)" });
+        easeHeight(p, was.height);
+    });
+}
 function renderWorld() {
     const heres = hereSpots();
+    const placeRects = new Map();
+    document.querySelectorAll("#world .place[data-place]").forEach((p) => placeRects.set(p.dataset.place, p.getBoundingClientRect()));
     const root = $("#world");
     const view = "places";
     if (root.dataset.view !== view) {
@@ -882,6 +916,7 @@ function renderWorld() {
         fileStateSeen.set(k, s);
     });
     syncScroll();
+    floatPlaces(placeRects);
 }
 /* the idea in one picture: two computers, one shared copy online */
 function mapHtml(recap = false) {

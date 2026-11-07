@@ -900,3 +900,5 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .hood__earlier summary { font-size: 12px; color: var(--ink-soft); margin: 2px 0 4px; }
 .hood__earlier[open] { opacity: .7; }
 .hist__cols, .hist__list li { grid-template-columns: 64px minmax(0, 1fr) 40px 96px; }
+/* while a box eases to a new height it clips its content instead of overflowing */
+.is-easing { overflow: hidden !important; }
