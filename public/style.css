@@ -127,9 +127,9 @@ code { font-family: var(--mono); font-size: inherit; }
 .top__right { display: flex; align-items: center; gap: 12px; }
 .mode { display: flex; align-items: center; gap: 2px; background: var(--card); border: 1.5px solid var(--line); border-radius: 999px; padding: 3px; }
 .mode__label { font-size: 14px; color: var(--ink-soft); padding: 0 8px 0 10px; }
-.mode button { border: 0; background: none; border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 600; color: var(--ink-soft); }
+.mode button { border: 0; background: none; border-radius: 999px; min-height: 32px; padding: 5px 12px; font-size: 14px; font-weight: 600; color: var(--ink-soft); }
 .mode button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
-.theme-toggle { width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--card); display: grid; place-items: center; }
+.theme-toggle { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--card); display: grid; place-items: center; }
 .theme-toggle svg { width: 20px; height: 20px; fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linecap: round; }
 :root[data-theme="light"] .theme-toggle svg path:first-child { fill: #f3c95b; }
 
@@ -167,7 +167,7 @@ code { font-family: var(--mono); font-size: inherit; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   border: 2px solid var(--btn-edge); background: var(--btn-bg); color: var(--btn-ink);
-  font-weight: 700; font-size: 16px; padding: 9px 18px;
+  font-weight: 700; font-size: 16px; padding: 9px 18px; min-height: 48px;
   border-radius: var(--wobble-2);
   box-shadow: 2px 3px 0 var(--line-strong);
   transition: transform .12s ease, box-shadow .12s ease;
@@ -182,7 +182,7 @@ code { font-family: var(--mono); font-size: inherit; }
 .btn--friend { background: var(--friend); border-color: var(--friend); color: #fff; justify-self: start; }
 .btn--gh { background: #2a8f4a; border-color: #1f6f38; color: #fff; }
 .gh-dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; opacity: .8; }
-.btn--small { font-size: 14px; padding: 5px 12px; margin-top: 8px; }
+.btn--small { min-height: 40px; font-size: 14px; padding: 5px 12px; margin-top: 8px; }
 .btn--next { margin-left: auto; }
 
 .acts { display: grid; gap: 12px; }
@@ -452,7 +452,7 @@ code { font-family: var(--mono); font-size: inherit; }
 :root[data-theme="dark"] .goal { color: var(--accent); }
 .btn--go { background: var(--btn-bg); }
 .acts--row { display: flex; flex-wrap: wrap; gap: 10px; }
-.btn--back { padding: 7px 12px; font-size: 14px; }
+.btn--back { min-height: 40px; padding: 7px 10px; font-size: 14px; }
 .lesson__nav .step-of { margin-left: auto; }
 .btn--next { margin-left: 0; }
 
@@ -509,7 +509,7 @@ code { font-family: var(--mono); font-size: inherit; }
 .fx-ring { position: fixed; width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--accent); }
 
 /* the word deck */
-.deck-btn { display: inline-flex; align-items: baseline; gap: 4px; border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 6px 12px 6px 10px; font-size: 14px; color: var(--ink-soft); }
+.deck-btn { display: inline-flex; align-items: baseline; gap: 4px; border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; min-height: 40px; padding: 6px 12px 6px 10px; font-size: 14px; color: var(--ink-soft); }
 .deck-btn:hover { border-color: var(--accent); }
 .deck__ico { width: 12px; height: 14px; border: 2px solid var(--accent); border-radius: 2px; transform: rotate(-8deg) translateY(1px); box-shadow: 3px -2px 0 -0.5px var(--card), 3px -2px 0 1.5px var(--accent); }
 .deck__n { font-weight: 700; color: var(--ink); font-size: 16px; }
@@ -875,11 +875,10 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .label.is-swap { animation: swap .7s cubic-bezier(.2,1.6,.4,1) both; transform-box: fill-box; transform-origin: center; }
 @keyframes swap { 0% { transform: translateY(-10px) scale(.6); opacity: 0; } 55% { transform: translateY(2px) scale(1.15); opacity: 1; } 100% { transform: none; } }
 .label--here { transform-box: fill-box; transform-origin: center; }
-.btn--undo { padding: 7px 12px; font-size: 14px; }
+.btn--undo { min-height: 40px; padding: 7px 10px; font-size: 14px; }
 /* the lesson's bottom row never wraps its words; the step count gives way first */
 .lesson__nav { gap: 8px; }
 .lesson__nav .btn, .lesson__nav .step-of { white-space: nowrap; }
-.lesson__nav .btn--back, .lesson__nav .btn--undo { padding: 7px 10px; }
 @media (max-width: 1240px) { .lesson__nav .step-of { display: none; } .lesson__nav .btn--next { margin-left: auto; } }
 /* the history as a chooser: column names, and an Open button on each row */
 .hist__cols { display: grid; grid-template-columns: 64px minmax(0, 1fr) 48px 72px; gap: 10px; padding: 0 6px 4px; font-size: 12px; color: var(--ink-soft); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
