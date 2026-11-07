@@ -594,7 +594,7 @@ export const chapters = [
     },
 ];
 /* what the beat looks like when someone "just does it", for replays */
-export function autoBeat(b, w, runCmd) {
+export function autoBeat(b, w, runCmd, note) {
     if (b.kind === "edit")
         b.edit.canon(w);
     else if (b.kind === "resolve") {
@@ -610,8 +610,11 @@ export function autoBeat(b, w, runCmd) {
             for (const s of a.steps(w, v)) {
                 if (typeof s === "string")
                     runCmd(s, a.who ?? "you", b.desk ?? 0);
-                else
-                    s(w);
+                else {
+                    const n = s(w);
+                    if (n && note)
+                        note(n, a.who ?? "you");
+                }
             }
         }
     }

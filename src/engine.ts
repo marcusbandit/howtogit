@@ -26,3 +26,19 @@ export function replayTo(ci: number, bi: number): G.World {
   }
   return w;
 }
+
+export interface Ran { kind: "cmd" | "out" | "err" | "note"; text: string; who: "you" | "albert" }
+
+/* beat (ci, bi) done the typical way: the world right after it, and the log of
+ * what ran (commands and git's answers), so a step rebuilt after a reload
+ * still shows what happened under the hood */
+export function finishBeat(ci: number, bi: number): { w: G.World; log: Ran[] } {
+  const w = replayTo(ci, bi);
+  const log: Ran[] = [];
+  autoBeat(chapters[ci].beats[bi], w, (cmd, who, d) => {
+    log.push({ kind: "cmd", text: cmd, who });
+    const r = exec(w, cmd, who, d);
+    if (r.out) log.push({ kind: r.ok ? "out" : "err", text: r.out, who });
+  }, (text, who) => log.push({ kind: "note", text, who }));
+  return { w, log };
+}

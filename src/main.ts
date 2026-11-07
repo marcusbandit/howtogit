@@ -12,7 +12,7 @@
 import * as G from "./model.js";
 import type { World } from "./model.js";
 import { chapters, MAIN_FILE, type Act, type Beat, type Who } from "./story.js";
-import { exec, replayTo } from "./engine.js";
+import { exec, replayTo, finishBeat } from "./engine.js";
 import { showIntro, introSeen, whyGithub } from "./intro.js";
 import { explain } from "./explain.js";
 import { circlePath, linePath, smooth, drawOn, el, prefersReduced, type Point } from "./sketch.js";
@@ -267,9 +267,10 @@ function back() {
     const i = flatIndex(ci, bi);
     if (i <= 0) return;
     const prev = flat[i - 1];
-    w = replayTo(ci, bi); // the world right after the previous step
+    const done = finishBeat(prev.c, prev.b); // the previous step, done the typical way
+    w = done.w;
     ci = prev.c; bi = prev.b;
-    log = [];
+    log = done.log;
     beatDone = true;
     termDesk = beatDesk();
   }
@@ -296,9 +297,10 @@ function jumpBeat(i: number) {
       beatDone = snap.beatDone;
       termDesk = beatDesk();
     } else {
-      w = replayTo(ci, i + 1);
+      const done = finishBeat(ci, i);
+      w = done.w;
       bi = i;
-      log = [];
+      log = done.log;
       beatDone = true;
       termDesk = beatDesk();
       history = [];
@@ -1170,7 +1172,9 @@ function boot() {
   $(".brand").addEventListener("click", (e) => { e.preventDefault(); intro(); });
   if (q.has("done")) {
     // dev: finish the current beat the typical way, to screenshot its after state
-    w = replayTo(ci, bi + 1);
+    const done = finishBeat(ci, bi);
+    w = done.w;
+    log = done.log;
     beatDone = true;
     instant = true; renderAll(); instant = false;
   }
