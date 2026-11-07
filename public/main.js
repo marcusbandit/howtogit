@@ -16,6 +16,24 @@ import { showIntro, introSeen, whyGithub } from "./intro.js";
 import { circlePath, linePath, smooth, drawOn, el, prefersReduced } from "./sketch.js";
 const $ = (s) => document.querySelector(s);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/* syntax colours for a command line: the program, what it should do, flags,
+ * quoted text, addresses and paths, and everything else (names, ids) */
+function hl(cmd) {
+    const parts = cmd.match(/"[^"]*"|'[^']*'|\S+|\s+/g) ?? [];
+    let word = 0;
+    return parts.map((t) => {
+        if (/^\s+$/.test(t))
+            return t;
+        word++;
+        const cls = word === 1 ? "tk-prog"
+            : word === 2 || (word === 3 && /^(remote|worktree|pr)$/.test(parts.filter((x) => !/^\s+$/.test(x))[1] ?? "")) ? "tk-sub"
+                : /^["']/.test(t) ? "tk-str"
+                    : /^-/.test(t) ? "tk-flag"
+                        : /:\/\/|^\.\.?\/|\.git$|github\.com/.test(t) ? "tk-url"
+                            : "tk-arg";
+        return `<span class="${cls}">${esc(t)}</span>`;
+    }).join("");
+}
 /* ------------------------------------------------------------------ state */
 const KEY = "htg-story-2";
 let w = G.freshWorld();
@@ -391,7 +409,7 @@ function doHtml(b) {
 function buttonsHtml(mine, acts) {
     const act = (a) => `<div class="act">
       ${inputsHtml(a, acts.indexOf(a))}
-      <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go btn--ide"}" data-run="${acts.indexOf(a)}">${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}</button>
+      <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go btn--ide"} ${beatDone ? "is-done" : ""}" data-run="${acts.indexOf(a)}" ${beatDone ? "disabled" : ""}>${beatDone ? '<span aria-hidden="true">✓</span> Done' : `${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}`}</button>
     </div>`;
     const local = mine.filter((a) => a.look !== "github"), web = mine.filter((a) => a.look === "github");
     const d = w.repos.you?.desks[beatDesk()];
@@ -425,7 +443,7 @@ function prompt() {
 function termHtml(readOnly = false) {
     const lines = log.map((l) => {
         if (l.kind === "cmd")
-            return `<div class="t-cmd ${l.who === "albert" ? "t-friend" : ""}">${l.who === "albert" ? "<span class=\"who\">albert's laptop $</span>" : "<span class=\"who\">$</span>"} ${esc(l.text)}</div>`;
+            return `<div class="t-cmd ${l.who === "albert" ? "t-friend" : ""}">${l.who === "albert" ? "<span class=\"who\">albert's laptop $</span>" : "<span class=\"who\">$</span>"} ${hl(l.text)}</div>`;
         if (l.kind === "note")
             return `<div class="t-note">${esc(l.text)}</div>`;
         return `<div class="t-${l.kind}">${esc(l.text)}</div>`;
@@ -441,7 +459,7 @@ function commandHtml(mine) {
     return `${termHtml()}
     <details class="hint-cmds"><summary>Not sure what to type?</summary>
       <p>Type ${cmds.length > 1 ? "these, one at a time" : "this"}:</p>
-      ${cmds.map((c) => `<code class="cmd-hint">${esc(c)}</code>`).join("")}
+      ${cmds.map((c) => `<code class="cmd-hint">${hl(c)}</code>`).join("")}
     </details>`;
 }
 /* AI mode: there is no real AI on this page (running one costs money and
@@ -468,7 +486,14 @@ function hoodHtml() {
     const errs = log.filter((l) => l.kind === "err");
     return `<div class="hood">
     <p class="hood__k">Under the hood, that ran:</p>
-    ${cmds.map((l) => `<code class="cmd-hint ${l.who === "albert" ? "is-friend" : ""}">${l.who === "albert" ? "Albert: " : ""}${esc(l.text)}</code>`).join("")}
+    ${cmds.reduce((acc, l) => {
+        const last = acc[acc.length - 1];
+        if (last && last.l.text === l.text && last.l.who === l.who)
+            last.n++;
+        else
+            acc.push({ l, n: 1 });
+        return acc;
+    }, []).map(({ l, n }) => `<code class="cmd-hint ${l.who === "albert" ? "is-friend" : ""}">${l.who === "albert" ? "Albert: " : ""}${hl(l.text)}${n > 1 ? `<span class="cmd-n">×${n}</span>` : ""}</code>`).join("")}
     ${errs.length ? `<pre class="hood__err">${esc(errs[errs.length - 1].text)}</pre>` : ""}
     <details><summary>Show git's full answer</summary><pre>${esc(log.filter((l) => l.kind === "out" || l.kind === "err").map((l) => l.text).join("\n\n")) || "(nothing printed)"}</pre></details>
   </div>`;
@@ -531,7 +556,7 @@ function askAi(text) {
     log.push({
         kind: "ai",
         text: `Sure${msgs.filter(Boolean).length ? `, ${msgs.filter(Boolean).join(" and ")}` : ""}. I'll run ${cmds.length > 1 ? "these git commands" : "this git command"}:
-      ${cmds.map((c) => `<code class="cmd-hint">${esc(c)}</code>`).join("")}
+      ${cmds.map((c) => `<code class="cmd-hint">${hl(c)}</code>`).join("")}
       <button type="button" class="btn btn--small btn--go" data-ai-run>Yes, run ${cmds.length > 1 ? "them" : "it"}</button>`,
         cmds,
     });
