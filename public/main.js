@@ -210,6 +210,8 @@ function runSteps(act, vals) {
     }
     if (ok && worldKey(w) !== startKey)
         ranActs.add(act);
+    if (ok)
+        markArrivals(before, who);
     afterChange();
     celebrate(before, ok, who);
     return ok;
@@ -266,6 +268,8 @@ function runTyped(line) {
     if (r.desk !== undefined)
         termDesk = r.desk;
     focusPlace = placeFor(line, "you");
+    if (r.ok)
+        markArrivals(before, "you");
     afterChange();
     celebrate(before, r.ok);
 }
@@ -307,7 +311,10 @@ function afterChange() {
     const strip = narrow() && focusPlace && !instant && !prefersReduced
         ? document.querySelector(`.place[data-place="${focusPlace}"] .strip`) : null;
     if (strip) {
+        // the page glide is the motion here; the card snaps so the glide starts at once
+        skipEase = true;
         renderLesson();
+        skipEase = false;
         renderTabs();
         worldReady = (async () => {
             await Promise.all($("#lesson").getAnimations().map((m) => m.finished.catch(() => undefined)));
@@ -991,8 +998,9 @@ function slideHere(before, place, wait = 0) {
 }
 /* content that grows or shrinks eases to its new height instead of snapping
  * (fast: 240 ms); the element clips while it moves */
+let skipEase = false;
 function easeHeight(node, from) {
-    if (instant || prefersReduced || !from)
+    if (instant || prefersReduced || !from || skipEase)
         return;
     const to = node.getBoundingClientRect().height;
     if (Math.abs(to - from) < 2)
@@ -1002,6 +1010,24 @@ function easeHeight(node, from) {
     const a = node.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
     a.id = "ease-h";
     a.finished.then(() => node.classList.remove("is-easing"), () => node.classList.remove("is-easing"));
+}
+/* phones: a place that just appeared opens up, its name and then its line,
+ * pushing what's below down smoothly instead of all at once */
+function growIn(place) {
+    if (place.dataset.growing)
+        return;
+    place.dataset.growing = "1";
+    const parts = [place.querySelector(":scope > .place__head"), ...place.querySelectorAll(".strip")].filter(Boolean);
+    const anims = parts.map((el) => {
+        const h = el.getBoundingClientRect().height;
+        el.style.overflow = "hidden";
+        return el.animate([{ height: "0px", opacity: 0 }, { height: `${h}px`, opacity: 1 }], { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)" });
+    });
+    Promise.all(anims.map((a) => a.finished.catch(() => undefined))).then(() => {
+        parts.forEach((el) => (el.style.overflow = ""));
+        place.classList.remove("is-new");
+        delete place.dataset.growing;
+    });
 }
 /* places that move because something above them changed float to their new
  * spot, and places that grew or shrank ease to their new height */
@@ -1096,6 +1122,8 @@ function renderWorld() {
     renderTabs();
     syncScroll();
     floatPlaces(placeRects);
+    if (narrow() && !instant && !prefersReduced)
+        root.querySelectorAll(".place.is-new").forEach(growIn);
 }
 /* the idea in one picture: two computers, one shared copy online */
 function mapHtml(recap = false) {
@@ -1347,10 +1375,12 @@ function drawStrip(id, cols, frame) {
             const col = colorOf(pi === 1 ? L.get(p).br : me.br);
             const path = el("path", { d, class: "edge", stroke: col, "data-to": cid });
             gEdges.append(path);
+            if (arriving.has(`${rid}:${cid}`))
+                path.style.opacity = "0";
             ink(path, `e:${p}>${cid}`);
         });
         const col = colorOf(me.br);
-        const g = el("g", { class: "commit", "data-c": cid, style: `transform-origin:${cx}px ${cy}px` });
+        const g = el("g", { class: "commit", "data-c": cid, style: `transform-origin:${cx}px ${cy}px${arriving.has(`${rid}:${cid}`) ? ";opacity:0" : ""}` });
         const node = el("path", { d: circlePath(cx, cy, 12, seed(cid)), class: "node", stroke: col });
         const t = el("title");
         t.textContent = `${c.msg}\nby ${c.author} · ${G.short(cid)}`;
@@ -1528,29 +1558,68 @@ function celebrateNow(before, who) {
                 return rect && rect.height ? [{ ...s, rect }] : [];
             });
         }
-        for (const [id, r] of Object.entries(w.repos)) {
-            const was = before.have[id] ?? new Set();
-            const fresh = [...placeCommits(r)].filter((c) => !was.has(c)).sort((a, b) => w.commits[a].n - w.commits[b].n);
-            for (const cid of fresh) {
-                const target = nodeEl(id, cid);
-                if (!target)
-                    continue;
-                // came from another place: a dot travels from there to here
-                // what lands on a laptop (clone, pull) always comes from GitHub; what
-                // lands on GitHub comes from whoever pushed it
-                const order = id === "github" ? [who, ...Object.keys(before.have)] : ["github"];
-                const from = order.find((o) => o !== id && before.have[o]?.has(cid) && nodeEl(o, cid));
-                // a place that just appeared slides in first; wait for it to settle
-                if (target.closest(".place.is-new"))
-                    delay = Math.max(delay, 480);
-                if (from)
-                    travel(nodeEl(from, cid), target, id === "github" ? "push" : "pull", delay);
-                else
-                    saved(target, w.commits[cid], staged.filter((s) => s.place === id), delay);
-                delay += 110;
+        // new versions made here pop first; then the ones that came from
+        // another place fly over, staggered. A version made and sent in one go
+        // (Albert commits and pushes) leaves its new dot once that dot has popped.
+        const list = arrivalsOf(before, who);
+        const poppedAt = new Map();
+        for (const a of list.filter((x) => !x.from)) {
+            const target = nodeEl(a.id, a.cid);
+            if (!target)
+                continue;
+            if (target.closest(".place.is-new"))
+                delay = Math.max(delay, 480);
+            const files = staged.filter((s) => s.place === a.id);
+            saved(target, w.commits[a.cid], files, delay);
+            poppedAt.set(a.cid, delay + (files.length ? 420 + files.length * 40 : 0));
+            delay += 110;
+        }
+        for (const a of list.filter((x) => x.from)) {
+            const target = nodeEl(a.id, a.cid), src = nodeEl(a.from, a.cid);
+            if (!target || !src) {
+                landed(a.id, a.cid);
+                continue;
             }
+            if (target.closest(".place.is-new"))
+                delay = Math.max(delay, 480);
+            const start = poppedAt.has(a.cid) ? Math.max(delay, poppedAt.get(a.cid) + 420) : delay;
+            travel(src, target, a.id === "github" ? "push" : "pull", start);
+            delay = start + 110;
         }
     });
+}
+function arrivalsOf(before, who) {
+    const out = [];
+    const maker = who === "albert" ? "albert" : "you";
+    for (const [id, r] of Object.entries(w.repos)) {
+        const was = before.have[id] ?? new Set();
+        const fresh = [...placeCommits(r)].filter((c) => !was.has(c)).sort((a, b) => w.commits[a].n - w.commits[b].n);
+        for (const cid of fresh) {
+            const order = id === "github" ? [who, ...Object.keys(before.have)] : ["github"];
+            let from = order.find((o) => o !== id && before.have[o]?.has(cid) && w.repos[o] && placeCommits(w.repos[o]).has(cid));
+            if (!from && id === "github" && w.repos[maker] && placeCommits(w.repos[maker]).has(cid))
+                from = maker;
+            out.push({ id, cid, from });
+        }
+    }
+    return out;
+}
+/* versions on their way stay hidden in the graph until their dot lands, so a
+ * graph never shows them first, hides them, then flies them in */
+const arriving = new Set();
+function markArrivals(before, who) {
+    if (prefersReduced)
+        return;
+    const list = arrivalsOf(before, who).filter((a) => a.from);
+    list.forEach((a) => arriving.add(`${a.id}:${a.cid}`));
+    // never leave one hidden if its flight is skipped
+    if (list.length)
+        setTimeout(() => list.forEach((a) => landed(a.id, a.cid)), 6000);
+}
+function landed(place, cid) {
+    if (!arriving.delete(`${place}:${cid}`))
+        return;
+    document.querySelectorAll(`[data-strip^="${place}"] [data-c="${cid}"], [data-strip^="${place}"] .edge[data-to="${cid}"]`).forEach((n) => (n.style.opacity = ""));
 }
 function fx() { return $("#fx"); }
 /* a new commit: the packed files fly into the dot, the dot pops, the note floats up */
@@ -1594,14 +1663,15 @@ function travel(from, to, kind, delay) {
         setTimeout(() => fly(from, to, kind), delay);
         return;
     }
+    arriving.add(`${placeOf(to)}:${to.dataset.c}`);
     to.style.opacity = "0";
     // the line into this commit waits for it too, and is drawn as the dot lands
     const lines = [...(to.ownerSVGElement?.querySelectorAll(`.edge[data-to="${to.dataset.c}"]`) ?? [])];
     lines.forEach((l) => { l.style.opacity = "0"; void drawOn(l, { duration: 1 }); });
     setTimeout(() => fly(from, to, kind, lines), delay);
 }
+const placeOf = (n) => (n.closest("[data-strip]")?.dataset.strip ?? "").split(":")[0];
 function fly(from, to, kind, lines = []) {
-    const toStyle = to.style;
     const delay = 0;
     const a = centre(from.getBoundingClientRect()), b = centre(to.getBoundingClientRect());
     const dot = document.createElement("span");
@@ -1610,7 +1680,7 @@ function fly(from, to, kind, lines = []) {
     dot.style.top = `${a.y}px`;
     fx().append(dot);
     if (to instanceof SVGGElement)
-        toStyle.opacity = "0";
+        to.style.opacity = "0";
     const lift = Math.min(60, Math.abs(b.y - a.y) * 0.25);
     dot.animate([
         { transform: "translate(-50%,-50%) scale(.6)" },
@@ -1618,8 +1688,18 @@ function fly(from, to, kind, lines = []) {
         { transform: `translate(calc(-50% + ${b.x - a.x}px), calc(-50% + ${b.y - a.y}px)) scale(.9)` },
     ], { duration: 460, delay, easing: "cubic-bezier(.45,0,.35,1)" }).finished.then(() => {
         dot.remove();
+        if (to instanceof SVGGElement) {
+            // the graph may have been redrawn mid-flight: land on what is there now
+            const place = placeOf(to), cid = to.dataset.c;
+            landed(place, cid);
+            const now = nodeEl(place, cid);
+            if (now && now !== to) {
+                to = now;
+                lines = [...(now.ownerSVGElement?.querySelectorAll(`.edge[data-to="${cid}"]`) ?? [])];
+            }
+        }
         lines.forEach((l) => { l.style.opacity = ""; void drawOn(l, { duration: 240 }); });
-        toStyle.opacity = "";
+        to.style.opacity = "";
         pop(to);
         ring(b, kind === "push" ? "var(--pen-remote)" : "var(--pen-blue)");
     });

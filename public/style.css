@@ -1038,7 +1038,7 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
   .place .place__grid:not(:last-child) > .strip { border-bottom: 1.5px dashed var(--line); border-radius: 0; }
   .place--github > .place__head, .place--github .strip { border-color: color-mix(in srgb, var(--pen-remote) 60%, transparent); background: color-mix(in srgb, var(--pen-remote) 6%, var(--card)); }
   .place--albert > .place__head, .place--albert .strip { border-color: color-mix(in srgb, var(--friend) 55%, transparent); }
-  .place.is-new > .place__head, .place.is-new .strip { animation: rise .5s ease both; }
+  .place > .place__head, .place .strip { box-sizing: border-box; }
   .place__head h3 { font-size: 20px; }
   .place__head .ico { transform: scale(.85); }
   .place__sub { display: none; }
