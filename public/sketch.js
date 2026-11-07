@@ -182,8 +182,12 @@ export function drawOn(pathEl, opts = {}) {
         // precision than performance.now() (Firefox with stricter privacy), and
         // mixing the two can make a line jump straight to finished
         const start = performance.now() + delay;
+        let ticks = 0;
+        const dbg = window.__htgDbg;
+        dbg?.(`pen start len=${Math.round(len)} dur=${duration} delay=${delay}`);
         const tick = () => {
             const now = performance.now();
+            ticks++;
             if (drawIds.get(pathEl) !== id) {
                 nib?.remove();
                 resolve();
@@ -201,6 +205,7 @@ export function drawOn(pathEl, opts = {}) {
                 requestAnimationFrame(tick);
             }
             else {
+                dbg?.(`pen done len=${Math.round(len)} ticks=${ticks} took=${Math.round(performance.now() - start)}ms`);
                 pathEl.style.strokeDasharray = "none";
                 if (nib) {
                     const fading = nib;
