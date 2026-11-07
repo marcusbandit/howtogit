@@ -301,8 +301,25 @@ function afterChange() {
     }
     else if (beatDone && beat().live && !beat().done(w))
         beatDone = false;
-    renderWorld();
-    renderLesson();
+    // phones: the graph is usually below the screen. The card shows the result
+    // first, the page glides to the graph, and only then does the graph change,
+    // so HEAD moving and new versions landing happen where you can see them
+    const strip = narrow() && focusPlace && !instant && !prefersReduced
+        ? document.querySelector(`.place[data-place="${focusPlace}"] .strip`) : null;
+    if (strip) {
+        renderLesson();
+        renderTabs();
+        worldReady = (async () => {
+            await Promise.all($("#lesson").getAnimations().map((m) => m.finished.catch(() => undefined)));
+            await bringIntoView(overview(), strip);
+            renderWorld();
+        })();
+    }
+    else {
+        renderWorld();
+        renderLesson();
+        worldReady = Promise.resolve();
+    }
     renderDeck();
     save();
     if (window.innerWidth >= 860)
@@ -311,6 +328,7 @@ function afterChange() {
     focusPlace = null;
 }
 let lastPlace = null;
+let worldReady = Promise.resolve();
 /* phones show one place at a time, picked with tabs; a step's change switches
  * to the place it happened in, and a dot marks any other place that changed */
 let phoneTab = "you";
@@ -558,7 +576,8 @@ function renderLesson() {
     if (beatDone && justDone) {
         justDone = false;
         // steps you click around in (live) keep still; others bring the result into view
-        if (!b.live)
+        // (on a phone, a change to a place scrolls to its graph instead, once, so nothing fights)
+        if (!b.live && !(narrow() && focusPlace))
             box.querySelector(".after")?.scrollIntoView({ block: "nearest", behavior: prefersReduced ? "auto" : "smooth" });
     }
     if (beatDone) {
@@ -1445,7 +1464,36 @@ function snapshotFx() {
     const staged = [...document.querySelectorAll("[data-state-key]")]
         .filter((c) => /^staged/.test(c.dataset.state) && c.dataset.state !== "staged-deleted")
         .map((c) => ({ path: c.dataset.path, place: c.dataset.stateKey.split(":")[0], rect: c.closest(".file-row").getBoundingClientRect() }));
-    return { have, staged };
+    return { have, staged, y: window.scrollY };
+}
+/* phones: every place's history line sits together in one overview. Before
+ * anything changes in it, the page glides just far enough that the overview
+ * sits above the step bar (or, if it's too tall, the line that changes) */
+const overview = () => [...document.querySelectorAll("#world .place > .place__head, #world .strip")].filter((e) => e.getBoundingClientRect().height > 0);
+function bringIntoView(els, focus) {
+    if (!els.length)
+        return Promise.resolve();
+    const rs = els.map((e) => e.getBoundingClientRect());
+    let r = { top: Math.min(...rs.map((x) => x.top)), bottom: Math.max(...rs.map((x) => x.bottom)) };
+    const bar = document.querySelector(".lesson__nav");
+    const floor = (bar && getComputedStyle(bar).position === "fixed" ? bar.getBoundingClientRect().top : window.innerHeight) - 16;
+    if (r.bottom - r.top > floor - 12 && focus)
+        r = focus.getBoundingClientRect();
+    let dy = r.bottom > floor ? r.bottom - floor : 0;
+    if (r.top - dy < 12)
+        dy = r.top - 12;
+    if (Math.abs(dy) < 4)
+        return Promise.resolve();
+    window.scrollBy({ top: dy, behavior: prefersReduced ? "auto" : "smooth" });
+    return new Promise((res) => {
+        let done = false;
+        const fin = () => { if (!done) {
+            done = true;
+            res();
+        } };
+        window.addEventListener("scrollend", fin, { once: true });
+        setTimeout(fin, 700);
+    });
 }
 const nodeEl = (place, cid) => document.querySelector(`[data-strip="${place}"] [data-c="${cid}"]`);
 const centre = (r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
@@ -1457,13 +1505,29 @@ function celebrate(before, ok, who = "you") {
     }
     if (prefersReduced)
         return;
+    void worldReady.then(() => celebrateNow(before, who));
+}
+function celebrateNow(before, who) {
     const wait = Math.max(0, settleUntil - performance.now());
     if (wait > 0) {
-        setTimeout(() => celebrate(before, ok, who), wait + 20);
+        setTimeout(() => celebrateNow(before, who), wait + 20);
         return;
     }
-    requestAnimationFrame(() => {
+    requestAnimationFrame(async () => {
         let delay = 0;
+        let staged = before.staged;
+        if (narrow()) {
+            // the card above grows with the result first; measure only once it has
+            const moving = [$("#lesson"), ...document.querySelectorAll("#world .place")].flatMap((el) => el.getAnimations());
+            await Promise.all(moving.map((m) => m.finished.catch(() => undefined)));
+            await bringIntoView(overview(), document.querySelector(`.place[data-place="${phoneTab}"] .strip`));
+            // the files fly from where their rows sit now, not where they sat before
+            staged = staged.flatMap((s) => {
+                const row = document.querySelector(`.place[data-place="${s.place}"] [data-file="${CSS.escape(s.path)}"]`)?.closest(".file-row");
+                const rect = row?.getBoundingClientRect();
+                return rect && rect.height ? [{ ...s, rect }] : [];
+            });
+        }
         for (const [id, r] of Object.entries(w.repos)) {
             const was = before.have[id] ?? new Set();
             const fresh = [...placeCommits(r)].filter((c) => !was.has(c)).sort((a, b) => w.commits[a].n - w.commits[b].n);
@@ -1482,7 +1546,7 @@ function celebrate(before, ok, who = "you") {
                 if (from)
                     travel(nodeEl(from, cid), target, id === "github" ? "push" : "pull", delay);
                 else
-                    saved(target, w.commits[cid], before.staged.filter((s) => s.place === id), delay);
+                    saved(target, w.commits[cid], staged.filter((s) => s.place === id), delay);
                 delay += 110;
             }
         }
@@ -1526,6 +1590,10 @@ function saved(target, c, files, delay) {
 }
 /* a commit travels between places: a dot flies from one row to the other */
 function travel(from, to, kind, delay) {
+    if (!(to instanceof SVGGElement)) {
+        setTimeout(() => fly(from, to, kind), delay);
+        return;
+    }
     to.style.opacity = "0";
     // the line into this commit waits for it too, and is drawn as the dot lands
     const lines = [...(to.ownerSVGElement?.querySelectorAll(`.edge[data-to="${to.dataset.c}"]`) ?? [])];
@@ -1533,6 +1601,7 @@ function travel(from, to, kind, delay) {
     setTimeout(() => fly(from, to, kind, lines), delay);
 }
 function fly(from, to, kind, lines = []) {
+    const toStyle = to.style;
     const delay = 0;
     const a = centre(from.getBoundingClientRect()), b = centre(to.getBoundingClientRect());
     const dot = document.createElement("span");
@@ -1540,7 +1609,8 @@ function fly(from, to, kind, lines = []) {
     dot.style.left = `${a.x}px`;
     dot.style.top = `${a.y}px`;
     fx().append(dot);
-    to.style.opacity = "0";
+    if (to instanceof SVGGElement)
+        toStyle.opacity = "0";
     const lift = Math.min(60, Math.abs(b.y - a.y) * 0.25);
     dot.animate([
         { transform: "translate(-50%,-50%) scale(.6)" },
@@ -1549,7 +1619,7 @@ function fly(from, to, kind, lines = []) {
     ], { duration: 460, delay, easing: "cubic-bezier(.45,0,.35,1)" }).finished.then(() => {
         dot.remove();
         lines.forEach((l) => { l.style.opacity = ""; void drawOn(l, { duration: 240 }); });
-        to.style.opacity = "";
+        toStyle.opacity = "";
         pop(to);
         ring(b, kind === "push" ? "var(--pen-remote)" : "var(--pen-blue)");
     });

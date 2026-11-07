@@ -276,8 +276,24 @@ function afterChange() {
     w.vars[`learned:${beat().id}`] = "1";
     beat().onDone?.(w);
   } else if (beatDone && beat().live && !beat().done(w)) beatDone = false;
-  renderWorld();
-  renderLesson();
+  // phones: the graph is usually below the screen. The card shows the result
+  // first, the page glides to the graph, and only then does the graph change,
+  // so HEAD moving and new versions landing happen where you can see them
+  const strip = narrow() && focusPlace && !instant && !prefersReduced
+    ? document.querySelector(`.place[data-place="${focusPlace}"] .strip`) : null;
+  if (strip) {
+    renderLesson();
+    renderTabs();
+    worldReady = (async () => {
+      await Promise.all($("#lesson").getAnimations().map((m) => m.finished.catch(() => undefined)));
+      await bringIntoView(overview(), strip);
+      renderWorld();
+    })();
+  } else {
+    renderWorld();
+    renderLesson();
+    worldReady = Promise.resolve();
+  }
   renderDeck();
   save();
   if (window.innerWidth >= 860) showPlace(focusPlace);
@@ -285,6 +301,7 @@ function afterChange() {
   focusPlace = null;
 }
 let lastPlace: string | null = null;
+let worldReady: Promise<void> = Promise.resolve();
 
 /* phones show one place at a time, picked with tabs; a step's change switches
  * to the place it happened in, and a dot marks any other place that changed */
@@ -524,7 +541,8 @@ function renderLesson() {
   if (beatDone && justDone) {
     justDone = false;
     // steps you click around in (live) keep still; others bring the result into view
-    if (!b.live) box.querySelector(".after")?.scrollIntoView({ block: "nearest", behavior: prefersReduced ? "auto" : "smooth" });
+    // (on a phone, a change to a place scrolls to its graph instead, once, so nothing fights)
+    if (!b.live && !(narrow() && focusPlace)) box.querySelector(".after")?.scrollIntoView({ block: "nearest", behavior: prefersReduced ? "auto" : "smooth" });
   }
   if (beatDone) {
     const nb = box.querySelector<HTMLButtonElement>("[data-next]");
@@ -1347,14 +1365,37 @@ function syncScroll() {
 
 /* what each place held before an action, and where its staged files sat on
  * screen, so the change can be animated from the old picture to the new */
-interface FxSnap { have: Record<string, Set<string>>; staged: { path: string; place: string; rect: DOMRect }[] }
+interface FxSnap { have: Record<string, Set<string>>; staged: { path: string; place: string; rect: DOMRect }[]; y: number }
 function snapshotFx(): FxSnap {
   const have: Record<string, Set<string>> = {};
   for (const [id, r] of Object.entries(w.repos)) have[id] = placeCommits(r);
   const staged = [...document.querySelectorAll<HTMLElement>("[data-state-key]")]
     .filter((c) => /^staged/.test(c.dataset.state!) && c.dataset.state !== "staged-deleted")
     .map((c) => ({ path: c.dataset.path!, place: c.dataset.stateKey!.split(":")[0], rect: c.closest(".file-row")!.getBoundingClientRect() }));
-  return { have, staged };
+  return { have, staged, y: window.scrollY };
+}
+
+/* phones: every place's history line sits together in one overview. Before
+ * anything changes in it, the page glides just far enough that the overview
+ * sits above the step bar (or, if it's too tall, the line that changes) */
+const overview = () => [...document.querySelectorAll("#world .place > .place__head, #world .strip")].filter((e) => e.getBoundingClientRect().height > 0);
+function bringIntoView(els: Element[], focus: Element | null): Promise<void> {
+  if (!els.length) return Promise.resolve();
+  const rs = els.map((e) => e.getBoundingClientRect());
+  let r = { top: Math.min(...rs.map((x) => x.top)), bottom: Math.max(...rs.map((x) => x.bottom)) };
+  const bar = document.querySelector<HTMLElement>(".lesson__nav");
+  const floor = (bar && getComputedStyle(bar).position === "fixed" ? bar.getBoundingClientRect().top : window.innerHeight) - 16;
+  if (r.bottom - r.top > floor - 12 && focus) r = focus.getBoundingClientRect();
+  let dy = r.bottom > floor ? r.bottom - floor : 0;
+  if (r.top - dy < 12) dy = r.top - 12;
+  if (Math.abs(dy) < 4) return Promise.resolve();
+  window.scrollBy({ top: dy, behavior: prefersReduced ? "auto" : "smooth" });
+  return new Promise((res) => {
+    let done = false;
+    const fin = () => { if (!done) { done = true; res(); } };
+    window.addEventListener("scrollend", fin, { once: true });
+    setTimeout(fin, 700);
+  });
 }
 
 const nodeEl = (place: string, cid: string) =>
@@ -1368,10 +1409,26 @@ function celebrate(before: FxSnap, ok: boolean, who: Who = "you") {
     return;
   }
   if (prefersReduced) return;
+  void worldReady.then(() => celebrateNow(before, who));
+}
+function celebrateNow(before: FxSnap, who: Who) {
   const wait = Math.max(0, settleUntil - performance.now());
-  if (wait > 0) { setTimeout(() => celebrate(before, ok, who), wait + 20); return; }
-  requestAnimationFrame(() => {
+  if (wait > 0) { setTimeout(() => celebrateNow(before, who), wait + 20); return; }
+  requestAnimationFrame(async () => {
     let delay = 0;
+    let staged = before.staged;
+    if (narrow()) {
+      // the card above grows with the result first; measure only once it has
+      const moving = [$("#lesson"), ...document.querySelectorAll("#world .place")].flatMap((el) => el.getAnimations());
+      await Promise.all(moving.map((m) => m.finished.catch(() => undefined)));
+      await bringIntoView(overview(), document.querySelector(`.place[data-place="${phoneTab}"] .strip`));
+      // the files fly from where their rows sit now, not where they sat before
+      staged = staged.flatMap((s) => {
+        const row = document.querySelector(`.place[data-place="${s.place}"] [data-file="${CSS.escape(s.path)}"]`)?.closest(".file-row");
+        const rect = row?.getBoundingClientRect();
+        return rect && rect.height ? [{ ...s, rect }] : [];
+      });
+    }
     for (const [id, r] of Object.entries(w.repos)) {
       const was = before.have[id] ?? new Set<string>();
       const fresh = [...placeCommits(r)].filter((c) => !was.has(c)).sort((a, b) => w.commits[a].n - w.commits[b].n);
@@ -1386,7 +1443,7 @@ function celebrate(before: FxSnap, ok: boolean, who: Who = "you") {
         // a place that just appeared slides in first; wait for it to settle
         if (target.closest(".place.is-new")) delay = Math.max(delay, 480);
         if (from) travel(nodeEl(from, cid)!, target, id === "github" ? "push" : "pull", delay);
-        else saved(target, w.commits[cid], before.staged.filter((s) => s.place === id), delay);
+        else saved(target, w.commits[cid], staged.filter((s) => s.place === id), delay);
         delay += 110;
       }
     }
@@ -1432,14 +1489,16 @@ function saved(target: SVGGElement, c: G.Commit, files: { path: string; rect: DO
 }
 
 /* a commit travels between places: a dot flies from one row to the other */
-function travel(from: SVGGElement, to: SVGGElement, kind: "push" | "pull", delay: number) {
+function travel(from: Element, to: Element, kind: "push" | "pull", delay: number) {
+  if (!(to instanceof SVGGElement)) { setTimeout(() => fly(from, to, kind), delay); return; }
   to.style.opacity = "0";
   // the line into this commit waits for it too, and is drawn as the dot lands
   const lines = [...(to.ownerSVGElement?.querySelectorAll<SVGPathElement>(`.edge[data-to="${to.dataset.c}"]`) ?? [])];
   lines.forEach((l) => { l.style.opacity = "0"; void drawOn(l, { duration: 1 }); });
   setTimeout(() => fly(from, to, kind, lines), delay);
 }
-function fly(from: SVGGElement, to: SVGGElement, kind: "push" | "pull", lines: SVGPathElement[] = []) {
+function fly(from: Element, to: Element, kind: "push" | "pull", lines: SVGPathElement[] = []) {
+  const toStyle = (to as HTMLElement | SVGGElement).style;
   const delay = 0;
   const a = centre(from.getBoundingClientRect()), b = centre(to.getBoundingClientRect());
   const dot = document.createElement("span");
@@ -1447,7 +1506,7 @@ function fly(from: SVGGElement, to: SVGGElement, kind: "push" | "pull", lines: S
   dot.style.left = `${a.x}px`;
   dot.style.top = `${a.y}px`;
   fx().append(dot);
-  to.style.opacity = "0";
+  if (to instanceof SVGGElement) toStyle.opacity = "0";
   const lift = Math.min(60, Math.abs(b.y - a.y) * 0.25);
   dot.animate([
     { transform: "translate(-50%,-50%) scale(.6)" },
@@ -1456,13 +1515,13 @@ function fly(from: SVGGElement, to: SVGGElement, kind: "push" | "pull", lines: S
   ], { duration: 460, delay, easing: "cubic-bezier(.45,0,.35,1)" }).finished.then(() => {
     dot.remove();
     lines.forEach((l) => { l.style.opacity = ""; void drawOn(l, { duration: 240 }); });
-    to.style.opacity = "";
+    toStyle.opacity = "";
     pop(to);
     ring(b, kind === "push" ? "var(--pen-remote)" : "var(--pen-blue)");
   });
 }
 
-function pop(g: SVGGElement) {
+function pop(g: Element) {
   g.classList.remove("is-pop");
   void g.getBoundingClientRect();
   g.classList.add("is-pop");

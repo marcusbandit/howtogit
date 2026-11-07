@@ -1018,11 +1018,34 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
   .wtab .ico { flex: none; transform: scale(.8); }
   .wtab[aria-selected="true"] { color: var(--ink); border-color: var(--ink); box-shadow: 2px 2px 0 var(--line); }
   .wtab__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-  .world__tabs:not(:empty) ~ .place:not(.is-shown) { position: absolute; left: 0; right: 0; top: 0; height: 0; padding-block: 0; border-block-width: 0;
-    overflow: hidden; visibility: hidden; pointer-events: none; }
-  .world__tabs:not(:empty) ~ .place .place__head > .ico, .world__tabs:not(:empty) ~ .place .place__head > h3 { display: none; }
-  .place__head { margin-bottom: 8px; }
+  /* every history line sits together on top as one overview, so a push or a
+   * pull flies between lines you can all see; the files sit below in tabs,
+   * one place at a time. The panels flatten into the page to allow this. */
+  .world { gap: 0; }
+  .world > .place, .place__rows, .place__grid { display: contents; }
+  .world__recap:not(:empty) { order: 0; margin-bottom: 4px; }
+  .place--github > .place__head { order: 1; } .place--github .strip { order: 2; }
+  .place--you > .place__head { order: 3; } .place--you .strip { order: 4; }
+  .place--albert > .place__head { order: 5; } .place--albert .strip { order: 6; }
+  .world__tabs { order: 10; margin-top: 16px; }
+  .place--github .place__left, .place--github .place__prs { order: 11; }
+  .place--you .place__left { order: 12; }
+  .place--albert .place__left { order: 13; }
+  .place .place__left, .place .place__prs:not(:empty) { margin-top: 10px; }
+  .place:not(.is-shown) .place__left, .place:not(.is-shown) .place__prs { display: none; }
+  .place > .place__head { margin: 8px 0 0; padding: 8px 12px 0; background: var(--card); border: 2px solid var(--line-strong); border-bottom: 0; border-radius: 12px 12px 0 0; }
+  .place .strip { background: var(--card); border: 2px solid var(--line-strong); border-top: 0; border-radius: 0 0 12px 12px; padding: 0 8px 4px; }
+  .place .place__grid:not(:last-child) > .strip { border-bottom: 1.5px dashed var(--line); border-radius: 0; }
+  .place--github > .place__head, .place--github .strip { border-color: color-mix(in srgb, var(--pen-remote) 60%, transparent); background: color-mix(in srgb, var(--pen-remote) 6%, var(--card)); }
+  .place--albert > .place__head, .place--albert .strip { border-color: color-mix(in srgb, var(--friend) 55%, transparent); }
+  .place.is-new > .place__head, .place.is-new .strip { animation: rise .5s ease both; }
+  .place__head h3 { font-size: 20px; }
+  .place__head .ico { transform: scale(.85); }
+  .place__sub { display: none; }
+  .place__head .badge { font-size: 12px; padding: 1px 8px; }
+  .wtab.is-pop { animation: tab-pop .5s cubic-bezier(.2,1.6,.4,1); }
 }
+@keyframes tab-pop { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: none; } }
 @media (max-width: 520px) {
   body:not([data-intro]) .brand { display: none; }
   .wtab .ico { display: none; }
