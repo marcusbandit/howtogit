@@ -1034,6 +1034,24 @@ function boot() {
   });
   $("#lesson").addEventListener("animationend", (e) => (e.target as HTMLElement).classList.remove("shake"));
   $("#deck-btn").addEventListener("click", openDeck);
+  // the pressing hand stays while the mouse button is held, wherever it is,
+  // and each click drops a little ink ring
+  document.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "mouse" || (e.target as HTMLElement).closest?.("input, textarea")) return;
+    const target = (e.target as HTMLElement).closest?.("button:not(:disabled), a, summary, label, [role=radio], [data-file], .why");
+    if (target) document.documentElement.classList.add("is-pressing");
+    if (prefersReduced) return;
+    const r = document.createElement("span");
+    r.className = "fx-click";
+    r.style.left = `${e.clientX}px`;
+    r.style.top = `${e.clientY}px`;
+    $("#fx").append(r);
+    r.animate([{ transform: "translate(-50%,-50%) scale(.3)", opacity: 0.9 }, { transform: "translate(-50%,-50%) scale(1.5)", opacity: 0 }],
+      { duration: 380, easing: "cubic-bezier(.2,.7,.3,1)" }).finished.then(() => r.remove());
+  });
+  const release = () => document.documentElement.classList.remove("is-pressing");
+  document.addEventListener("pointerup", release);
+  document.addEventListener("pointercancel", release);
   // the "why GitHub?" note opens on tap too (phones have no hover), and closes on the next tap anywhere
   document.addEventListener("click", (e) => {
     const why = (e.target as HTMLElement).closest(".why");
