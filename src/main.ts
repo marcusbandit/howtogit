@@ -31,8 +31,10 @@ function explainHtml(cmd: string): string {
   if (!e || e.parts.length < 2) return "";
   return `<span class="explain" tabindex="0" role="button" aria-label="explain this command">explain<span class="explain__tip" role="tooltip">
     <span class="explain__k">What each part means</span>
-    ${e.parts.map((p) => `<span class="explain__row"><code>${hl(p.t)}</code><span>${esc(p.means)}</span></span>`).join("")}
+    ${e.parts.map((p) => `<span class="explain__row"><code><span class="${p.kind === "program" ? "tk-prog" : p.kind === "command" ? "tk-sub" : p.kind === "flag" ? "tk-flag" : /^["']/.test(p.t) ? "tk-str" : /:\/\/|^\.\.?\/|github\.com/.test(p.t) ? "tk-url" : "tk-arg"}">${esc(p.t)}</span></code><span><i class="kind kind--${p.kind}">${p.kind}</i> ${esc(p.means)}</span></span>`).join("")}
+    ${e.flags ? `<span class="explain__note">A <b>flag</b> starts with a dash and changes how a command behaves. Short flags use one dash (<code>-m</code>), long ones two (<code>--message</code>). Some flags take a <b>value</b> right after them.</span>` : ""}
     ${e.also.length ? `<span class="explain__k">Other ways</span>${e.also.map((a) => `<span class="explain__row"><code>${a.cmd.startsWith("git") || a.cmd.startsWith("gh") ? hl(a.cmd) : esc(a.cmd)}</code><span>${esc(a.means)}</span></span>`).join("")}` : ""}
+    ${e.docs ? `<a class="explain__more" href="${e.docs}" target="_blank" rel="noopener">Learn more: the official manual ↗</a>` : ""}
   </span></span>`;
 }
 

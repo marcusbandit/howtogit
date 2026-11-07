@@ -34,7 +34,7 @@ function insertAfter(text, after, line) {
 }
 const setWork = (w, f, text, i = 0) => { desk(w, i).work[f] = text; };
 export const keyLine = (s) => s.split("\n").find((l) => /deadline/i.test(l)) ?? "";
-const commitAct = (def, files = ".") => ({
+const commitAct = (def, files = "-A") => ({
     label: "Stage and commit",
     inputs: [{ key: "msg", label: "Commit message", def: () => def }],
     steps: (_w, v) => [`git add ${files}`, `git commit -m "${q(v.msg)}"`],
@@ -63,7 +63,7 @@ export const chapters = [
                 id: "stage-all",
                 kind: "act",
                 say: () => `A brand new repository starts out as if the folder were empty: git hasn't kept anything yet. So both files count as a change. They're <b>new</b> files.<br><br>Keeping a version takes two moves. First you <b>stage</b> the changes you want in it, like packing a box. Stage both files.`,
-                acts: [{ label: "Stage all changes", steps: () => ["git add ."], ai: "stage all my files" }],
+                acts: [{ label: "Stage all changes", steps: () => ["git add -A"], ai: "stage all my files" }],
                 done: (w) => !!you(w) && Object.keys(desk(w).work).every((f) => desk(w).index[f] === desk(w).work[f]),
                 after: () => `Both files say <b>staged</b>. Nothing is kept yet: the box is packed, not taped shut.`,
                 term: ["staging", "Choosing what goes into the next version. The command is <code>git add</code>."],

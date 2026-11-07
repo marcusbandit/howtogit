@@ -797,3 +797,11 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 :root[data-theme="dark"] .explain__row code .tk-prog { color: #a9c9ff; } :root[data-theme="dark"] .explain__row code .tk-sub { color: #ffa877; }
 :root[data-theme="dark"] .explain__row code .tk-flag { color: #d4b8ff; } :root[data-theme="dark"] .explain__row code .tk-str { color: #a8e29a; }
 :root[data-theme="dark"] .explain__row code .tk-url { color: #f5cf7e; } :root[data-theme="dark"] .explain__row code .tk-arg { color: #f1e9d8; }
+.kind { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 0 5px; border-radius: 4px; margin-right: 2px; vertical-align: 1px; border: 1px solid currentColor; }
+.kind--program { color: #2357a8; } .kind--command { color: #ad3b10; } .kind--flag { color: #6a43c0; } .kind--value { color: var(--ink-soft); }
+:root[data-theme="dark"] .kind--program { color: #a9c9ff; } :root[data-theme="dark"] .kind--command { color: #ffa877; } :root[data-theme="dark"] .kind--flag { color: #d4b8ff; }
+.explain__note { font-size: 12.5px; color: var(--ink-soft); background: var(--card-2); border-radius: 6px; padding: 6px 8px; }
+.explain__note code { font-family: var(--mono); font-size: 11.5px; }
+.explain__more { font-size: 12.5px; color: var(--accent-deep); justify-self: start; }
+:root[data-theme="dark"] .explain__more { color: var(--accent); }
+.explain__note code { white-space: nowrap; }
