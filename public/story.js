@@ -52,26 +52,26 @@ export const chapters = [
             {
                 id: "init",
                 kind: "act",
-                say: () => `This is your project folder: a report and some notes. For now they're plain files.<br><br>Switch on version history for the folder.`,
-                acts: [{ label: "Turn on version history", steps: () => ["git init"], ai: "set up git for this folder" }],
+                say: () => `This is your project folder: a report and some notes. For now they're plain files.<br><br>To give the folder a version history, you turn it into a <b>repository</b> (<b>repo</b> for short): a folder where git keeps every version of your files.`,
+                acts: [{ label: "Create repository", steps: () => ["git init"], ai: "turn this folder into a git repository" }],
                 done: (w) => !!you(w),
-                after: () => `Git is now watching the folder. Both files say <b>new</b>: git can see them, but it hasn't kept a version of them yet.`,
+                after: () => `The folder is a repository now. Both files say <b>new</b>: git can see them, but it hasn't kept a version of them yet.`,
                 term: ["repository", "A folder with version history switched on. People say <b>repo</b>."],
                 more: [["Do I do this for every project?", "Once per project. Often not even that: you copy an existing project from GitHub instead, which you'll do in chapter 4."]],
             },
             {
                 id: "stage-all",
                 kind: "act",
-                say: () => `Keeping a version takes two moves. First you choose which files go into it, like packing a box. Pack both files.`,
-                acts: [{ label: "Stage all changes", steps: () => ["git add ."], ai: "get all my files ready to commit" }],
+                say: () => `Keeping a version takes two moves. First you <b>stage</b> files: choose which ones go into the next version, like packing a box. Stage both files.`,
+                acts: [{ label: "Stage all changes", steps: () => ["git add ."], ai: "stage all my files" }],
                 done: (w) => !!you(w) && Object.keys(desk(w).work).every((f) => desk(w).index[f] === desk(w).work[f]),
-                after: () => `Both files say <b>packed</b>. Nothing is kept yet: the box is packed, not taped shut.`,
+                after: () => `Both files say <b>staged</b>. Nothing is kept yet: the box is packed, not taped shut.`,
                 term: ["staging", "Choosing what goes into the next version. The command is <code>git add</code>."],
             },
             {
                 id: "commit1",
                 kind: "act",
-                say: () => `Now tape the box shut. Give the version a short note, so you know later what it was.`,
+                say: () => `Now <b>commit</b>: tape the box shut and keep it as a version. Give it a short note, so you know later what it was.`,
                 acts: [{
                         label: "Commit",
                         inputs: [{ key: "msg", label: "Note for this version", def: () => "First version" }],
@@ -94,7 +94,7 @@ export const chapters = [
                     canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /worked best/i, "It was also the cheapest.")),
                 },
                 done: (w) => changed(w),
-                after: () => `report.md now says <b>changed</b>. Saving the file only changed the file; your version from before is untouched. Look at the preview under the folder: green lines are new since that version, red crossed-out lines are gone.`,
+                after: () => `report.md now says <b>changed</b>. Saving the file only changed the file; your version from before is untouched. The preview under the folder shows the <b>diff</b>, what's different since that version: green lines are new, red crossed-out lines are gone.`,
                 term: ["diff", "What's different between your files now and the last version. Green was added, red was removed."],
             },
             {
@@ -113,27 +113,27 @@ export const chapters = [
             {
                 id: "stage-one",
                 kind: "act",
-                say: () => `The report is finished, the notes aren't. Pack <b>only report.md</b>.`,
-                acts: [{ label: "Stage report.md", steps: () => [`git add ${MAIN_FILE}`], ai: "get only report.md ready to commit, not the notes" }],
+                say: () => `The report is finished, the notes aren't. Stage <b>only report.md</b>.`,
+                acts: [{ label: "Stage report.md", steps: () => [`git add ${MAIN_FILE}`], ai: "stage only report.md, not the notes" }],
                 done: (w) => {
                     const d = desk(w), h = headTree(w);
                     return d.index[MAIN_FILE] === d.work[MAIN_FILE] && d.index[MAIN_FILE] !== h[MAIN_FILE] &&
                         d.index["notes.txt"] === h["notes.txt"] && d.work["notes.txt"] !== h["notes.txt"];
                 },
-                after: () => `report.md is <b>packed</b>, notes.txt stays out. That's what staging is for: you choose exactly what goes into each version.`,
+                after: () => `report.md is <b>staged</b>, notes.txt stays out. That's what staging is for: you choose exactly what goes into each version.`,
             },
             {
                 id: "commit2",
                 kind: "act",
-                say: () => `Commit the report change.`,
+                say: () => `Commit the staged report change.`,
                 acts: [{
                         label: "Commit",
                         inputs: [{ key: "msg", label: "Note for this version", def: () => "Improve the report" }],
                         steps: (_w, v) => [`git commit -m "${q(v.msg)}"`],
-                        ai: "commit the packed report change with a note",
+                        ai: "commit the staged report change with a note",
                     }],
                 done: (w) => count(w, you(w)?.branches.main) >= 2,
-                after: () => `Two dots now. notes.txt still says <b>changed</b>: it wasn't packed, so it isn't in that version.`,
+                after: () => `Two dots now. notes.txt still says <b>changed</b>: it wasn't staged, so it isn't in that version.`,
             },
         ],
     },
@@ -165,7 +165,7 @@ export const chapters = [
             {
                 id: "travel",
                 kind: "act",
-                say: () => `You can open any older version too. Open the very first one.`,
+                say: () => `The <b>you are here</b> marker has a git name: <b>HEAD</b>, the version your files match right now. You can move HEAD to any older version. Open the very first one.`,
                 acts: [
                     { label: "Show history", steps: () => ["git log --oneline"], ai: "show me the history of this project" },
                     {
@@ -205,7 +205,7 @@ export const chapters = [
             {
                 id: "publish",
                 kind: "act",
-                say: () => `Everything is on your laptop only. If it breaks, the report is gone, and nobody else can see it.<br><br>Put a copy on GitHub.`,
+                say: () => `Everything is on your laptop only. If it breaks, the report is gone, and nobody else can see it.<br><br>Put a copy on GitHub. A copy of your repository somewhere else is called a <b>remote</b>, and sending your versions to it is a <b>push</b>.`,
                 acts: [{
                         label: "Publish to GitHub",
                         steps: () => [`git remote add origin ${G.REPO_URL}`, "git push -u origin main"],
@@ -257,10 +257,10 @@ export const chapters = [
             {
                 id: "albert-clone",
                 kind: "watch",
-                say: () => `A friend, Albert, wants to help. He copies the project from GitHub onto his laptop.`,
-                acts: [{ label: "Watch Albert copy it", who: "albert", steps: () => [`git clone ${G.REPO_URL}`] }],
+                say: () => `A friend, Albert, wants to help. He makes a <b>clone</b>: a full copy of the project from GitHub onto his laptop, history and all.`,
+                acts: [{ label: "Watch Albert clone it", who: "albert", steps: () => [`git clone ${G.REPO_URL}`] }],
                 done: (w) => !!albert(w),
-                after: () => `Albert has the whole project: the files and every version.`,
+                after: () => `Albert has his clone: the files and every version.`,
                 term: ["clone", "Copy a project from GitHub to your computer, history and all. Usually the first git thing anyone does."],
             },
             {
@@ -282,7 +282,7 @@ export const chapters = [
             {
                 id: "pull",
                 kind: "act",
-                say: () => `Bring Albert's version down to your laptop.`,
+                say: () => `Bring Albert's version down to your laptop. Getting new versions from GitHub is a <b>pull</b>.`,
                 acts: [pullAct],
                 done: (w) => synced(w, "main") && desk(w).branch === "main",
                 after: () => `report.md has Albert's line now, and his dot is on your line with his name on it. <b>Push</b> sends up, <b>pull</b> brings down.`,
@@ -422,7 +422,7 @@ export const chapters = [
             {
                 id: "mergepr",
                 kind: "act",
-                say: () => `Approved. Press merge.`,
+                say: () => `Approved. Press merge: it <b>merges</b> your branch into main.`,
                 acts: [{ label: "Merge pull request", look: "github", steps: () => ["gh pr merge 1 --merge"], ai: "merge the approved pull request" }],
                 done: (w) => w.prs[0]?.state === "merged",
                 after: (w) => `main on GitHub has your summary. A dot with two parents joins ${br(w)} back into main.`,
@@ -543,7 +543,7 @@ export const chapters = [
             {
                 id: "wt",
                 kind: "act",
-                say: () => `Open a <b>second desk</b> instead: another folder on your laptop, on its own branch, sharing the same history.`,
+                say: () => `Open a <b>second desk</b> instead: another folder on your laptop, on its own branch, sharing the same history. Git calls it a <b>worktree</b>.`,
                 acts: [{ label: "Open a second desk", steps: () => ["git worktree add ../my-recipe-fix -b fix-typo main"], ai: "give me a separate folder to fix a typo on main without touching my current work" }],
                 done: (w) => (you(w)?.desks.length ?? 0) >= 2,
                 after: () => `A second folder, <b>my-recipe-fix</b>, on a new branch fix-typo. The chart work sits untouched on desk one.`,

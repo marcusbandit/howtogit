@@ -330,7 +330,7 @@ function renderLesson() {
     ${after || (beatDone && b.term) ? `<div class="after ${fresh ? "is-new" : ""}">
         ${after ? `<p class="after__text"><span class="tick" aria-hidden="true">✓</span> ${after}</p>` : ""}
         ${lastPlace ? `<button type="button" class="see" data-see="${lastPlace}">See what changed ↓</button>` : ""}
-        ${b.term ? `<div class="term"><span class="term__k">New git word</span><b class="term__w">${b.term[0]}</b><p>${b.term[1]}</p></div>` : ""}
+        ${b.term ? `<div class="term"><span class="term__k">Git word</span><b class="term__w">${b.term[0]}</b><p>${b.term[1]}</p></div>` : ""}
       </div>` : ""}
     ${beatDone && b.more ? `<div class="more">${b.more.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${a}</p></details>`).join("")}</div>` : ""}
     ${beatDone && lastOfChapter && ch.goal ? `<div class="chapter-done ${fresh ? "is-new" : ""}"><span class="star" aria-hidden="true">★</span><div><b>Chapter ${ci + 1} done</b><p>You can now ${esc(ch.goal)}.</p></div></div>` : ""}
@@ -568,8 +568,8 @@ const drawn = new Map<string, Set<string>>();
 const COL = 100, X0 = 56;
 
 const STATE_WORDS: Record<G.FileState, string> = {
-  saved: "no changes", changed: "changed", staged: "packed", "staged+changed": "packed, then changed",
-  new: "new", conflict: "conflict!", deleted: "deleted", "staged-deleted": "deletion packed",
+  saved: "no changes", changed: "changed", staged: "staged", "staged+changed": "staged, then changed",
+  new: "new", conflict: "conflict!", deleted: "deleted", "staged-deleted": "deletion staged",
 };
 
 /* parts of the world are only replaced when their markup changed */
