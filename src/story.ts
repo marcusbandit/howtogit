@@ -44,6 +44,8 @@ export interface Beat {
   term?: [string, string];
   more?: [string, string][];
   onDone?: (w: World) => void;
+  live?: boolean; // done is re-checked after every action (you can wander off and back)
+  status?: (w: World) => string; // a short line that changes as you act, in a fixed-height slot
 }
 
 export interface Chapter {
@@ -232,14 +234,16 @@ export const chapters: Chapter[] = [
       {
         id: "travel",
         kind: "act",
-        say: (w) => {
+        say: (w) => `The <b>you are here</b> marker has a git name: <b>HEAD</b>, the commit your files match right now. You can move HEAD to any commit.<br><br>`
+          + `To point at one commit, git uses its <b>ID</b>: the short code in front of each commit, like <code>${G.short(firstCommit(w).id)}</code>. It's made from the commit's contents, so no two are alike.<br><br>`
+          + `Open your very first commit. Feel free to open the others too.`,
+        live: true,
+        status: (w) => {
           const d = desk(w);
-          const first = firstCommit(w);
-          const wrong = d?.detached && d.detached !== first.id ? w.commits[d.detached] : null;
-          return `The <b>you are here</b> marker has a git name: <b>HEAD</b>, the commit your files match right now. You can move HEAD to any commit.<br><br>`
-            + `To point at one commit, git uses its <b>ID</b>: the short code in front of each commit, like <code>${G.short(first.id)}</code>. It's made from the commit's contents, so no two are alike.<br><br>`
-            + (wrong ? `That opened <code>${G.short(wrong.id)}</code>, "${wrong.msg.replace(/</g, "&lt;")}". Not the oldest one yet: it's at the bottom of the history.`
-              : `Open your very first commit.`);
+          if (!d?.detached) return "";
+          const c = w.commits[d.detached];
+          return c.id === firstCommit(w).id ? `Opened <code>${G.short(c.id)}</code>: your first commit.`
+            : `Opened <code>${G.short(c.id)}</code>, "${c.msg.replace(/</g, "&lt;")}". The oldest one is at the bottom.`;
         },
         acts: [{
           label: "Open",

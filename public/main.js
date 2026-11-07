@@ -180,15 +180,17 @@ function undo() {
     renderDeck();
     save();
 }
+let actN = Date.now(); // numbers each action (a clock start keeps it unique across reloads), so the hood can show just the latest one
 function runSteps(act, vals) {
     keepForUndo();
+    actN++;
     const who = act.who ?? "you";
     const deskI = who === "you" ? (mode === "command" ? termDesk : beatDesk()) : 0;
     const before = snapshotFx();
     let ok = true;
     for (const s of act.steps(w, vals)) {
         if (typeof s === "string") {
-            log.push({ kind: "cmd", text: s, who });
+            log.push({ kind: "cmd", text: s, who, act: actN });
             const r = exec(w, s, who, deskI);
             if (r.out)
                 log.push({ kind: r.ok ? "out" : "err", text: r.out, who });
@@ -212,8 +214,9 @@ function runTyped(line) {
     if (!line.trim())
         return;
     keepForUndo();
+    actN++;
     const before = snapshotFx();
-    log.push({ kind: "cmd", text: line.trim(), who: "you" });
+    log.push({ kind: "cmd", text: line.trim(), who: "you", act: actN });
     const r = exec(w, line, "you", termDesk);
     if (r.out === "\f") {
         log = [];
@@ -253,6 +256,8 @@ function afterChange() {
         justDone = true;
         beat().onDone?.(w);
     }
+    else if (beatDone && beat().live && !beat().done(w))
+        beatDone = false;
     renderWorld();
     renderLesson();
     renderDeck();
@@ -471,7 +476,9 @@ function renderLesson() {
         term.scrollTop = term.scrollHeight;
     if (beatDone && justDone) {
         justDone = false;
-        box.querySelector(".after")?.scrollIntoView({ block: "nearest", behavior: prefersReduced ? "auto" : "smooth" });
+        // steps you click around in (live) keep still; others bring the result into view
+        if (!b.live)
+            box.querySelector(".after")?.scrollIntoView({ block: "nearest", behavior: prefersReduced ? "auto" : "smooth" });
     }
     if (beatDone) {
         const nb = box.querySelector("[data-next]");
@@ -528,7 +535,7 @@ function buttonsHtml(mine, acts) {
     </div>`;
     const picker = mine.find((a) => a.pick === "commit");
     if (picker)
-        return historyHtml(acts.indexOf(picker));
+        return historyHtml(acts.indexOf(picker)) + statusHtml();
     const local = mine.filter((a) => a.look !== "github"), web = mine.filter((a) => a.look === "github");
     const d = w.repos.you?.desks[beatDesk()];
     const where = d ? (d.detached ? `old version ${G.short(d.detached)}` : d.branch ?? "") : "";
@@ -612,9 +619,14 @@ function historyHtml(pickAct = -1) {
     <ol class="hist__list">${list.map((c) => `<li class="${c.id === head ? "is-head" : ""}">
       <code class="hist__id">${G.short(c.id)}</code><span class="hist__msg">${esc(c.msg)}</span>
       <span class="hist__who">${esc(c.author)}</span>${c.id === head ? `<span class="hist__head">${marker}</span>`
-        : pickAct >= 0 && !beatDone ? `<button type="button" class="hist__open" data-run="${pickAct}" data-pick="${G.short(c.id)}">Open</button>` : "<span></span>"}
+        : pickAct >= 0 ? `<button type="button" class="hist__open" data-run="${pickAct}" data-pick="${G.short(c.id)}">Open</button>` : "<span></span>"}
     </li>`).join("")}</ol>
   </div>`;
+}
+/* a beat's changing status line, in a slot that keeps its height */
+function statusHtml() {
+    const st = beat().status;
+    return st ? `<p class="status" aria-live="polite">${st(w)}</p>` : "";
 }
 /* in buttons and AI mode, show which git commands actually ran */
 function hoodHtml() {
@@ -622,16 +634,21 @@ function hoodHtml() {
     if (!cmds.length)
         return "";
     const errs = log.filter((l) => l.kind === "err");
-    return `<div class="hood">
-    <p class="hood__k">Under the hood, that ran:</p>
-    ${cmds.reduce((acc, l) => {
+    // the latest action's commands are shown; anything before folds away
+    const lastAct = Math.max(...cmds.map((l) => l.act ?? 0));
+    const now = cmds.filter((l) => (l.act ?? 0) === lastAct), earlier = cmds.filter((l) => (l.act ?? 0) !== lastAct);
+    const rows = (list) => list.reduce((acc, l) => {
         const last = acc[acc.length - 1];
         if (last && last.l.text === l.text && last.l.who === l.who)
             last.n++;
         else
             acc.push({ l, n: 1 });
         return acc;
-    }, []).map(({ l, n }) => `<div class="cmd-row"><code class="cmd-hint ${l.who === "albert" ? "is-friend" : ""}">${l.who === "albert" ? "Albert: " : ""}${hl(l.text)}${n > 1 ? `<span class="cmd-n">×${n}</span>` : ""}</code>${explainHtml(l.text)}</div>`).join("")}
+    }, []).map(({ l, n }) => `<div class="cmd-row"><code class="cmd-hint ${l.who === "albert" ? "is-friend" : ""}">${l.who === "albert" ? "Albert: " : ""}${hl(l.text)}${n > 1 ? `<span class="cmd-n">×${n}</span>` : ""}</code>${explainHtml(l.text)}</div>`).join("");
+    return `<div class="hood">
+    <p class="hood__k">Under the hood, that ran:</p>
+    ${earlier.length ? `<details class="hood__earlier"><summary>Show ${earlier.length} earlier command${earlier.length > 1 ? "s" : ""}</summary>${rows(earlier)}</details>` : ""}
+    ${rows(now)}
     ${errs.length ? `<pre class="hood__err">${esc(errs[errs.length - 1].text)}</pre>` : ""}
     <details><summary>Show git's full answer</summary><pre>${esc(log.filter((l) => l.kind === "out" || l.kind === "err").map((l) => l.text).join("\n\n")) || "(nothing printed)"}</pre></details>
   </div>`;

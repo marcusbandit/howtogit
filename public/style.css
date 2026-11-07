@@ -894,3 +894,9 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .here__arrow { fill: var(--ink); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
 .here { transform-box: fill-box; transform-origin: center; }
 .strip.is-gliding { overflow-x: hidden; }
+/* a status line that changes as you act, in a slot that keeps its height */
+.status { min-height: calc(2 * 1.5em); font-size: 14px; line-height: 1.5; color: var(--ink-soft); margin: 0; }
+.status code { font-family: var(--mono); font-size: inherit; background: var(--card-2); padding: 0 4px; border-radius: 4px; color: var(--pen-blue); }
+.hood__earlier summary { font-size: 12px; color: var(--ink-soft); margin: 2px 0 4px; }
+.hood__earlier[open] { opacity: .7; }
+.hist__cols, .hist__list li { grid-template-columns: 64px minmax(0, 1fr) 40px 96px; }
