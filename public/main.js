@@ -1371,8 +1371,10 @@ function drawStrip(id, cols, frame) {
     drawn.set(id, seen);
     const gEdges = el("g", { class: "edges" }), gNodes = el("g", { class: "nodes" }), gLabels = el("g", { class: "labels" });
     svg.append(gEdges, gNodes, gLabels);
-    // a new commit's line draws first and its dot is inked as the line arrives
-    const inkedInto = new Set();
+    // a new commit's line draws first, at an even pace that takes longer the
+    // longer it is (a branch's corner about half a second), and its dot is
+    // inked as the line arrives
+    const inkedInto = new Map();
     const ink = (p, key, dur = 400, into) => {
         if (frame)
             return;
@@ -1381,9 +1383,14 @@ function drawStrip(id, cols, frame) {
             return;
         }
         seen.add(key);
-        if (into)
-            inkedInto.add(into);
-        const delay = !into && inkedInto.has(key.slice(2)) ? 300 : 0;
+        if (into) {
+            dur = Math.max(300, Math.min(620, p.getTotalLength() * 4));
+            inkedInto.set(into, Math.max(inkedInto.get(into) ?? 0, dur));
+            inkUntil = Math.max(inkUntil, performance.now() + dur);
+            void drawOn(p, { duration: dur, even: true });
+            return;
+        }
+        const delay = inkedInto.has(key.slice(2)) ? Math.round(inkedInto.get(key.slice(2)) * 0.85) : 0;
         inkUntil = Math.max(inkUntil, performance.now() + delay + dur);
         // a dot waiting for its line shows no fill either, until the pen gets there
         if (delay) {

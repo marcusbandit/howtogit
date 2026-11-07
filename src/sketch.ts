@@ -17,6 +17,7 @@ export type Point = [number, number];
 export interface DrawOnOptions {
   duration?: number;
   delay?: number; // ms to wait, hidden, before the pen starts
+  even?: boolean; // ease in and out, so the whole line reads as drawn (default: fast start)
 
   nibGroup?: SVGElement | null;
   color?: string;
@@ -154,7 +155,7 @@ const drawIds = new WeakMap<SVGPathElement, number>();
 
 /* draw a path element on, like a pen laying down ink, with a leading nib */
 export function drawOn(pathEl: SVGPathElement, opts: DrawOnOptions = {}): Promise<void> {
-  const { duration = 650, delay = 0, nibGroup = null, color = "#2a2521" } = opts;
+  const { duration = 650, delay = 0, even = false, nibGroup = null, color = "#2a2521" } = opts;
   // a newer drawOn on the same path takes over; the older one stops quietly
   const id = (drawIds.get(pathEl) ?? 0) + 1;
   drawIds.set(pathEl, id);
@@ -178,7 +179,7 @@ export function drawOn(pathEl: SVGPathElement, opts: DrawOnOptions = {}): Promis
     const tick = (now: number) => {
       if (drawIds.get(pathEl) !== id) { nib?.remove(); resolve(); return; }
       const t = Math.max(0, Math.min(1, (now - start) / duration));
-      const e = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const e = even ? (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2) : 1 - Math.pow(1 - t, 3); // in-out, or out, cubic
       pathEl.style.strokeDashoffset = `${len * (1 - e)}`;
       if (nib) {
         const pt = pathEl.getPointAtLength(len * e);
