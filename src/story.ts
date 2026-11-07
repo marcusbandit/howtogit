@@ -242,7 +242,7 @@ export const chapters: Chapter[] = [
           const d = desk(w);
           if (!d?.detached) return "";
           const c = w.commits[d.detached];
-          return c.id === firstCommit(w).id ? `Opened <code>${G.short(c.id)}</code>: your first commit.`
+          return c.id === firstCommit(w).id ? `Opened <code>${G.short(c.id)}</code>: your first commit. From now on we'll call the marker <b>HEAD</b>.`
             : `Opened <code>${G.short(c.id)}</code>, "${c.msg.replace(/</g, "&lt;")}". The oldest one is at the bottom.`;
         },
         acts: [{

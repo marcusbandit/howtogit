@@ -239,6 +239,7 @@ function afterChange() {
   if (!beatDone && beat().done(w)) {
     beatDone = true;
     justDone = true;
+    w.vars[`learned:${beat().id}`] = "1";
     beat().onDone?.(w);
   } else if (beatDone && beat().live && !beat().done(w)) beatDone = false;
   renderWorld();
@@ -386,10 +387,14 @@ function renderMode() {
 }
 
 /* the git words you've earned so far: every term up to where you are */
+/* "you are here" becomes HEAD from the first time you move it yourself */
+const headKnown = () => earned().has("HEAD") || w.vars.movedHead === "1";
+
 function earned(): Set<string> {
   const now = flatIndex(ci, bi);
   const s = new Set<string>();
-  flat.forEach((x, i) => { if (x.beat.term && (i < now || (i === now && beatDone))) s.add(x.beat.term[0]); });
+  // a word stays earned once its step was done, even if you wander off again
+  flat.forEach((x, i) => { if (x.beat.term && (i < now || (i === now && (beatDone || w.vars[`learned:${x.beat.id}`] === "1")))) s.add(x.beat.term[0]); });
   return s;
 }
 const allTerms = flat.filter((x) => x.beat.term).map((x) => x.beat.term!);
@@ -584,7 +589,7 @@ function historyHtml(pickAct = -1): string {
   const d = r.desks[beatDesk()];
   const head = G.headId(r, d);
   const list = [...G.ancestors(w, r.branches.main)].map((id) => w.commits[id]).sort((a, b) => b.n - a.n);
-  const marker = earned().has("HEAD") ? "HEAD" : "you are here";
+  const marker = headKnown() ? "HEAD" : "you are here";
   return `<div class="hist ${pickAct >= 0 ? "hist--pick" : ""}">
     <p class="hist__k">History of main, newest first</p>
     <div class="hist__cols" aria-hidden="true"><span>ID</span><span>Commit message</span><span>By</span><span></span></div>
@@ -999,7 +1004,7 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   const push = (cid: string, v: { text: string; color: string; here?: boolean; desk?: number }) => { const a = labels.get(cid) ?? []; a.push(v); labels.set(cid, a); };
   if (!r.bare) r.desks.forEach((d, i) => {
     const h = G.headId(r, d);
-    const learned = earned().has("HEAD");
+    const learned = headKnown();
     if (h) push(h, { text: learned ? (r.desks.length > 1 ? `HEAD, desk ${i + 1}` : id === "albert" ? "Albert's HEAD" : "HEAD")
       : (r.desks.length > 1 ? `desk ${i + 1} is here` : id === "albert" ? "Albert is here" : "you are here"), color: "var(--ink)", here: true, desk: i });
   });
