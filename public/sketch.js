@@ -129,7 +129,7 @@ export function el(name, attrs = {}) {
 const drawIds = new WeakMap();
 /* draw a path element on, like a pen laying down ink, with a leading nib */
 export function drawOn(pathEl, opts = {}) {
-    const { duration = 650, nibGroup = null, color = "#2a2521" } = opts;
+    const { duration = 650, delay = 0, nibGroup = null, color = "#2a2521" } = opts;
     // a newer drawOn on the same path takes over; the older one stops quietly
     const id = (drawIds.get(pathEl) ?? 0) + 1;
     drawIds.set(pathEl, id);
@@ -147,14 +147,14 @@ export function drawOn(pathEl, opts = {}) {
             nib = el("circle", { r: 3.4, fill: color, class: "nib" });
             nibGroup.appendChild(nib);
         }
-        const start = performance.now();
+        const start = performance.now() + delay;
         const tick = (now) => {
             if (drawIds.get(pathEl) !== id) {
                 nib?.remove();
                 resolve();
                 return;
             }
-            const t = Math.min(1, (now - start) / duration);
+            const t = Math.max(0, Math.min(1, (now - start) / duration));
             const e = 1 - Math.pow(1 - t, 3); // ease-out cubic
             pathEl.style.strokeDashoffset = `${len * (1 - e)}`;
             if (nib) {

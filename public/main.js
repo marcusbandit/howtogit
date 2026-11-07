@@ -1297,6 +1297,7 @@ function drawStrip(id, cols, frame) {
     const svg = host?.querySelector("svg");
     if (!r || !svg)
         return;
+    const hostH = frame ? 0 : host.getBoundingClientRect().height;
     const all = placeCommits(r);
     const have = frame ? new Set([...all].filter((c) => frame.only.has(c))) : all;
     const L = lanes(r);
@@ -1355,12 +1356,24 @@ function drawStrip(id, cols, frame) {
     host.style.setProperty("--strip-scale", String(scale));
     svg.setAttribute("width", String(Math.floor(W * scale)));
     svg.setAttribute("height", String(Math.floor(H * scale)));
+    // a new lane makes the graph taller and moves main down: main glides down
+    // while the room above opens, instead of everything jumping at once
+    if (!frame) {
+        const base = baseY * scale, was = lastBase.get(id);
+        lastBase.set(id, base);
+        if (was !== undefined && Math.abs(base - was) > 1 && !instant && !prefersReduced) {
+            svg.animate([{ transform: `translateY(${was - base}px)` }, { transform: "none" }], { duration: 380, easing: "cubic-bezier(.2,.8,.2,1)" });
+            easeHeight(host, hostH);
+        }
+    }
     svg.innerHTML = "";
     const seen = drawn.get(id) ?? new Set();
     drawn.set(id, seen);
     const gEdges = el("g", { class: "edges" }), gNodes = el("g", { class: "nodes" }), gLabels = el("g", { class: "labels" });
     svg.append(gEdges, gNodes, gLabels);
-    const ink = (p, key, dur = 400) => {
+    // a new commit's line draws first and its dot is inked as the line arrives
+    const inkedInto = new Set();
+    const ink = (p, key, dur = 400, into) => {
         if (frame)
             return;
         if (instant || seen.has(key)) {
@@ -1368,7 +1381,16 @@ function drawStrip(id, cols, frame) {
             return;
         }
         seen.add(key);
-        void drawOn(p, { duration: dur });
+        if (into)
+            inkedInto.add(into);
+        const delay = !into && inkedInto.has(key.slice(2)) ? 300 : 0;
+        inkUntil = Math.max(inkUntil, performance.now() + delay + dur);
+        // a dot waiting for its line shows no fill either, until the pen gets there
+        if (delay) {
+            p.style.fillOpacity = "0";
+            setTimeout(() => { p.style.transition = "fill-opacity .2s ease"; p.style.fillOpacity = ""; }, delay + dur * 0.4);
+        }
+        void drawOn(p, { duration: dur, delay });
     };
     const seed = (s) => [...s].reduce((a, c) => a + c.charCodeAt(0), 0);
     for (const cid of cols) {
@@ -1388,7 +1410,7 @@ function drawStrip(id, cols, frame) {
             gEdges.append(path);
             if (arriving.has(`${rid}:${cid}`))
                 path.style.opacity = "0";
-            ink(path, `e:${p}>${cid}`);
+            ink(path, `e:${p}>${cid}`, 400, cid);
         });
         const col = colorOf(me.br);
         const g = el("g", { class: "commit", "data-c": cid, style: `transform-origin:${cx}px ${cy}px${arriving.has(`${rid}:${cid}`) ? ";opacity:0" : ""}` });
@@ -1452,10 +1474,12 @@ function drawStrip(id, cols, frame) {
 /* when a change re-spaces a strip (a new commit makes room), everything that
  * was already there glides to its new spot; new commits are inked once it lands */
 const lastLayout = new Map();
+const lastBase = new Map();
 const lastHave = new Map();
 const lastLabels = new Map();
 const tweens = new Map();
 let settleUntil = 0;
+let inkUntil = 0; // when the pen finishes the newest lines and dots
 function glideStrip(id, cols, heres) {
     const host = document.querySelector(`[data-strip="${id}"]`);
     const prev = lastLayout.get(id), had = lastHave.get(id);
@@ -1636,7 +1660,9 @@ function celebrate(before, ok, who = "you") {
     void worldReady.then(() => celebrateNow(before, who));
 }
 function celebrateNow(before, who) {
-    const wait = Math.max(0, settleUntil - performance.now());
+    // wait for the graph to stop moving, and for the pen to (nearly) reach the
+    // new dot: the files then fly in as it is finished, and the pop lands on it
+    const wait = Math.max(0, settleUntil - performance.now(), inkUntil - 420 - performance.now());
     if (wait > 0) {
         setTimeout(() => celebrateNow(before, who), wait + 20);
         return;
@@ -1644,6 +1670,8 @@ function celebrateNow(before, who) {
     requestAnimationFrame(async () => {
         let delay = 0;
         let staged = before.staged;
+        const shifting = [...document.querySelectorAll("#world .strip, #world .strip__svg")].flatMap((el) => el.getAnimations());
+        await Promise.all(shifting.map((m) => m.finished.catch(() => undefined)));
         if (narrow()) {
             // the card above grows with the result first; measure only once it has
             const moving = [$("#lesson"), ...document.querySelectorAll("#world .place")].flatMap((el) => el.getAnimations());
