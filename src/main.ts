@@ -19,7 +19,7 @@ import { circlePath, linePath, smooth, drawOn, el, prefersReduced, type Point } 
 
 type Mode = "buttons" | "command" | "ai";
 type Place = "github" | "you" | "albert";
-interface LogLine { kind: "cmd" | "out" | "err" | "note" | "ai" | "me" | "coach"; text: string; who?: Who; cmds?: string[]; act?: number; ok?: boolean; good?: boolean }
+interface LogLine { kind: "cmd" | "out" | "err" | "note" | "ai" | "me" | "coach"; text: string; hide?: boolean; who?: Who; cmds?: string[]; act?: number; ok?: boolean; good?: boolean }
 interface Snap { ci: number; bi: number; w: string; log: string; beatDone: boolean }
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -210,16 +210,25 @@ function runSteps(act: Act, vals: Record<string, string>): boolean {
  * again shows as done, so a two-button step reads "1 done, now the next" */
 const ranActs = new Set<Act>();
 const worldKey = (x: World) => JSON.stringify([x.commits, x.repos, x.prs]);
+const spentMemo = new Map<string, boolean>();
 function spent(a: Act): boolean {
   if (!ranActs.has(a) || a.pick) return false;
+  const ai = (beat().acts ?? []).indexOf(a);
+  const vals: Record<string, string> = {};
+  a.inputs?.forEach((inp) => (vals[inp.key] = valueFor(beat(), ai, inp, w)));
+  const k = worldKey(w);
+  const memo = `${ai}|${JSON.stringify(vals)}|${k}`;
+  if (spentMemo.has(memo)) return spentMemo.get(memo)!;
   const t = G.clone(w);
-  const k = worldKey(t);
   const deskI = beatDesk();
-  for (const s of a.steps(t, {})) {
-    if (typeof s !== "string") continue;
+  for (const s of a.steps(t, vals)) {
+    if (typeof s !== "string") { s(t); continue; }
     if (!exec(t, s, a.who ?? "you", deskI).ok) break;
   }
-  return worldKey(t) === k;
+  const out = worldKey(t) === k;
+  if (spentMemo.size > 50) spentMemo.clear();
+  spentMemo.set(memo, out);
+  return out;
 }
 
 function runTyped(line: string) {
@@ -232,7 +241,7 @@ function runTyped(line: string) {
   const steps = taskSteps();
   const r = exec(w, line, "you", termDesk);
   entry.ok = r.ok;
-  if (r.out === "\f") { log = []; }
+  if (r.out === "\f") log.forEach((l) => (l.hide = true)); // clear wipes the screen, not your progress
   else if (r.out) log.push({ kind: r.ok ? "out" : "err", text: r.out, who: "you" });
   const c = coach(line.trim(), r, steps);
   if (c) log.push({ kind: "coach", text: c.text, good: c.good, who: "you" });
@@ -519,7 +528,7 @@ function doHtml(b: Beat): string {
   }
   if (mine.length) {
     if (mode === "buttons") html += buttonsHtml(mine, acts);
-    if (mode === "command") html += commandHtml(mine);
+    if (mode === "command") html += commandHtml();
     if (mode === "ai") html += aiHtml(mine);
   }
   const picks = (b.acts ?? []).some((a) => a.pick === "commit");
@@ -574,7 +583,7 @@ function prompt(): string {
 }
 
 function termHtml(readOnly = false): string {
-  const lines = log.map((l) => {
+  const lines = log.filter((l) => !l.hide).map((l) => {
     if (l.kind === "cmd") return `<div class="t-cmd ${l.who === "albert" ? "t-friend" : ""}">${l.who === "albert" ? "<span class=\"who\">albert's laptop $</span>" : "<span class=\"who\">$</span>"} ${hl(l.text)}</div>`;
     if (l.kind === "note") return `<div class="t-note">${esc(l.text)}</div>`;
     if (l.kind === "coach") return `<div class="t-coach ${l.good ? "is-good" : "is-hint"}">${l.text}</div>`;
@@ -591,7 +600,8 @@ function termHtml(readOnly = false): string {
 const sameCmd = (a: string, b: string) => {
   const ta = a.trim().split(/\s+/), tb = b.trim().split(/\s+/);
   const deep = /^(remote|worktree|pr)$/.test(tb[1] ?? "");
-  return ta[0] === tb[0] && ta[1] === tb[1] && (!deep || ta[2] === tb[2]);
+  const flags = (t: string[]) => t.filter((x) => /^-/.test(x)).sort().join(" ");
+  return ta[0] === tb[0] && ta[1] === tb[1] && (!deep || ta[2] === tb[2]) && flags(ta) === flags(tb);
 };
 function taskSteps(): { cmd: string; words: string; done: boolean }[] {
   const mine = (beat().acts ?? []).filter((a) => !isWatch(a));
@@ -633,8 +643,7 @@ function coach(line: string, r: { ok: boolean; out: string }, before: { cmd: str
     : "Git didn't accept that.";
   return { text: `✗ ${why}${next ? ` The step needs: ${esc(next.words.toLowerCase())}.` : ""}`, good: false };
 }
-function commandHtml(mine: Act[]): string {
-  void mine;
+function commandHtml(): string {
   const steps = taskSteps();
   const nextI = steps.findIndex((s) => !s.done);
   return `<ol class="task">${steps.map((s, i) => `<li class="${s.done ? "is-done" : i === nextI ? "is-next" : ""}">
@@ -717,6 +726,7 @@ function recapHtml(): string {
   </div>`;
 }
 
+const folding = new WeakMap<HTMLDetailsElement, { anim: Animation; opening: boolean }>();
 function wireLesson() {
   const root = $("#lesson");
   root.querySelectorAll<HTMLButtonElement>("[data-run]").forEach((btn) => btn.addEventListener("click", () => {
@@ -931,7 +941,11 @@ function renderWorld() {
     const r = w.repos[id];
     const n = id === "github" ? 1 : Math.max(1, r?.desks.length ?? 1);
     const rowsBox = sec.querySelector<HTMLElement>(".place__rows")!;
-    while (rowsBox.children.length > n) rowsBox.lastElementChild!.remove();
+    while (rowsBox.children.length > n) {
+      const k = `${id}:${rowsBox.children.length - 1}`;
+      [lastLayout, lastHave, lastLabels, drawn].forEach((m) => m.delete(k));
+      rowsBox.lastElementChild!.remove();
+    }
     while (rowsBox.children.length < n) {
       const i = rowsBox.children.length;
       const row = document.createElement("div");
@@ -1154,9 +1168,9 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
     now.forEach((arr, cid) => arr.forEach((lb) => add(cid, lb)));
   }
   else lastLabels.set(id, new Map(labels));
-  // labels of commits on main hang below the line; labels of commits on a
-  // branch lane sit right above them, so a branch name is next to its branch
-  const above = (cid: string) => (L.get(cid)?.lane ?? 0) > 0;
+  // labels of commits on main hang below the line; labels of commits on the
+  // top branch lane sit right above them (lower lanes keep theirs below), so a branch name is next to its branch
+  const above = (cid: string) => { const l = L.get(cid)?.lane ?? 0; return l > 0 && l === maxLane; };
   topPad = Math.max(0, ...[...labels].filter(([c]) => above(c)).map(([, a]) => a.length * 21 + 8));
   const baseY = laneY(0);
   const maxLabels = Math.max(1, ...[...labels].filter(([c]) => !above(c)).map(([, a]) => a.length));
@@ -1482,7 +1496,9 @@ function fitEditor() {
 
 /* the conflict picker: choosing a side only previews it in the file below;
  * nothing is kept until Save file, and Start over brings the conflict back */
+let resolverKept = "";
 function renderResolver(text: string, readOnly: boolean, picked = "") {
+  if (!picked) resolverKept = "";
   const box = $("#resolver");
   const m = text.match(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n([\s\S]*?)>>>>>>> [^\n]*\n?/);
   if (!m || readOnly) { box.hidden = true; box.innerHTML = ""; return; }
@@ -1499,12 +1515,19 @@ function renderResolver(text: string, readOnly: boolean, picked = "") {
       : "The file below is how git left it: your version between <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> and <code>=======</code>, Albert's between <code>=======</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>. Pick above, or fix it by hand."}</p>`;
   box.querySelectorAll<HTMLButtonElement>("[data-pick]").forEach((b) => b.addEventListener("click", () => {
     const keep = b.dataset.pick === "mine" ? m[1] : b.dataset.pick === "theirs" ? m[2] : m[1] + m[2];
-    $<HTMLTextAreaElement>("#editor-text").value = text.replace(m[0], () => keep);
+    // swap only the clash (or the last pick) inside what's in the box now, so
+    // anything typed by hand elsewhere in the file stays
+    const ta = $<HTMLTextAreaElement>("#editor-text");
+    const cur = ta.value.includes(m[0]) ? m[0] : resolverKept;
+    ta.value = cur && ta.value.includes(cur) ? ta.value.replace(cur, () => keep) : text.replace(m[0], () => keep);
+    resolverKept = keep;
     fitEditor();
     renderResolver(text, readOnly, b.dataset.pick);
   }));
   box.querySelector("[data-reset]")?.addEventListener("click", () => {
-    $<HTMLTextAreaElement>("#editor-text").value = text;
+    const ta = $<HTMLTextAreaElement>("#editor-text");
+    ta.value = resolverKept && ta.value.includes(resolverKept) ? ta.value.replace(resolverKept, () => m[0]) : text;
+    resolverKept = "";
     fitEditor();
     renderResolver(text, readOnly);
   });
@@ -1605,14 +1628,19 @@ function boot() {
     if (!sum || !det || det.tagName !== "DETAILS" || prefersReduced) return;
     e.preventDefault();
     const from = det.getBoundingClientRect().height;
-    const closing = det.open;
+    const running = folding.get(det);
+    const closing = running ? !running.opening : det.open;
+    running?.anim.cancel();
     if (!closing) det.open = true;
     const to = closing ? sum.getBoundingClientRect().height : det.getBoundingClientRect().height;
     det.style.overflow = "hidden";
-    det.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" }).finished.then(() => {
+    const anim = det.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" });
+    folding.set(det, { anim, opening: !closing });
+    anim.finished.then(() => {
+      folding.delete(det);
       if (closing) det.open = false;
       det.style.overflow = "";
-    });
+    }, () => { /* cancelled by a newer click */ });
   });
   // explain: hover opens it (and it stays while the pointer is on the panel),
   // a click or tap pins it open, Escape or a click elsewhere closes it

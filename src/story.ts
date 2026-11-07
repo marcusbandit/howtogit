@@ -588,11 +588,11 @@ export const chapters: Chapter[] = [
         kind: "resolve",
         say: (w) => {
           const m = work(w, MAIN_FILE).match(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n([\s\S]*?)>>>>>>> /);
-          const two = m ? `<span class="clash"><span class="clash__side"><i>yours</i><code>${m[1].trim().replace(/</g, "&lt;")}</code></span><span class="clash__vs">or</span><span class="clash__side clash__side--friend"><i>Albert's</i><code>${m[2].trim().replace(/</g, "&lt;")}</code></span></span>` : "";
+          const two = m ? `<span class="clash"><span class="clash__side"><i>yours</i><code>${m[1].trim().replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code></span><span class="clash__vs">or</span><span class="clash__side clash__side--friend"><i>Albert's</i><code>${m[2].trim().replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code></span></span>` : "";
           return `Here's the clash: the same line, changed two ways.${two}Git can't know which is right, so it kept both in <b>report.md</b>, with marks around them, and waits for you. Open the file and pick. Nothing is saved until you press <b>Save file</b>.`;
         },
         done: (w) => !G.hasMarkers(work(w, MAIN_FILE)),
-        after: (w) => `Settled: the line now says <code>${(keyLine(work(w, MAIN_FILE)) || "your choice").replace(/</g, "&lt;")}</code>. Changed your mind? <b>Undo</b> brings the clash back.`,
+        after: (w) => `Settled: the line now says <code>${(keyLine(work(w, MAIN_FILE)) || "your choice").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code>. Changed your mind? <b>Undo</b> brings the clash back.`,
         more: [["What are the <<<<<<< lines?", "Git's conflict marks inside the file: your version sits between <<<<<<< and =======, the other between ======= and >>>>>>>. Editors turn them into buttons like the ones you used."]],
       },
       {
