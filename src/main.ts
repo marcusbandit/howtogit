@@ -269,6 +269,7 @@ function showPlace(id: string | null) {
 }
 
 function afterChange() {
+  if (focusPlace && (focusPlace === "you" || w.repos[focusPlace as Place])) phoneTab = focusPlace as Place;
   if (!beatDone && beat().done(w)) {
     beatDone = true;
     justDone = true;
@@ -284,6 +285,29 @@ function afterChange() {
   focusPlace = null;
 }
 let lastPlace: string | null = null;
+
+/* phones show one place at a time, picked with tabs; a step's change switches
+ * to the place it happened in, and a dot marks any other place that changed */
+let phoneTab: Place = "you";
+const seenSig = new Map<string, string>();
+const placeSig = (id: Place) => JSON.stringify(w.repos[id] ?? null) + (id === "github" ? JSON.stringify(w.prs) : "");
+const narrow = () => window.innerWidth <= 860;
+function showTab(id: Place, scroll = false) {
+  phoneTab = id;
+  renderTabs();
+  if (scroll) $("#world").scrollIntoView({ block: "start", behavior: prefersReduced ? "auto" : "smooth" });
+}
+function renderTabs() {
+  const root = $("#world");
+  const present = (["github", "you", "albert"] as Place[]).filter((id) => id === "you" || !!w.repos[id]);
+  if (!present.includes(phoneTab)) phoneTab = "you";
+  const name = { github: "GitHub", you: "Your computer", albert: "Albert's" } as const;
+  if (instant) present.forEach((id) => seenSig.set(id, placeSig(id)));
+  seenSig.set(phoneTab, placeSig(phoneTab));
+  setPart(root.querySelector(".world__tabs"), present.length < 2 ? "" : present.map((id) => `<button type="button" role="tab" class="wtab wtab--${id}" data-tab="${id}" aria-selected="${id === phoneTab}">
+      <span class="ico ${id === "github" ? "ico--cloud" : "ico--laptop"}" aria-hidden="true"></span>${name[id]}${seenSig.get(id) !== placeSig(id) ? `<span class="wtab__dot" aria-label="changed"></span>` : ""}</button>`).join(""));
+  root.querySelectorAll<HTMLElement>(".place[data-place]").forEach((p) => p.classList.toggle("is-shown", p.dataset.place === phoneTab));
+}
 
 /* ------------------------------------------------------------ navigation */
 
@@ -412,10 +436,16 @@ function renderChapters() {
       <span class="chap__n">${i < ci ? "✓" : i + 1}</span><span class="chap__t">${esc(c.short)}</span>
     </button>`).join("");
   nav.querySelector(".is-now")?.scrollIntoView({ block: "nearest", inline: "center" });
+  // phones: one pill in the header, the list lives in a sheet
+  $("#chap-pill").innerHTML = `<span class="chap-pill__n">${ci + 1}/${chapters.length}</span><span class="chap-pill__t">${esc(chapters[ci].title)}</span><span class="chap-pill__caret" aria-hidden="true"></span>`;
+  $("#chap-list").innerHTML = chapters.map((c, i) => `
+    <li><button type="button" class="sheet__chap ${i === ci ? "is-now" : ""} ${i < ci ? "is-done" : ""}" data-ch="${i}" ${i === ci ? 'aria-current="step"' : ""}>
+      <span class="chap__n">${i < ci ? "✓" : i + 1}</span><span class="sheet__chap-t"><b>${esc(c.title)}</b>${c.goal ? `<span>${esc(c.goal)}</span>` : ""}</span>
+    </button></li>`).join("");
 }
 
 function renderMode() {
-  document.querySelectorAll<HTMLButtonElement>("#mode [data-mode]").forEach((b) => {
+  document.querySelectorAll<HTMLButtonElement>("#mode [data-mode], #menu [data-mode]").forEach((b) => {
     b.setAttribute("aria-checked", String(b.dataset.mode === mode));
   });
   document.body.dataset.mode = mode;
@@ -743,8 +773,11 @@ function wireLesson() {
   root.querySelector("[data-back]")?.addEventListener("click", back);
   root.querySelector("[data-undo]")?.addEventListener("click", undo);
   root.querySelectorAll<HTMLButtonElement>("[data-beat]").forEach((b) => b.addEventListener("click", () => jumpBeat(Number(b.dataset.beat))));
-  root.querySelector<HTMLButtonElement>("[data-see]")?.addEventListener("click", (e) =>
-    document.querySelector(`.place--${(e.currentTarget as HTMLElement).dataset.see}`)?.scrollIntoView({ block: "start", behavior: prefersReduced ? "auto" : "smooth" }));
+  root.querySelector<HTMLButtonElement>("[data-see]")?.addEventListener("click", (e) => {
+    const id = (e.currentTarget as HTMLElement).dataset.see as Place;
+    if (narrow()) return showTab(id, true);
+    document.querySelector(`.place--${id}`)?.scrollIntoView({ block: "start", behavior: prefersReduced ? "auto" : "smooth" });
+  });
   root.querySelector("[data-restart]")?.addEventListener("click", () => {
     for (const k of Object.keys(choices)) delete choices[k];
     goto(0, 0, { replay: true });
@@ -914,14 +947,14 @@ function renderWorld() {
   const root = $("#world");
   const view = "places";
   if (root.dataset.view !== view) {
-    root.innerHTML = view === "places" ? `<div class="world__recap"></div>` : "";
+    root.innerHTML = view === "places" ? `<div class="world__recap"></div><div class="world__tabs" role="tablist" aria-label="places"></div>` : "";
     root.dataset.view = view;
     parts.clear(); // everything cached for the old view is gone from the page
   }
   setPart(root.querySelector(".world__recap"), ci === chapters.length - 1 ? mapHtml(true) : "");
   const cols = columns();
   const order: Place[] = ["github", "you", "albert"];
-  let prev: Element = root.querySelector(".world__recap")!;
+  let prev: Element = root.querySelector(".world__tabs")!;
   for (const id of order) {
     let sec = root.querySelector<HTMLElement>(`[data-place="${id}"]`);
     const present = id === "you" || !!w.repos[id];
@@ -970,6 +1003,12 @@ function renderWorld() {
     const was = fileStateSeen.get(k);
     if (was !== undefined && was !== s && !instant) chip.classList.add("pop");
     fileStateSeen.set(k, s);
+  });
+  renderTabs();
+  // phones cap the file preview's height; keep what just changed in view
+  root.querySelectorAll<HTMLElement>(".peek").forEach((pk) => {
+    const hit = pk.querySelector<HTMLElement>(".is-mark, .is-new, .is-gone");
+    if (hit && pk.scrollHeight > pk.clientHeight) pk.scrollTop = Math.max(0, hit.offsetTop - 28);
   });
   syncScroll();
   floatPlaces(placeRects);
@@ -1606,7 +1645,26 @@ function boot() {
     if (c === ci) return;
     goto(c, 0, { replay: true });
   });
-  document.querySelectorAll<HTMLButtonElement>("#mode [data-mode]").forEach((b) => b.addEventListener("click", () => {
+  const sheet = (id: string) => $(id) as unknown as HTMLDialogElement;
+  const openSheet = (id: string) => {
+    sheet(id).showModal();
+    sheet(id).querySelector(".is-now")?.scrollIntoView({ block: "nearest" });
+  };
+  $("#chap-pill").addEventListener("click", () => openSheet("#chap-sheet"));
+  $("#chap-list").addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-ch]");
+    if (!b) return;
+    sheet("#chap-sheet").close();
+    const c = Number(b.dataset.ch);
+    if (c !== ci) goto(c, 0, { replay: true });
+  });
+  const syncThemeRow = () => $("#menu-theme").setAttribute("aria-pressed", String(document.documentElement.dataset.theme === "dark"));
+  $("#menu-btn").addEventListener("click", () => { syncThemeRow(); openSheet("#menu"); });
+  $("#menu-theme").addEventListener("click", () => { $<HTMLButtonElement>("#theme-toggle").click(); syncThemeRow(); });
+  $("#menu-intro").addEventListener("click", () => { sheet("#menu").close(); intro(); });
+  // a tap on the dimmed backdrop closes a sheet, as on any phone
+  document.querySelectorAll<HTMLDialogElement>("dialog.sheet").forEach((d) => d.addEventListener("click", (e) => { if (e.target === d) d.close(); }));
+  document.querySelectorAll<HTMLButtonElement>("#mode [data-mode], #menu [data-mode]").forEach((b) => b.addEventListener("click", () => {
     mode = b.dataset.mode as Mode;
     log = log.filter((l) => l.kind !== "me" && l.kind !== "ai");
     renderMode();
@@ -1616,6 +1674,8 @@ function boot() {
   }));
   // files in the world open the editor (one listener, since parts are replaced)
   $("#world").addEventListener("click", (e) => {
+    const tab = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-tab]");
+    if (tab) return showTab(tab.dataset.tab as Place);
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-file]");
     if (b) openEditor(b.dataset.place as Place, Number(b.dataset.desk), b.dataset.file!);
   });
