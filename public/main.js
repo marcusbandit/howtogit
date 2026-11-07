@@ -1129,7 +1129,7 @@ function drawStrip(id, cols, frame) {
             const d = py === cy ? linePath(px + 13, py, cx - 13, cy, seed(cid) + pi)
                 : smooth([[px + 10, py], [px + (cx - px) * 0.55, py + (cy - py) * 0.15], [cx - 12, cy]]);
             const col = colorOf(pi === 1 ? L.get(p).br : me.br === "?" ? "main" : me.br);
-            const path = el("path", { d, class: "edge", stroke: col });
+            const path = el("path", { d, class: "edge", stroke: col, "data-to": cid });
             gEdges.append(path);
             ink(path, `e:${p}>${cid}`);
         });
@@ -1324,9 +1324,12 @@ function saved(target, c, files, delay) {
 /* a commit travels between places: a dot flies from one row to the other */
 function travel(from, to, kind, delay) {
     to.style.opacity = "0";
-    setTimeout(() => fly(from, to, kind), delay);
+    // the line into this commit waits for it too, and is drawn as the dot lands
+    const lines = [...(to.ownerSVGElement?.querySelectorAll(`.edge[data-to="${to.dataset.c}"]`) ?? [])];
+    lines.forEach((l) => { l.style.opacity = "0"; void drawOn(l, { duration: 1 }); });
+    setTimeout(() => fly(from, to, kind, lines), delay);
 }
-function fly(from, to, kind) {
+function fly(from, to, kind, lines = []) {
     const delay = 0;
     const a = centre(from.getBoundingClientRect()), b = centre(to.getBoundingClientRect());
     const dot = document.createElement("span");
@@ -1342,6 +1345,7 @@ function fly(from, to, kind) {
         { transform: `translate(calc(-50% + ${b.x - a.x}px), calc(-50% + ${b.y - a.y}px)) scale(.9)` },
     ], { duration: 560, delay, easing: "cubic-bezier(.45,0,.35,1)" }).finished.then(() => {
         dot.remove();
+        lines.forEach((l) => { l.style.opacity = ""; void drawOn(l, { duration: 240 }); });
         to.style.opacity = "";
         pop(to);
         ring(b, kind === "push" ? "var(--pen-remote)" : "var(--pen-blue)");
