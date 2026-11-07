@@ -36,7 +36,7 @@ const setWork = (w, f, text, i = 0) => { desk(w, i).work[f] = text; };
 export const keyLine = (s) => s.split("\n").find((l) => /deadline/i.test(l)) ?? "";
 const commitAct = (def, files = ".") => ({
     label: "Stage and commit",
-    inputs: [{ key: "msg", label: "Note for this version", def: () => def }],
+    inputs: [{ key: "msg", label: "Commit message", def: () => def }],
     steps: (_w, v) => [`git add ${files}`, `git commit -m "${q(v.msg)}"`],
     ai: "commit my changes with a short note",
 });
@@ -71,16 +71,16 @@ export const chapters = [
             {
                 id: "commit1",
                 kind: "act",
-                say: () => `Now <b>commit</b>: tape the box shut and keep it as a version. Give it a short note, so you know later what it was.`,
+                say: () => `Now <b>commit</b>: tape the box shut and keep it as a version.<br><br>Every commit carries a short note saying what changed, called the <b>commit message</b>, so you know later what each version was.`,
                 acts: [{
                         label: "Commit",
-                        inputs: [{ key: "msg", label: "Note for this version", def: () => "First version" }],
+                        inputs: [{ key: "msg", label: "Commit message", def: () => "First version" }],
                         steps: (_w, v) => [`git commit -m "${q(v.msg)}"`],
                         ai: "commit this as the first version",
                     }],
                 done: (w) => !!you(w)?.branches.main,
-                after: () => `See the dot next to the folder? That's your first version: both files exactly as they are now, with your note, your name and the time. The files now say <b>no changes</b>: they match that version.`,
-                term: ["commit", "One kept version of the whole project, with a note. The line of dots is the <b>history</b>."],
+                after: () => `See the dot next to the folder? That's your first version: both files exactly as they are now, with your commit message, your name and the time. The files now say <b>no changes</b>: they match that version.`,
+                term: ["commit", "One kept version of the whole project, with a commit message saying what changed. The line of dots is the <b>history</b>."],
                 more: [["Does a commit copy every file?", "It works like a full snapshot you can always go back to. Git avoids storing the same content twice, so it stays small."]],
             },
             {
@@ -128,7 +128,7 @@ export const chapters = [
                 say: () => `Commit the staged report change.`,
                 acts: [{
                         label: "Commit",
-                        inputs: [{ key: "msg", label: "Note for this version", def: () => "Improve the report" }],
+                        inputs: [{ key: "msg", label: "Commit message", def: () => "Improve the report" }],
                         steps: (_w, v) => [`git commit -m "${q(v.msg)}"`],
                         ai: "commit the staged report change with a note",
                     }],

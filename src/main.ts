@@ -276,12 +276,6 @@ function renderMode() {
   document.body.dataset.mode = mode;
 }
 
-const MODE_NOTE: Record<Mode, string> = {
-  buttons: "Buttons, like VS Code or GitHub Desktop.",
-  command: "Typed commands, like a developer's terminal.",
-  ai: "An AI assistant that runs git for you.",
-};
-
 /* the git words you've earned so far: every term up to where you are */
 function earned(): Set<string> {
   const now = flatIndex(ci, bi);
@@ -327,7 +321,7 @@ function renderLesson() {
     <nav class="beats" aria-label="steps in this chapter">${ch.beats.map((_, i) => `<button type="button" class="beat ${i < bi || (i === bi && beatDone) ? "done" : i === bi ? "now" : ""}" data-beat="${i}" aria-label="Step ${i + 1}" ${i === bi ? 'aria-current="step"' : ""}></button>`).join("")}</nav>
     <div class="say">${b.say(w)}</div>
     ${isLast ? recapHtml() : ""}
-    ${b.kind === "next" ? "" : `<div class="do">${b.acts?.some((a) => !isWatch(a)) ? `<p class="mode-note">${MODE_NOTE[mode]}</p>` : ""}${doHtml(b)}</div>`}
+    ${b.kind === "next" ? "" : `<div class="do">${doHtml(b)}</div>`}
     ${after || (beatDone && b.term) ? `<div class="after ${fresh ? "is-new" : ""}">
         ${after ? `<p class="after__text"><span class="tick" aria-hidden="true">✓</span> ${after}</p>` : ""}
         ${lastPlace ? `<button type="button" class="see" data-see="${lastPlace}">See what changed ↓</button>` : ""}
@@ -530,7 +524,7 @@ function askAi(text: string) {
   const mine = (beat().acts ?? []).filter((a) => !isWatch(a));
   log.push({ kind: "me", text: text.trim() || "do the next step" });
   const cmds = hintCmds(mine);
-  const msgs = mine.flatMap((a) => (a.inputs ?? []).map((i) => i.key === "msg" ? `with the note <b>"${esc(i.def(w))}"</b>` : i.key === "name" ? `called <b>${esc(i.def(w))}</b>` : i.key === "title" ? `titled <b>"${esc(i.def(w))}"</b>` : ""));
+  const msgs = mine.flatMap((a) => (a.inputs ?? []).map((i) => i.key === "msg" ? `with the commit message <b>"${esc(i.def(w))}"</b>` : i.key === "name" ? `called <b>${esc(i.def(w))}</b>` : i.key === "title" ? `titled <b>"${esc(i.def(w))}"</b>` : ""));
   log.push({
     kind: "ai",
     text: `Sure${msgs.filter(Boolean).length ? `, ${msgs.filter(Boolean).join(" and ")}` : ""}. I'll run ${cmds.length > 1 ? "these git commands" : "this git command"}:
@@ -1094,19 +1088,25 @@ function boot() {
   } else {
     goto(0, 0, { replay: true });
   }
-  const intro = (first: boolean) => showIntro(mode, (m) => {
+  // the intro never resets progress: Start just carries on where you are
+  // (on a first visit that is the beginning anyway)
+  const intro = () => showIntro(mode, (m) => {
     mode = m;
     renderMode();
-    if (first) goto(0, 0, { replay: true }); else { renderLesson(); save(); }
+    renderLesson();
+    save();
   });
-  if (q.has("intro") || (!introSeen() && !q.has("ch"))) intro(true);
-  $(".brand").addEventListener("click", (e) => { e.preventDefault(); intro(false); });
+  if (q.has("intro") || (!introSeen() && !q.has("ch"))) intro();
+  $(".brand").addEventListener("click", (e) => { e.preventDefault(); intro(); });
   if (q.has("done")) {
     // dev: finish the current beat the typical way, to screenshot its after state
     w = replayTo(ci, bi + 1);
     beatDone = true;
     instant = true; renderAll(); instant = false;
   }
+  // links like ?ch=3 or ?intro=1 apply once; take them off the address bar so
+  // a normal reload resumes your saved place instead of applying them again
+  if ([...q.keys()].length) window.history.replaceState(null, "", location.pathname + location.hash);
 
   $("#chapters").addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-ch]");

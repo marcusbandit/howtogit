@@ -74,7 +74,8 @@ try {
   await click('[data-beat="2"]', { drift: 5 });
   await rightClickEmpty("Back and step bar spam");
   // 4. someone selects lesson text on purpose, then right-clicks elsewhere
-  const t = await centre(".say");
+  // drag along the first line of the lesson text (its middle can be a blank line)
+  const t = await ev(`(()=>{const r=document.querySelector(".say").getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+12};})()`);
   await mouse("mousePressed", t.x - 120, t.y, { clickCount: 1 });
   await mouse("mouseMoved", t.x + 60, t.y, { buttons: 1 });
   await mouse("mouseReleased", t.x + 60, t.y, { clickCount: 1 });
@@ -83,7 +84,9 @@ try {
   await mouse("mousePressed", t.x - 120, t.y, { clickCount: 1 });
   await mouse("mouseMoved", t.x + 60, t.y, { buttons: 1 });
   await mouse("mouseReleased", t.x + 60, t.y, { clickCount: 1 });
-  await contextMenuAt(t.x - 30, t.y);
+  // aim at the middle of what actually got selected, not a guessed spot
+  const on = await ev(`(()=>{const r=getSelection().getRangeAt(0).getClientRects()[0]; return r ? {x:r.left+r.width/2,y:r.top+r.height/2} : null;})()`);
+  if (on) await contextMenuAt(on.x, on.y);
   await sleep(30);
   if (!(await ev(`String(getSelection())`))) { fails++; console.log("FAIL  right-click on selected text should keep it for Copy"); }
   else console.log("ok    right-click on selected text keeps it");
