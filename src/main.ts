@@ -505,8 +505,8 @@ const drawn = new Map<string, Set<string>>();
 const COL = 100, X0 = 56;
 
 const STATE_WORDS: Record<G.FileState, string> = {
-  saved: "saved", changed: "changed", staged: "ready to save", "staged+changed": "ready, then changed again",
-  new: "new", conflict: "conflict!", deleted: "deleted", "staged-deleted": "deletion ready to save",
+  saved: "no changes", changed: "changed", staged: "packed", "staged+changed": "packed, then changed",
+  new: "new", conflict: "conflict!", deleted: "deleted", "staged-deleted": "deletion packed",
 };
 
 /* parts of the world are only replaced when their markup changed */
@@ -572,7 +572,7 @@ function mapHtml(recap = false): string {
       <span class="up">push ↑</span><span class="down">↓ pull, clone</span>
     </div>
     <div class="map__pcs">
-      <div><span class="ico ico--laptop"></span><b>Your computer</b><span>your files and every saved version</span>${recap ? `<em>edit → stage → commit, on any branch</em>` : ""}</div>
+      <div><span class="ico ico--laptop"></span><b>Your computer</b><span>your files and every version</span>${recap ? `<em>edit → stage → commit, on any branch</em>` : ""}</div>
       <div class="map__friend"><span class="ico ico--laptop"></span><b>${recap ? "Albert's computer" : "A friend's computer"}</b><span>their copy: the same history</span>${recap ? `<em>clone once, then pull and push</em>` : ""}</div>
     </div>
     ${recap ? "" : `<p class="map__note">Everyone has the <b>whole</b> history on their own computer. GitHub is the copy everyone agrees to share through.</p>`}
@@ -610,9 +610,10 @@ function peekHtml(d: G.Desk | null, r: G.Repo | null): string {
   if (text === undefined) return "";
   const base = d && r ? G.treeOf(w, G.headId(r, d))[MAIN_FILE] : text;
   const diff = base === undefined ? text.replace(/\n$/, "").split("\n").map((s) => ({ t: "+" as const, s })) : G.lineDiff(base, text);
-  const lines = diff.filter((l) => l.t !== "-").filter((l) => l.s.trim() !== "").slice(0, 12);
+  const fresh = base === undefined; // never committed: nothing to compare with yet
+  const lines = diff.filter((l) => l.s.trim() !== "").slice(0, 14);
   return `<div class="peek" aria-label="${MAIN_FILE} right now"><p class="peek__name">${MAIN_FILE}</p>${lines.map((l) =>
-    `<div class="peek__l ${l.t === "+" && base !== undefined ? "is-new" : ""} ${/^(<<<<<<<|=======|>>>>>>>)/.test(l.s) ? "is-mark" : ""}">${typos(esc(l.s))}</div>`).join("")}</div>`;
+    `<div class="peek__l ${!fresh && l.t === "+" ? "is-new" : ""} ${!fresh && l.t === "-" ? "is-gone" : ""} ${/^(<<<<<<<|=======|>>>>>>>)/.test(l.s) ? "is-mark" : ""}">${typos(esc(l.s))}</div>`).join("")}</div>`;
 }
 
 /* the lesson's planted typo (and a few classics) get the familiar red squiggle,
@@ -863,7 +864,7 @@ function saved(target: SVGGElement, c: G.Commit, files: { path: string; rect: DO
     ring(to, "var(--accent)");
     const note = document.createElement("span");
     note.className = "fx-note";
-    note.innerHTML = `✓ saved <b>${esc(c.msg)}</b>`;
+    note.innerHTML = `✓ new version: <b>${esc(c.msg)}</b>`;
     note.style.left = `${to.x}px`;
     note.style.top = `${to.y - 44}px`;
     fx().append(note);

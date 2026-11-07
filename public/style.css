@@ -494,7 +494,11 @@ code { font-family: var(--mono); font-size: 0.86em; }
 .peek { margin-top: 10px; border-top: 1.5px dashed var(--line); padding-top: 8px; font-family: var(--mono); font-size: 12px; line-height: 1.5; }
 .peek__name { font-family: var(--ui); font-size: 11.5px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
 .peek__l { white-space: pre-wrap; word-break: break-word; padding: 0 6px; border-radius: 4px; color: var(--ink-soft); }
-.peek__l.is-new { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--ink); }
+.peek__l.is-new { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ink); }
+.peek__l.is-new::before { content: "+ "; color: var(--ok); font-weight: 700; margin-left: -1.2ch; }
+.peek__l.is-gone { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); text-decoration: line-through; }
+.peek__l.is-gone::before { content: "- "; font-weight: 700; margin-left: -1.2ch; text-decoration: none; display: inline-block; }
+.peek__l { padding-left: 1.4ch; }
 .peek__l.is-mark { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); font-weight: 700; }
 
 /* effects layer: things that fly between parts of the page */

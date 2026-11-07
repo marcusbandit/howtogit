@@ -83,9 +83,9 @@ const commitAct = (def: string, files = "."): Act => ({
   label: "Stage and commit",
   inputs: [{ key: "msg", label: "Note for this version", def: () => def }],
   steps: (_w, v) => [`git add ${files}`, `git commit -m "${q(v.msg)}"`],
-  ai: "save my changes with a short note",
+  ai: "commit my changes with a short note",
 });
-const pushAct: Act = { label: "Push", steps: () => ["git push"], ai: "upload my saved versions to GitHub" };
+const pushAct: Act = { label: "Push", steps: () => ["git push"], ai: "upload my versions to GitHub" };
 const pullAct: Act = { label: "Pull", steps: () => ["git pull"], ai: "get the latest changes from GitHub" };
 
 /* ------------------------------------------------------------- chapters */
@@ -99,90 +99,88 @@ export const chapters: Chapter[] = [
       {
         id: "init",
         kind: "act",
-        say: () => `This is your project folder: a report and some notes. Right now they're plain files.<br><br>Switch on version history for the folder.`,
+        say: () => `This is your project folder: a report and some notes. For now they're plain files.<br><br>Switch on version history for the folder.`,
         acts: [{ label: "Turn on version history", steps: () => ["git init"], ai: "set up git for this folder" }],
         done: (w) => !!you(w),
-        after: () => `Git made a hidden <code>.git</code> folder inside my-recipe. Every version you save will live there. Your files didn't change.`,
+        after: () => `Git is now watching the folder. Both files say <b>new</b>: git can see them, but it hasn't kept a version of them yet.`,
         term: ["repository", "A folder with version history switched on. People say <b>repo</b>."],
         more: [["Do I do this for every project?", "Once per project. Often not even that: you copy an existing project from GitHub instead, which you'll do in chapter 4."]],
       },
       {
-        id: "edit1",
-        kind: "edit",
-        say: () => `Open <b>report.md</b> and add a sentence. Anything you like.`,
-        edit: {
-          files: [MAIN_FILE],
-          ask: () => "Add a sentence",
-          check: (w) => work(w, MAIN_FILE) !== G.freshWorld().folder![MAIN_FILE],
-          canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /worked best/i, "It was also the cheapest.")),
-        },
-        done: (w) => work(w, MAIN_FILE) !== G.freshWorld().folder![MAIN_FILE],
-        after: () => `report.md now says <b>changed</b>. Git noticed, but hasn't stored anything yet.`,
-        term: ["working tree", "Your files as they are right now, saved or not."],
-      },
-      {
         id: "stage-all",
         kind: "act",
-        say: () => `Saving takes two moves. First you pick what goes into the version, like packing a box. This first time, pack everything.`,
-        acts: [{ label: "Stage all changes", steps: () => ["git add ."], ai: "get all my files ready to save" }],
+        say: () => `Keeping a version takes two moves. First you choose which files go into it, like packing a box. Pack both files.`,
+        acts: [{ label: "Stage all changes", steps: () => ["git add ."], ai: "get all my files ready to commit" }],
         done: (w) => !!you(w) && Object.keys(desk(w).work).every((f) => desk(w).index[f] === desk(w).work[f]),
-        after: () => `Everything says <b>ready to save</b>. Packed, not taped shut yet.`,
-        term: ["staging", "Picking what goes into the next version. The command is <code>git add</code>."],
+        after: () => `Both files say <b>packed</b>. Nothing is kept yet: the box is packed, not taped shut.`,
+        term: ["staging", "Choosing what goes into the next version. The command is <code>git add</code>."],
       },
       {
         id: "commit1",
         kind: "act",
-        say: () => `Now tape the box shut: save the version. Add a short note so you'll know later what it was.`,
+        say: () => `Now tape the box shut. Give the version a short note, so you know later what it was.`,
         acts: [{
           label: "Commit",
           inputs: [{ key: "msg", label: "Note for this version", def: () => "First version" }],
           steps: (_w, v) => [`git commit -m "${q(v.msg)}"`],
-          ai: "save this version with a note saying it's the first one",
+          ai: "commit this as the first version",
         }],
         done: (w) => !!you(w)?.branches.main,
-        after: () => `That dot is your first saved version: every file exactly as it was, plus your note, your name and the time. <b>You are here</b> marks the version your files match.`,
-        term: ["commit", "One saved version of the whole project, with a note. The line of dots is the <b>history</b>."],
+        after: () => `See the dot next to the folder? That's your first version: both files exactly as they are now, with your note, your name and the time. The files now say <b>no changes</b>: they match that version.`,
+        term: ["commit", "One kept version of the whole project, with a note. The line of dots is the <b>history</b>."],
         more: [["Does a commit copy every file?", "It works like a full snapshot you can always go back to. Git avoids storing the same content twice, so it stays small."]],
+      },
+      {
+        id: "edit1",
+        kind: "edit",
+        say: () => `Now change something. Open <b>report.md</b>, fix a word or add a sentence, and press <b>Save file</b>.`,
+        edit: {
+          files: [MAIN_FILE],
+          ask: () => "Fix a word or add a sentence",
+          check: (w) => changed(w),
+          canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /worked best/i, "It was also the cheapest.")),
+        },
+        done: (w) => changed(w),
+        after: () => `report.md now says <b>changed</b>. Saving the file only changed the file; your version from before is untouched. Look at the preview under the folder: green lines are new since that version, red crossed-out lines are gone.`,
+        term: ["diff", "What's different between your files now and the last version. Green was added, red was removed."],
       },
       {
         id: "edit2",
         kind: "edit",
-        say: () => `Change two files: add a line to <b>report.md</b>, and a line to <b>notes.txt</b>.`,
+        say: () => `Add a line to <b>notes.txt</b> too.`,
         edit: {
-          files: [MAIN_FILE, "notes.txt"],
-          ask: () => "Change both files",
-          check: (w) => [MAIN_FILE, "notes.txt"].every((f) => changed(w, f)),
-          canon: (w) => {
-            setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /worked best/i, "Users liked it most."));
-            setWork(w, "notes.txt", work(w, "notes.txt") + "- ask about the budget\n");
-          },
+          files: ["notes.txt"],
+          ask: () => "Add a line",
+          check: (w) => changed(w, "notes.txt") && changed(w),
+          canon: (w) => setWork(w, "notes.txt", work(w, "notes.txt") + "- ask about the budget\n"),
         },
-        done: (w) => [MAIN_FILE, "notes.txt"].every((f) => changed(w, f)),
+        done: (w) => changed(w, "notes.txt") && changed(w),
+        after: () => `Both files say <b>changed</b> now.`,
       },
       {
         id: "stage-one",
         kind: "act",
-        say: () => `The report change is done, the notes aren't. Pack <b>only report.md</b>.`,
-        acts: [{ label: "Stage report.md", steps: () => [`git add ${MAIN_FILE}`], ai: "get only report.md ready to save, not the notes" }],
+        say: () => `The report is finished, the notes aren't. Pack <b>only report.md</b>.`,
+        acts: [{ label: "Stage report.md", steps: () => [`git add ${MAIN_FILE}`], ai: "get only report.md ready to commit, not the notes" }],
         done: (w) => {
           const d = desk(w), h = headTree(w);
           return d.index[MAIN_FILE] === d.work[MAIN_FILE] && d.index[MAIN_FILE] !== h[MAIN_FILE] &&
             d.index["notes.txt"] === h["notes.txt"] && d.work["notes.txt"] !== h["notes.txt"];
         },
-        after: () => `report.md is packed. notes.txt stays out. That's what staging is for: you choose exactly what goes into each version.`,
+        after: () => `report.md is <b>packed</b>, notes.txt stays out. That's what staging is for: you choose exactly what goes into each version.`,
       },
       {
         id: "commit2",
         kind: "act",
-        say: () => `Save the version with just the report in it.`,
+        say: () => `Commit the report change.`,
         acts: [{
           label: "Commit",
-          inputs: [{ key: "msg", label: "Note for this version", def: () => "Add what users liked" }],
+          inputs: [{ key: "msg", label: "Note for this version", def: () => "Improve the report" }],
           steps: (_w, v) => [`git commit -m "${q(v.msg)}"`],
-          ai: "save the staged report change with a note",
+          ai: "commit the packed report change with a note",
         }],
         done: (w) => count(w, you(w)?.branches.main) >= 2,
-        after: () => `Two versions. notes.txt is still <b>changed</b>: it wasn't packed.`,
+        after: () => `Two dots now. notes.txt still says <b>changed</b>: it wasn't packed, so it isn't in that version.`,
       },
     ],
   },
@@ -207,10 +205,10 @@ export const chapters: Chapter[] = [
       {
         id: "restore",
         kind: "act",
-        say: () => `Git still has your last saved version. Throw away what the cat did.`,
-        acts: [{ label: "Discard changes to report.md", steps: () => [`git restore ${MAIN_FILE}`], ai: "undo my unsaved changes to report.md" }],
+        say: () => `Git still has your last version. Throw away what the cat did.`,
+        acts: [{ label: "Discard changes to report.md", steps: () => [`git restore ${MAIN_FILE}`], ai: "undo my changes to report.md since the last version" }],
         done: (w) => !work(w, MAIN_FILE).includes("🐾"),
-        after: () => `Back exactly as you last saved it. Unsaved changes can be thrown away. Saved versions stay safe.`,
+        after: () => `Back exactly as it was in your last version. Changes you haven't committed can be thrown away; versions you committed stay safe.`,
       },
       {
         id: "travel",
@@ -240,10 +238,10 @@ export const chapters: Chapter[] = [
       {
         id: "save-shop",
         kind: "act",
-        say: () => `Save the notes too, so nothing is left unsaved.`,
+        say: () => `Commit the notes too, so nothing is left uncommitted.`,
         acts: [commitAct("Add a note about the budget", "notes.txt")],
         done: (w) => clean(w) && count(w, you(w).branches.main) >= 3,
-        after: () => `Three versions, nothing unsaved.`,
+        after: () => `Three versions, nothing left uncommitted.`,
       },
     ],
   },
