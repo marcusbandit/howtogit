@@ -254,8 +254,8 @@ export const chapters: Chapter[] = [
       {
         id: "return",
         kind: "act",
-        say: () => `Go back to the newest version.`,
-        acts: [{ label: "Back to main", steps: () => ["git switch main"], ai: "go back to the latest version" }],
+        say: () => `Go back to the newest version on the <b>main</b> line.`,
+        acts: [{ label: "Switch back to main", steps: () => ["git switch main"], ai: "go back to the newest version on main" }],
         done: (w) => desk(w)?.branch === "main" && !desk(w).detached,
         after: () => `Back at the newest commit, and HEAD with it. <b>main</b> is the name of this line of commits. More lines are coming.`,
       },
