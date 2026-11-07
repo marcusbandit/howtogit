@@ -191,6 +191,46 @@ function back() {
   save();
 }
 
+/* jump to a step in this chapter from the progress bar. Going back restores it
+ * exactly as you left it when there's a record; otherwise it's rebuilt the
+ * typical way (finished when it's behind you, fresh when it's ahead). */
+function jumpBeat(i: number) {
+  if (i === bi) return;
+  clearSelection();
+  if (i < bi) {
+    const k = history.map((h) => h.ci === ci && h.bi === i).lastIndexOf(true);
+    if (k >= 0) {
+      const snap = history[k];
+      history = history.slice(0, k);
+      w = JSON.parse(snap.w);
+      bi = i;
+      log = JSON.parse(snap.log);
+      beatDone = snap.beatDone;
+      termDesk = beatDesk();
+    } else {
+      w = replayTo(ci, i + 1);
+      bi = i;
+      log = [];
+      beatDone = true;
+      termDesk = beatDesk();
+      history = [];
+    }
+    instant = true;
+    renderAll();
+    instant = false;
+    save();
+    return;
+  }
+  history.push({ ci, bi, w: JSON.stringify(w), log: JSON.stringify(log), beatDone });
+  w = replayTo(ci, i);
+  bi = i;
+  arrive();
+  instant = true;
+  renderAll();
+  instant = false;
+  save();
+}
+
 /* ---------------------------------------------------------------- render */
 
 function renderAll() {
@@ -265,7 +305,7 @@ function renderLesson() {
   box.innerHTML = `
     <p class="kicker"><span>Chapter ${ci + 1} of ${chapters.length}</span> <b>${esc(ch.title)}</b></p>
     ${ch.goal ? `<p class="goal">Goal: ${esc(ch.goal)}</p>` : ""}
-    <div class="beats" aria-hidden="true">${ch.beats.map((_, i) => `<i class="${i < bi || (i === bi && beatDone) ? "done" : i === bi ? "now" : ""}"></i>`).join("")}</div>
+    <nav class="beats" aria-label="steps in this chapter">${ch.beats.map((_, i) => `<button type="button" class="beat ${i < bi || (i === bi && beatDone) ? "done" : i === bi ? "now" : ""}" data-beat="${i}" aria-label="Step ${i + 1}" ${i === bi ? 'aria-current="step"' : ""}></button>`).join("")}</nav>
     <div class="say">${b.say(w)}</div>
     ${isLast ? recapHtml() : ""}
     ${b.kind === "next" ? "" : `<div class="do">${b.acts?.some((a) => !isWatch(a)) ? `<p class="mode-note">${MODE_NOTE[mode]}</p>` : ""}${doHtml(b)}</div>`}
@@ -440,6 +480,7 @@ function wireLesson() {
   }));
   root.querySelector("[data-next]")?.addEventListener("click", next);
   root.querySelector("[data-back]")?.addEventListener("click", back);
+  root.querySelectorAll<HTMLButtonElement>("[data-beat]").forEach((b) => b.addEventListener("click", () => jumpBeat(Number(b.dataset.beat))));
   root.querySelector<HTMLButtonElement>("[data-see]")?.addEventListener("click", (e) =>
     document.querySelector(`.place--${(e.currentTarget as HTMLElement).dataset.see}`)?.scrollIntoView({ block: "start", behavior: prefersReduced ? "auto" : "smooth" }));
   root.querySelector("[data-restart]")?.addEventListener("click", () => goto(0, 0, { replay: true }));

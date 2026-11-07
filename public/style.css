@@ -156,9 +156,6 @@ code { font-family: var(--mono); font-size: 0.86em; }
 .kicker { font-size: 13px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .kicker b { font-family: var(--hand); font-size: 30px; line-height: 1.05; color: var(--ink); flex-basis: 100%; }
 .beats { display: flex; gap: 5px; margin: 12px 0 16px; }
-.beats i { flex: 1; height: 4px; border-radius: 4px; background: var(--line); }
-.beats i.done { background: var(--accent); }
-.beats i.now { background: var(--line-strong); }
 .say { font-size: 17.5px; line-height: 1.6; }
 .say b { font-weight: 700; }
 .say code, .after code, .term code, .more code { background: var(--card-2); padding: 1px 5px; border-radius: 4px; }
@@ -740,3 +737,13 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 /* misspelled words: the red squiggle everyone knows from word processors */
 .typo { text-decoration: underline wavy var(--bad); text-decoration-thickness: 1.3px; text-underline-offset: 3px; text-decoration-skip-ink: none; }
 #editor-text { overflow-y: auto; }
+
+/* the step bar: each segment is a button with a taller hit area than it looks */
+.beats { display: flex; gap: 5px; margin: 6px 0 10px; }
+.beat { flex: 1; height: 16px; padding: 6px 0; border: 0; background: none; border-radius: 4px; }
+.beat::before { content: ""; display: block; height: 4px; border-radius: 4px; background: var(--line); transition: background .15s ease, transform .15s ease; }
+.beat.done::before { background: var(--accent); }
+.beat.now::before { background: var(--line-strong); }
+.beat:hover::before { transform: scaleY(1.8); background: color-mix(in srgb, var(--accent) 55%, var(--line-strong)); }
+.beat.done:hover::before { background: var(--accent-deep); }
+.beat[aria-current="step"]::before { box-shadow: 0 0 0 1.5px var(--ink); }
