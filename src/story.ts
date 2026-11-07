@@ -635,10 +635,10 @@ export const chapters: Chapter[] = [
       {
         id: "wt",
         kind: "act",
-        say: () => `Open a <b>second desk</b> instead: another folder on your laptop, on its own branch, sharing the same history. Git calls it a <b>worktree</b>.`,
+        say: () => `There's a better way: open a <b>second desk</b>. It's another folder on your laptop with its own HEAD and its own branch, sharing the same history. Git calls it a <b>worktree</b>.`,
         acts: [{ label: "Open a second desk", steps: () => ["git worktree add ../my-report-fix -b quick-fix main"], ai: "give me a separate folder for a quick fix on main, without touching my current work" }],
         done: (w) => (you(w)?.desks.length ?? 0) >= 2,
-        after: () => `A second folder, <b>my-report-fix</b>, on a new branch quick-fix. The chart work sits untouched on desk one.`,
+        after: () => `Your laptop now shows two rows: two folders, one shared history. Desk two, <b>my-report-fix</b>, has its own HEAD on a new branch, <b>quick-fix</b>, made from main. Desk one's HEAD is still on <b>chart</b>, next to your half-done work, untouched.`,
         term: ["worktree", "An extra folder for the same project, each on its own branch. People and AI coding tools use them to work on several things at once."],
         more: [["Why do AI tools care?", "An AI agent in your folder would trip over your half-done changes. Giving each agent its own worktree lets several work at once, each on its own branch, and you review each as a pull request."]],
       },

@@ -772,7 +772,7 @@ function aiRun() {
 const COLORS = ["var(--pen-red)", "var(--pen-green)", "var(--pen-amber)", "var(--pen-remote)"];
 const branchColor = new Map<string, string>([["main", "var(--pen-blue)"]]);
 function colorOf(b: string) {
-  if (b === "?") return "var(--pen-blue)";
+  if (b === "?") return "var(--ink-soft)";
   if (!branchColor.has(b)) branchColor.set(b, COLORS[(branchColor.size - 1) % COLORS.length]);
   return branchColor.get(b)!;
 }
@@ -898,18 +898,35 @@ function renderWorld() {
       sec = document.createElement("section");
       sec.className = `place place--${id}${instant ? "" : " is-new"}`;
       sec.dataset.place = id;
-      sec.innerHTML = `<header class="place__head"></header><div class="place__grid"><div class="place__left"></div><div class="strip" data-strip="${id}"></div></div><div class="place__prs"></div>`;
+      sec.innerHTML = `<header class="place__head"></header><div class="place__rows"></div><div class="place__prs"></div>`;
       sec.addEventListener("animationend", () => sec!.classList.remove("is-new"), { once: true });
       prev.after(sec);
     }
     prev = sec;
     setPart(sec.querySelector(".place__head"), headHtml(id));
-    setPart(sec.querySelector(".place__left"), leftHtml(id));
-    const strip = sec.querySelector<HTMLElement>(".strip")!;
-    if (w.repos[id]) { if (!strip.querySelector("svg")) { strip.innerHTML = `<svg class="strip__svg"></svg>`; parts.delete(strip); } }
-    else setPart(strip, `<p class="strip__empty">No version history yet.<br>Just files.</p>`);
+    // one row per desk (a worktree adds a desk): its folder, and its own graph
+    // with that desk's HEAD; the history itself is shared
+    const r = w.repos[id];
+    const n = id === "github" ? 1 : Math.max(1, r?.desks.length ?? 1);
+    const rowsBox = sec.querySelector<HTMLElement>(".place__rows")!;
+    while (rowsBox.children.length > n) rowsBox.lastElementChild!.remove();
+    while (rowsBox.children.length < n) {
+      const i = rowsBox.children.length;
+      const row = document.createElement("div");
+      row.className = `place__grid${instant || i === 0 ? "" : " is-new"}`;
+      row.innerHTML = `<div class="place__left"></div><div class="strip" data-strip="${i ? `${id}:${i}` : id}"></div>`;
+      row.addEventListener("animationend", () => row.classList.remove("is-new"), { once: true });
+      rowsBox.append(row);
+    }
+    [...rowsBox.children].forEach((row, i) => {
+      const key = i ? `${id}:${i}` : id;
+      setPart(row.querySelector(".place__left"), id === "github" ? ghLeftHtml() : r ? deskHtml(id as "you" | "albert", r, i) : deskHtml("you", null, 0));
+      const strip = row.querySelector<HTMLElement>(".strip")!;
+      if (r) { if (!strip.querySelector("svg")) { strip.innerHTML = `<svg class="strip__svg"></svg>`; parts.delete(strip); } }
+      else setPart(strip, `<p class="strip__empty">No version history yet.<br>Just files.</p>`);
+      glideStrip(key, cols, heres);
+    });
     setPart(sec.querySelector(".place__prs"), id === "github" ? prsHtml() : "");
-    glideStrip(id, cols, heres);
   }
   // file state chips that changed get a little pop, so you see what moved
   root.querySelectorAll<HTMLElement>("[data-state-key]").forEach((chip) => {
@@ -956,12 +973,6 @@ function headHtml(id: Place): string {
   return `<span class="ico ${id === "github" ? "ico--cloud" : "ico--laptop"}"></span><h3>${id === "github" ? whyGithub() : title}</h3><span class="place__sub">${sub}</span>${badge}`;
 }
 
-function leftHtml(id: Place): string {
-  if (id === "github") return ghLeftHtml();
-  const r = w.repos[id];
-  if (!r) return deskHtml("you", null, 0);
-  return r.desks.map((_, i) => deskHtml(id, r, i)).join("");
-}
 
 /* the main file as it is in this folder right now; lines you changed since the
  * last saved version are marked, so you can see what a commit will hold */
@@ -1076,7 +1087,11 @@ function layoutOf(host: HTMLElement, cols: string[]) {
 /* frame: an in-between drawing while the layout glides from the old spacing
  * to the new one; it draws only commits that were already there, inks nothing */
 function drawStrip(id: string, cols: string[], frame?: { scale: number; col: number; only: Set<string>; k: number }) {
-  const r = w.repos[id];
+  const [rid, dk] = id.split(":");
+  const r = w.repos[rid];
+  // a strip with a desk number shows that desk's HEAD; a repo with several desks
+  // gives each its own strip, so the plain id is desk 1
+  const deskOnly = dk !== undefined ? Number(dk) : (r && r.desks.length > 1 ? 0 : undefined);
   const host = document.querySelector<HTMLElement>(`[data-strip="${id}"]`);
   const svg = host?.querySelector<SVGSVGElement>("svg");
   if (!r || !svg) return;
@@ -1084,8 +1099,8 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   const have = frame ? new Set([...all].filter((c) => frame.only.has(c))) : all;
   const L = lanes(r);
   const maxLane = Math.max(0, ...[...L.values()].map((v) => v.lane));
-  const laneY = (l: number) => 26 + (maxLane - l) * 44;
-  const baseY = laneY(0);
+  let topPad = 0; // room above the top lane for labels of branch commits
+  const laneY = (l: number) => 26 + topPad + (maxLane - l) * 44;
   const { scale, col } = frame ?? layoutOf(host!, cols);
   if (!frame) { lastLayout.set(id, { scale, col }); lastHave.set(id, all); }
   const x = (cid: string) => X0 + cols.indexOf(cid) * col;
@@ -1093,10 +1108,10 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   const labels = new Map<string, { text: string; color: string; here?: boolean; desk?: number }[]>();
   const push = (cid: string, v: { text: string; color: string; here?: boolean; desk?: number }) => { const a = labels.get(cid) ?? []; a.push(v); labels.set(cid, a); };
   if (!r.bare) r.desks.forEach((d, i) => {
+    if (deskOnly !== undefined && i !== deskOnly) return;
     const h = G.headId(r, d);
     const learned = headKnown();
-    if (h) push(h, { text: learned ? (r.desks.length > 1 ? `HEAD, desk ${i + 1}` : id === "albert" ? "Albert's HEAD" : "HEAD")
-      : (r.desks.length > 1 ? `desk ${i + 1} is here` : id === "albert" ? "Albert is here" : "you are here"), color: "var(--ink)", here: true, desk: i });
+    if (h) push(h, { text: learned ? (rid === "albert" ? "Albert's HEAD" : "HEAD") : (rid === "albert" ? "Albert is here" : "you are here"), color: "var(--ink)", here: true, desk: i });
   });
   Object.entries(r.branches).sort(([a], [b]) => (a === "main" ? -1 : b === "main" ? 1 : 0)).forEach(([b, cid]) => push(cid, { text: b, color: colorOf(b) }));
   // mid-glide, labels stay where they were before the change and move with
@@ -1117,7 +1132,12 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
     now.forEach((arr, cid) => arr.forEach((lb) => add(cid, lb)));
   }
   else lastLabels.set(id, new Map(labels));
-  const maxLabels = Math.max(1, ...[...labels.values()].map((a) => a.length));
+  // labels of commits on main hang below the line; labels of commits on a
+  // branch lane sit right above them, so a branch name is next to its branch
+  const above = (cid: string) => (L.get(cid)?.lane ?? 0) > 0;
+  topPad = Math.max(0, ...[...labels].filter(([c]) => above(c)).map(([, a]) => a.length * 21 + 8));
+  const baseY = laneY(0);
+  const maxLabels = Math.max(1, ...[...labels].filter(([c]) => !above(c)).map(([, a]) => a.length));
   const H = baseY + 34 + maxLabels * 21;
   const W = X0 * 2 + 30 + Math.max(0, cols.length - 1) * col;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -1147,12 +1167,12 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
       const px = x(p), py = laneY(pl.lane);
       const d = py === cy ? linePath(px + 13, py, cx - 13, cy, seed(cid) + pi)
         : smooth([[px + 10, py] as Point, [px + (cx - px) * 0.55, py + (cy - py) * 0.15], [cx - 12, cy]]);
-      const col = colorOf(pi === 1 ? L.get(p)!.br : me.br === "?" ? "main" : me.br);
+      const col = colorOf(pi === 1 ? L.get(p)!.br : me.br);
       const path = el("path", { d, class: "edge", stroke: col, "data-to": cid }) as SVGPathElement;
       gEdges.append(path);
       ink(path, `e:${p}>${cid}`);
     });
-    const col = colorOf(me.br === "?" ? "main" : me.br);
+    const col = colorOf(me.br);
     const g = el("g", { class: "commit", "data-c": cid, style: `transform-origin:${cx}px ${cy}px` });
     const node = el("path", { d: circlePath(cx, cy, 12, seed(cid)), class: "node", stroke: col }) as SVGPathElement;
     const t = el("title");
@@ -1171,9 +1191,10 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
     if (!have.has(cid)) continue;
     const cx = x(cid);
     const top = laneY(L.get(cid)?.lane ?? 0);
-    gLabels.append(el("path", { d: linePath(cx, top + 14, cx, baseY + 26, seed(cid)), class: "label__tie", "data-tie": cid }));
+    const up = above(cid);
+    gLabels.append(el("path", { d: up ? linePath(cx, top - 14, cx, top - 17, seed(cid)) : linePath(cx, top + 14, cx, baseY + 26, seed(cid)), class: "label__tie", "data-tie": cid }));
     arr.forEach((lb, i) => {
-      const y = baseY + 42 + i * 21;
+      const y = up ? top - 24 - i * 21 : baseY + 42 + i * 21;
       // mid-glide a HEAD marker moves from its old column toward its new one
       const lx = cx; // mid-glide, labels ride along with their commit
       const tx = el("text", { x: lx, y, class: `label ${lb.here ? "label--here" : ""}`, fill: lb.color });
@@ -1186,7 +1207,9 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
         g.append(el("path", {
           class: "here__arrow",
           // straight sides like a pen stroke, the base sagging a hair
-          d: `M ${lx - 4.6} ${y - 12.6} L ${lx + 0.2 + s * 0.05} ${y - 20.6} L ${lx + 4.7} ${y - 12.3} Q ${lx} ${y - 11.5} ${lx - 4.6} ${y - 12.6} Z`,
+          // under the commit it points up at it; above a branch commit it points down
+          d: up ? `M ${lx - 4.6} ${y + 3.6} L ${lx + 0.2 + s * 0.05} ${y + 11.4} L ${lx + 4.7} ${y + 3.3} Q ${lx} ${y + 2.6} ${lx - 4.6} ${y + 3.6} Z`
+            : `M ${lx - 4.6} ${y - 12.6} L ${lx + 0.2 + s * 0.05} ${y - 20.6} L ${lx + 4.7} ${y - 12.3} Q ${lx} ${y - 11.5} ${lx - 4.6} ${y - 12.6} Z`,
         }), tx);
         gLabels.append(g);
       } else {
@@ -1219,13 +1242,13 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
     // labels start from where the glide left them; if a new commit appeared,
     // they hold still while it is drawn and connected, then step onto it
     const from = glided ? hereSpots() : heres;
-    const grew = !!had && [...placeCommits(w.repos[id])].some((c) => !had.has(c));
+    const grew = !!had && [...placeCommits(w.repos[id.split(":")[0]])].some((c) => !had.has(c));
     host?.classList.remove("is-gliding");
     drawStrip(id, cols);
     if (!instant) slideHere(from, id, grew ? 380 : 0);
     syncScroll();
   };
-  if (instant || prefersReduced || !host || !prev || !had || !w.repos[id]) return finish();
+  if (instant || prefersReduced || !host || !prev || !had || !w.repos[id.split(":")[0]]) return finish();
   const next = layoutOf(host, cols);
   if (Math.abs(next.scale - prev.scale) < 0.01 && Math.abs(next.col - prev.col) < 0.5) return finish();
   const dur = 320, t0 = performance.now();
