@@ -187,6 +187,7 @@ function runSteps(act, vals) {
     actN++;
     const who = act.who ?? "you";
     const deskI = who === "you" ? (mode === "command" ? termDesk : beatDesk()) : 0;
+    flushWorld();
     const before = snapshotFx();
     let ok = true;
     const startKey = worldKey(w);
@@ -210,6 +211,8 @@ function runSteps(act, vals) {
     }
     if (ok && worldKey(w) !== startKey)
         ranActs.add(act);
+    if (worldKey(w) === startKey)
+        focusPlace = null; // nothing changed: stay where you are
     if (ok)
         markArrivals(before, who);
     afterChange();
@@ -252,7 +255,9 @@ function runTyped(line) {
         return;
     keepForUndo();
     actN++;
+    flushWorld();
     const before = snapshotFx();
+    const startKey = worldKey(w);
     const entry = { kind: "cmd", text: line.trim(), who: "you", act: actN };
     log.push(entry);
     const steps = taskSteps();
@@ -267,7 +272,8 @@ function runTyped(line) {
         log.push({ kind: "coach", text: c.text, good: c.good, who: "you" });
     if (r.desk !== undefined)
         termDesk = r.desk;
-    focusPlace = placeFor(line, "you");
+    // a command that changed nothing (git status, a typo) keeps you at the terminal
+    focusPlace = r.ok && worldKey(w) !== startKey ? placeFor(line, "you") : null;
     if (r.ok)
         markArrivals(before, "you");
     afterChange();
@@ -316,11 +322,16 @@ function afterChange() {
         renderLesson();
         skipEase = false;
         renderTabs();
+        worldPending = true;
         worldReady = (async () => {
-            await Promise.all($("#lesson").getAnimations().map((m) => m.finished.catch(() => undefined)));
-            await bringIntoView(overview(), strip);
-            renderWorld();
-            armBackUp();
+            try {
+                await Promise.all($("#lesson").getAnimations().map((m) => m.finished.catch(() => undefined)));
+                await bringIntoView(overview(), strip);
+            }
+            finally {
+                flushWorld();
+                armBackUp();
+            }
         })();
     }
     else {
@@ -337,6 +348,15 @@ function afterChange() {
 }
 let lastPlace = null;
 let worldReady = Promise.resolve();
+// a phone's world render waits for the page glide; the next action (or the
+// glide's end) draws it at once, so nothing ever reads a stale graph
+let worldPending = false;
+function flushWorld() {
+    if (!worldPending)
+        return;
+    worldPending = false;
+    renderWorld();
+}
 /* phones show one place at a time, picked with tabs; a step's change switches
  * to the place it happened in, and a dot marks any other place that changed */
 let phoneTab = "you";
@@ -355,11 +375,12 @@ function renderTabs() {
     if (!present.includes(phoneTab))
         phoneTab = "you";
     const name = { github: "GitHub", you: "Your computer", albert: "Albert's" };
+    const sig = new Map(present.map((id) => [id, placeSig(id)]));
     if (instant)
-        present.forEach((id) => seenSig.set(id, placeSig(id)));
-    seenSig.set(phoneTab, placeSig(phoneTab));
+        present.forEach((id) => seenSig.set(id, sig.get(id)));
+    seenSig.set(phoneTab, sig.get(phoneTab));
     setPart(root.querySelector(".world__tabs"), present.length < 2 ? "" : present.map((id) => `<button type="button" role="tab" class="wtab wtab--${id}" data-tab="${id}" aria-selected="${id === phoneTab}">
-      <span class="ico ${id === "github" ? "ico--cloud" : "ico--laptop"}" aria-hidden="true"></span>${name[id]}${seenSig.get(id) !== placeSig(id) ? `<span class="wtab__dot" aria-label="changed"></span>` : ""}</button>`).join(""));
+      <span class="ico ${id === "github" ? "ico--cloud" : "ico--laptop"}" aria-hidden="true"></span>${name[id]}${seenSig.get(id) !== sig.get(id) ? `<span class="wtab__dot" aria-label="changed"></span>` : ""}</button>`).join(""));
     root.querySelectorAll(".place[data-place]").forEach((p) => p.classList.toggle("is-shown", p.dataset.place === phoneTab));
 }
 /* ------------------------------------------------------------ navigation */
@@ -1086,7 +1107,7 @@ function renderWorld() {
         const rowsBox = sec.querySelector(".place__rows");
         while (rowsBox.children.length > n) {
             const k = `${id}:${rowsBox.children.length - 1}`;
-            [lastLayout, lastHave, lastLabels, drawn].forEach((m) => m.delete(k));
+            [lastLayout, lastHave, lastLabels, drawn, lastBase].forEach((m) => m.delete(k));
             rowsBox.lastElementChild.remove();
         }
         while (rowsBox.children.length < n) {
@@ -1280,6 +1301,7 @@ function layoutOf(host, cols) {
 /* how long the pen takes over a new line: longer lines take longer, so every
  * one reads as drawn, never snapped in */
 const lineMs = (p) => Math.max(300, Math.min(620, p.getTotalLength() * 4));
+// returns true when the final drawing waits for a lane glide to finish
 function drawStrip(id, cols, frame) {
     const [rid, dk] = id.split(":");
     const r = w.repos[rid];
@@ -1289,7 +1311,7 @@ function drawStrip(id, cols, frame) {
     const host = document.querySelector(`[data-strip="${id}"]`);
     const svg = host?.querySelector("svg");
     if (!r || !svg)
-        return;
+        return false;
     const hostH = frame ? 0 : host.getBoundingClientRect().height;
     // what was drawn before this change, for the glide down when a lane is added
     const prevHave = frame ? undefined : lastHave.get(id), prevLabels = frame ? undefined : lastLabels.get(id);
@@ -1298,7 +1320,7 @@ function drawStrip(id, cols, frame) {
     const L = lanes(r);
     const maxLane = Math.max(0, ...[...L.values()].map((v) => v.lane));
     let topPad = 0; // room above the top lane for labels of branch commits
-    const off = frame?.dy ?? 0; // mid-glide, everything drawn this much higher
+    let off = frame?.dy ?? 0; // mid-glide, everything drawn this much higher
     const laneY = (l) => 26 + topPad + (maxLane - l) * 44 + off;
     const { scale, col } = frame ?? layoutOf(host, cols);
     if (!frame) {
@@ -1344,6 +1366,9 @@ function drawStrip(id, cols, frame) {
     // top branch lane sit right above them (lower lanes keep theirs below), so a branch name is next to its branch
     const above = (cid) => { const l = L.get(cid)?.lane ?? 0; return l > 0 && l === maxLane; };
     topPad = Math.max(0, ...[...labels].filter(([c]) => above(c)).map(([, a]) => a.length * 21 + 8));
+    // a sideways glide keeps main where it was; the lane glide then moves it
+    if (frame && frame.dy === undefined && lastBase.has(id))
+        off = lastBase.get(id) - laneY(0);
     const baseY = laneY(0);
     const maxLabels = Math.max(1, ...[...labels].filter(([c]) => !above(c)).map(([, a]) => a.length));
     const H = baseY - off + 34 + maxLabels * 21;
@@ -1357,14 +1382,16 @@ function drawStrip(id, cols, frame) {
     // It redraws frame by frame, like the sideways glide, with no CSS transform
     // (Firefox on Android stops repainting lines inked under one), and only
     // then draws the new lines and dots.
+    // (lane geometry is compared unscaled: a change of scale alone is the
+    // sideways glide's job, not a new lane)
     if (!frame) {
-        const base = baseY * scale, was = lastBase.get(id);
-        lastBase.set(id, base);
-        if (was !== undefined && Math.abs(base - was) > 1 && !instant && !prefersReduced && prevHave) {
+        const was = lastBase.get(id);
+        lastBase.set(id, baseY);
+        if (was !== undefined && Math.abs(baseY - was) > 0.5 && !instant && !prefersReduced && prevHave) {
             easeHeight(host, hostH);
             if (prevLabels)
                 lastLabels.set(id, prevLabels);
-            const from = (was - base) / scale, t0 = performance.now(), dur = 320;
+            const from = was - baseY, t0 = performance.now(), dur = 320;
             settleUntil = Math.max(settleUntil, t0 + dur + 20);
             const step = () => {
                 const t = Math.min(1, (performance.now() - t0) / dur);
@@ -1377,7 +1404,7 @@ function drawStrip(id, cols, frame) {
                 tweens.set(id, window.requestAnimationFrame(step));
             };
             step();
-            return;
+            return true;
         }
     }
     svg.innerHTML = "";
@@ -1498,6 +1525,7 @@ function drawStrip(id, cols, frame) {
     }
     if (!frame)
         hideArrivingLabels(rid, gLabels);
+    return false;
 }
 /* when a change re-spaces a strip (a new commit makes room), everything that
  * was already there glides to its new spot; new commits are inked once it lands */
@@ -1530,8 +1558,8 @@ function glideStrip(id, cols, heres) {
         const from = glided ? hereSpots() : heres;
         const grew = !!had && [...placeCommits(w.repos[id.split(":")[0]])].some((c) => !had.has(c));
         host?.classList.remove("is-gliding");
-        drawStrip(id, cols);
-        if (!instant)
+        // labels only slide on the final drawing, never on a lane glide's first frame
+        if (!drawStrip(id, cols) && !instant)
             slideHere(from, id, grew ? 380 : 0);
         syncScroll();
     };
@@ -1565,6 +1593,8 @@ let lead = null;
 // (a phone's address bar sliding away mid-scroll is one) keeps where you are.
 function syncScroll(pin = true) {
     const strips = [...document.querySelectorAll(".strip")];
+    if (lead && !lead.isConnected)
+        lead = null;
     const ov = ovScroller();
     strips.forEach((s) => {
         if (pin)
@@ -1673,8 +1703,9 @@ function bringIntoView(els, focus) {
     if (r.bottom - r.top > floor - 12 && focus)
         r = focus.getBoundingClientRect();
     let dy = r.bottom > floor ? r.bottom - floor : 0;
-    if (r.top - dy < 12)
-        dy = r.top - 12;
+    const top = topEdge() + 12; // below the header, which stays pinned on phones
+    if (r.top - dy < top)
+        dy = r.top - top;
     if (Math.abs(dy) < 4)
         return Promise.resolve();
     window.scrollBy({ top: dy, behavior: prefersReduced ? "auto" : "smooth" });

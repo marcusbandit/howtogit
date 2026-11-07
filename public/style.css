@@ -1010,7 +1010,6 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
     background: linear-gradient(color-mix(in srgb, var(--paper) 0%, transparent), color-mix(in srgb, var(--paper) 92%, transparent)); }
 
   /* one place at a time; the others keep their width so their graphs stay drawn */
-  .world { position: relative; gap: 10px; }
   .world__tabs:not(:empty) { display: flex; gap: 6px; }
   .ov-scroll:not([hidden]) { display: block; }
   .wtab { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 4px 8px;
@@ -1026,7 +1025,7 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
   /* every history line sits together on top as one overview, so a push or a
    * pull flies between lines you can all see; the files sit below in tabs,
    * one place at a time. The panels flatten into the page to allow this. */
-  .world { gap: 0; }
+  .world { position: relative; gap: 0; scroll-margin-top: 72px; }
   .world > .place, .place__rows, .place__grid { display: contents; }
   .world__recap:not(:empty) { order: 0; margin-bottom: 4px; }
   .place--github > .place__head { order: 1; } .place--github .strip { order: 2; }
@@ -1045,7 +1044,6 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
   .place--albert > .place__head, .place--albert .strip { border-color: color-mix(in srgb, var(--friend) 55%, transparent); }
   .place > .place__head, .place .strip { box-sizing: border-box; }
   /* one scroller for every line; the lines themselves only follow it */
-  .world { position: relative; }
   .place .strip, .place .strip.is-gliding { overflow-x: hidden; }
   .place > .place__head { position: relative; z-index: 2; }
   .ov-scroll { position: absolute; z-index: 1; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }

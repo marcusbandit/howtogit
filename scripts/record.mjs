@@ -37,9 +37,9 @@ try {
   await sleep(MS);
   await send("Page.stopScreencast");
   const keep = frames.filter((f) => f.t >= t0);
-  const N = Number(a.n ?? 12); // --n 60 keeps more frames, for fast motion
+  const N = Math.max(1, Math.floor(Number(a.n)) || 12); // --n 60 keeps more frames, for fast motion
   const step = Math.max(1, Math.floor(keep.length / N));
-  keep.filter((_, i) => i % step === 0).slice(0, N).forEach((f, i) => writeFileSync(`${OUT}/f${String(i).padStart(2, "0")}_${Math.round(f.t - t0)}ms.png`, Buffer.from(f.d, "base64")));
+  keep.filter((_, i) => i % step === 0).slice(0, N).forEach((f, i) => writeFileSync(`${OUT}/f${String(i).padStart(3, "0")}_${Math.round(f.t - t0)}ms.png`, Buffer.from(f.d, "base64")));
   console.log(`frames=${keep.length} animating right after: ${anim.result.result.value}`);
 } catch (e) { console.error("record failed:", e.message); process.exitCode = 1; }
 finally { try { ws?.close(); } catch {} chrome.kill("SIGKILL"); }
