@@ -890,3 +890,6 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .hist__cols, .hist__list li { grid-template-columns: 64px minmax(0, 1fr) 40px max-content; }
 .hist__head, .hist__open { white-space: nowrap; }
 .hist__cols span:last-child { min-width: 52px; }
+/* the HEAD marker: a hand-drawn ink arrowhead over the word */
+.here__arrow { fill: var(--ink); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
+.here { transform-box: fill-box; transform-origin: center; }

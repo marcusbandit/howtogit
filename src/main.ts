@@ -707,9 +707,9 @@ function setPart(node: Element | null, html: string): boolean {
 const fileStateSeen = new Map<string, string>();
 
 /* retype a label: backspace the old words, then type the new ones, with a caret.
- * The "▲ " in front stays put. */
+ */
 function typeOver(t: SVGTextElement, from: string, to: string, ms: number) {
-  const keep = from.startsWith("▲ ") && to.startsWith("▲ ") ? "▲ " : "";
+  const keep = "";
   const a = from.slice(keep.length), b = to.slice(keep.length);
   const steps = a.length + b.length;
   const tick = Math.max(18, ms / Math.max(1, steps));
@@ -726,9 +726,9 @@ function typeOver(t: SVGTextElement, from: string, to: string, ms: number) {
 /* where each HEAD marker sat before a change: screen position and commit */
 function hereSpots(): Map<string, { x: number; y: number; at: string; text: string }> {
   const m = new Map<string, { x: number; y: number; at: string; text: string }>();
-  document.querySelectorAll<SVGTextElement>("[data-here]").forEach((t) => {
+  document.querySelectorAll<SVGGElement>("[data-here]").forEach((t) => {
     const r = t.getBoundingClientRect();
-    m.set(t.dataset.here!, { x: r.left + r.width / 2, y: r.top + r.height / 2, at: t.dataset.at!, text: t.textContent ?? "" });
+    m.set(t.dataset.here!, { x: r.left + r.width / 2, y: r.top + r.height / 2, at: t.dataset.at!, text: t.querySelector("text")?.textContent ?? "" });
   });
   return m;
 }
@@ -736,22 +736,23 @@ function hereSpots(): Map<string, { x: number; y: number; at: string; text: stri
  * (and if it was still "you are here", the new word appears as it lands) */
 function slideHere(before: Map<string, { x: number; y: number; at: string; text: string }>, place: string) {
   if (prefersReduced) return;
-  document.querySelectorAll<SVGTextElement>(`[data-strip="${place}"] [data-here]`).forEach((t) => {
+  document.querySelectorAll<SVGGElement>(`[data-strip="${place}"] [data-here]`).forEach((t) => {
     const was = before.get(t.dataset.here!);
     if (!was || was.at === t.dataset.at) return;
     const r = t.getBoundingClientRect();
     const scale = parseFloat(getComputedStyle(t.closest(".strip")!).getPropertyValue("--strip-scale")) || 1;
     const dx = (was.x - (r.left + r.width / 2)) / scale, dy = (was.y - (r.top + r.height / 2)) / scale;
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-    t.classList.remove("is-new", "is-swap");
-    const word = t.textContent ?? "";
+    const label = t.querySelector("text")!;
+    label.classList.remove("is-new", "is-swap");
+    const word = label.textContent ?? "";
     const tie = t.parentElement?.querySelector<SVGPathElement>(`[data-tie="${t.dataset.at}"]`);
     tie?.animate([{ opacity: 0 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }], { duration: 750 });
     // a straight, even glide along the line to the commit it now points at
     t.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
       { duration: 650, easing: "cubic-bezier(.4,0,.2,1)" });
     // and on the way, the old words are backspaced and the new ones typed in
-    if (was.text !== word) typeOver(t, was.text, word, 900);
+    if (was.text !== word) typeOver(label, was.text, word, 900);
   });
 }
 
@@ -1022,9 +1023,20 @@ function drawStrip(id: string, cols: string[]) {
     gLabels.append(el("path", { d: linePath(cx, top + 14, cx, baseY + 26, seed(cid)), class: "label__tie", "data-tie": cid }));
     arr.forEach((lb, i) => {
       const y = baseY + 42 + i * 21;
-      const tx = el("text", { x: cx, y, class: `label ${lb.here ? "label--here" : ""}`, fill: lb.color, ...(lb.here ? { "data-here": `${id}:${lb.desk}`, "data-at": cid } : {}) });
-      tx.textContent = lb.here ? `▲ ${lb.text}` : lb.text;
-      gLabels.append(tx);
+      const tx = el("text", { x: cx, y, class: `label ${lb.here ? "label--here" : ""}`, fill: lb.color });
+      tx.textContent = lb.text;
+      if (lb.here) {
+        // HEAD (or "you are here") travels as one piece: a little hand-drawn
+        // ink arrowhead pointing up at the commit, with the word under it
+        const g = el("g", { class: "here", "data-here": `${id}:${lb.desk}`, "data-at": cid });
+        const s = seed(cid) % 7;
+        g.append(el("path", {
+          class: "here__arrow",
+          // straight sides like a pen stroke, the base sagging a hair
+          d: `M ${cx - 4.6} ${y - 12.6} L ${cx + 0.2 + s * 0.05} ${y - 20.6} L ${cx + 4.7} ${y - 12.3} Q ${cx} ${y - 11.5} ${cx - 4.6} ${y - 12.6} Z`,
+        }), tx);
+        gLabels.append(g);
+      } else gLabels.append(tx);
       const k = `l:${cid}:${lb.text}`;
       // the plain label turning into the git word gets a little bounce
       const swapped = lb.here && /HEAD/.test(lb.text) && !seen.has(k) && [...seen].some((x) => x.startsWith(`l:${cid}:`) && /is here$/.test(x));
