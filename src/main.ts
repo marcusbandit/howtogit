@@ -1005,11 +1005,6 @@ function renderWorld() {
     fileStateSeen.set(k, s);
   });
   renderTabs();
-  // phones cap the file preview's height; keep what just changed in view
-  root.querySelectorAll<HTMLElement>(".peek").forEach((pk) => {
-    const hit = pk.querySelector<HTMLElement>(".is-mark, .is-new, .is-gone");
-    if (hit && pk.scrollHeight > pk.clientHeight) pk.scrollTop = Math.max(0, hit.offsetTop - 28);
-  });
   syncScroll();
   floatPlaces(placeRects);
 }

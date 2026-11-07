@@ -1001,11 +1001,14 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
   .beats { margin: 10px 0 12px; }
 
   /* Back, Undo and Next ride along the bottom edge */
-  body:not([data-intro]) { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
+  body:not([data-intro]) { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
   .lesson__nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; margin: 0;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
     background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(6px);
     border-top: 1.5px solid var(--line); }
+  /* what scrolls under the bar fades out instead of being sliced off */
+  .lesson__nav::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 28px; pointer-events: none;
+    background: linear-gradient(color-mix(in srgb, var(--paper) 0%, transparent), color-mix(in srgb, var(--paper) 92%, transparent)); }
 
   /* one place at a time; the others keep their width so their graphs stay drawn */
   .world { position: relative; gap: 10px; }
@@ -1019,9 +1022,6 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
     overflow: hidden; visibility: hidden; pointer-events: none; }
   .world__tabs:not(:empty) ~ .place .place__head > .ico, .world__tabs:not(:empty) ~ .place .place__head > h3 { display: none; }
   .place__head { margin-bottom: 8px; }
-  .peek { position: relative; max-height: 132px; overflow-y: auto; overscroll-behavior: contain;
-    -webkit-mask: linear-gradient(#000 calc(100% - 20px), transparent); mask: linear-gradient(#000 calc(100% - 20px), transparent); padding-bottom: 14px; }
-  .peek__name { position: sticky; top: 0; background: var(--card); }
 }
 @media (max-width: 520px) {
   body:not([data-intro]) .brand { display: none; }
