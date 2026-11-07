@@ -15,7 +15,7 @@ import { chapters, MAIN_FILE, choices, choiceKey, valueFor, type Act, type Beat,
 import { exec, replayTo, finishBeat } from "./engine.js";
 import { showIntro, introSeen, whyGithub } from "./intro.js";
 import { explain } from "./explain.js";
-import { circlePath, linePath, drawOn, el, prefersReduced } from "./sketch.js";
+import { circlePath, linePath, elbowPath, drawOn, el, prefersReduced } from "./sketch.js";
 
 type Mode = "buttons" | "command" | "ai";
 type Place = "github" | "you" | "albert";
@@ -1201,15 +1201,9 @@ function layoutOf(host: HTMLElement, cols: string[]) {
 
 /* frame: an in-between drawing while the layout glides from the old spacing
  * to the new one; it draws only commits that were already there, inks nothing */
-/* a line between lanes turns one rounded corner. Branching off, it leaves its
- * commit straight up (or down) and then runs along the new lane; merging back,
- * it runs along its own lane first and then drops into the merge commit. */
-function laneEdge(px: number, py: number, cx: number, cy: number, branching: boolean): string {
-  const d = Math.sign(cy - py);
-  const r = Math.max(4, Math.min(14, Math.abs(cy - py) - 12, (cx - px) / 2 - 13));
-  if (branching) return `M ${px} ${py + 12 * d} L ${px} ${cy - r * d} Q ${px} ${cy} ${px + r} ${cy} L ${cx - 13} ${cy}`;
-  return `M ${px + 13} ${py} L ${cx - r} ${py} Q ${cx} ${py} ${cx} ${py + r * d} L ${cx} ${cy - 12 * d}`;
-}
+/* how long the pen takes over a new line: longer lines take longer, so every
+ * one reads as drawn, never snapped in */
+const lineMs = (p: SVGPathElement) => Math.max(300, Math.min(620, p.getTotalLength() * 4));
 
 function drawStrip(id: string, cols: string[], frame?: { scale: number; col: number; only: Set<string>; k: number }) {
   const [rid, dk] = id.split(":");
@@ -1294,7 +1288,7 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
     if (instant || seen.has(key)) { seen.add(key); return; }
     seen.add(key);
     if (into) {
-      dur = Math.max(300, Math.min(620, p.getTotalLength() * 4));
+      dur = lineMs(p);
       inkedInto.set(into, Math.max(inkedInto.get(into) ?? 0, dur));
       inkUntil = Math.max(inkUntil, performance.now() + dur);
       void drawOn(p, { duration: dur, even: true });
@@ -1319,7 +1313,12 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
       if (!have.has(p)) return;
       const pl = L.get(p)!;
       const px = x(p), py = laneY(pl.lane);
-      const d = py === cy ? linePath(px + 13, py, cx - 13, cy, seed(cid) + pi) : laneEdge(px, py, cx, cy, me.lane > pl.lane);
+      const d = py === cy ? linePath(px + 13, py, cx - 13, cy, seed(cid) + pi) : (me.lane > pl.lane
+        // between lanes, one rounded corner with the same pen: a branch leaves
+        // its commit straight up (or down) and then runs along; a merge runs
+        // along its own lane and then drops into the merge commit
+        ? elbowPath(px, py + 12 * Math.sign(cy - py), cx - 13, cy, true, seed(cid) + pi)
+        : elbowPath(px + 13, py, cx, cy - 12 * Math.sign(cy - py), false, seed(cid) + pi));
       const col = colorOf(pi === 1 ? L.get(p)!.br : me.br);
       const path = el("path", { d, class: "edge", stroke: col, "data-to": cid }) as SVGPathElement;
       gEdges.append(path);
@@ -1379,10 +1378,22 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
       seen.add(k);
     });
   }
+  if (!frame) hideArrivingLabels(rid, gLabels);
 }
 
 /* when a change re-spaces a strip (a new commit makes room), everything that
  * was already there glides to its new spot; new commits are inked once it lands */
+/* a version still on its way shows no branch names yet (a HEAD marker moving
+ * onto it keeps sliding, so you see where it is going) */
+function hideArrivingLabels(rid: string, g: SVGElement) {
+  // visibility, not opacity: a label's own pop-in animation would override opacity
+  g.querySelectorAll<SVGElement>("text.label[data-at]").forEach((t) => { if (arriving.has(`${rid}:${t.dataset.at}`)) t.style.visibility = "hidden"; });
+  g.querySelectorAll<SVGElement>("[data-tie]").forEach((t) => {
+    const cid = t.dataset.tie!;
+    if (arriving.has(`${rid}:${cid}`) && !g.querySelector(`.here[data-at="${cid}"]`)) t.style.visibility = "hidden";
+  });
+}
+
 const lastLayout = new Map<string, { scale: number; col: number }>();
 const lastBase = new Map<string, number>();
 const lastHave = new Map<string, Set<string>>();
@@ -1630,6 +1641,12 @@ function markArrivals(before: FxSnap, who: Who) {
 function landed(place: string, cid: string) {
   if (!arriving.delete(`${place}:${cid}`)) return;
   document.querySelectorAll<SVGElement>(`[data-strip^="${place}"] [data-c="${cid}"], [data-strip^="${place}"] .edge[data-to="${cid}"]`).forEach((n) => (n.style.opacity = ""));
+  // its branch names pop in with it
+  document.querySelectorAll<SVGElement>(`[data-strip^="${place}"] text.label[data-at="${cid}"], [data-strip^="${place}"] [data-tie="${cid}"]`).forEach((n) => {
+    if (!n.style.visibility) return;
+    n.style.visibility = "";
+    if (n.matches("text.label")) { n.classList.remove("is-new"); void n.getBoundingClientRect(); n.classList.add("is-new"); }
+  });
 }
 
 function fx(): HTMLElement { return $("#fx"); }
@@ -1704,7 +1721,8 @@ function fly(from: Element, to: Element, kind: "push" | "pull", lines: SVGPathEl
       const now = nodeEl(place, cid);
       if (now && now !== to) { to = now; lines = [...(now.ownerSVGElement?.querySelectorAll<SVGPathElement>(`.edge[data-to="${cid}"]`) ?? [])]; }
     }
-    lines.forEach((l) => { l.style.opacity = ""; void drawOn(l, { duration: 240 }); });
+    // its line grows into it at the same even pace as a new commit's
+    lines.forEach((l) => { l.style.opacity = ""; void drawOn(l, { duration: lineMs(l), even: true }); });
     (to as SVGGElement).style.opacity = "";
     pop(to);
     ring(b, kind === "push" ? "var(--pen-remote)" : "var(--pen-blue)");
