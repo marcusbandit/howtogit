@@ -756,3 +756,23 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .tk-arg { color: #f1e9d8; }
 .cmd-n { float: right; padding-left: 10px; font-size: 11.5px; color: #a89c84; }
 .btn.is-done:disabled { opacity: 1; background: color-mix(in srgb, var(--ok) 12%, var(--card)); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 55%, transparent); box-shadow: none; }
+
+/* command chips: light paper chips with deep ink colours in light mode, dark
+   chips with bright colours in dark mode; the terminal stays dark in both */
+.cmd-hint { background: #efe6d3; color: var(--ink); border: 1.5px solid var(--line); }
+.cmd-hint .tk-prog { color: #2357a8; }
+.cmd-hint .tk-sub { color: #ad3b10; }
+.cmd-hint .tk-flag { color: #6a43c0; }
+.cmd-hint .tk-str { color: #266b33; }
+.cmd-hint .tk-url { color: #825407; }
+.cmd-hint .tk-arg { color: var(--ink); }
+.cmd-hint .cmd-n { color: var(--ink-soft); }
+.cmd-hint.is-friend { background: color-mix(in srgb, var(--friend) 10%, #efe6d3); }
+:root[data-theme="dark"] .cmd-hint { background: #0f1013; border-color: var(--line); }
+:root[data-theme="dark"] .cmd-hint .tk-prog, .term-box .tk-prog, .pv-term .tk-prog { color: #a9c9ff; }
+:root[data-theme="dark"] .cmd-hint .tk-sub, .term-box .tk-sub { color: #ffa877; }
+:root[data-theme="dark"] .cmd-hint .tk-flag, .term-box .tk-flag { color: #d4b8ff; }
+:root[data-theme="dark"] .cmd-hint .tk-str, .term-box .tk-str { color: #a8e29a; }
+:root[data-theme="dark"] .cmd-hint .tk-url, .term-box .tk-url { color: #f5cf7e; }
+:root[data-theme="dark"] .cmd-hint .tk-arg, .term-box .tk-arg { color: #f1e9d8; }
+:root[data-theme="dark"] .cmd-hint.is-friend { background: color-mix(in srgb, var(--friend) 14%, #0f1013); }
