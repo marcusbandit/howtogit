@@ -10,7 +10,7 @@ export function exec(w, cmd, who, desk) {
         w.vars.rejected = "1";
     if (r.ok && /^\s*git\s+log\b/.test(cmd))
         w.vars.sawLog = "1";
-    if (r.ok && /^\s*git\s+(switch|checkout)\b.*--detach|^\s*git\s+checkout\s+[0-9a-f]{5,}/.test(cmd))
+    if (r.ok && /^\s*git\s+(switch|checkout)\b.*--detach|^\s*git\s+checkout\s+[0-9a-f]{5,}\s*$/.test(cmd))
         w.vars.movedHead = "1";
     return r;
 }

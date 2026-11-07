@@ -10,7 +10,7 @@ export function exec(w: G.World, cmd: string, who: "you" | "albert", desk: numbe
   const r = run(w, { repo: who, desk, author: authorOf(who) }, cmd);
   if (/\[rejected\]/.test(r.out)) w.vars.rejected = "1";
   if (r.ok && /^\s*git\s+log\b/.test(cmd)) w.vars.sawLog = "1";
-  if (r.ok && /^\s*git\s+(switch|checkout)\b.*--detach|^\s*git\s+checkout\s+[0-9a-f]{5,}/.test(cmd)) w.vars.movedHead = "1";
+  if (r.ok && /^\s*git\s+(switch|checkout)\b.*--detach|^\s*git\s+checkout\s+[0-9a-f]{5,}\s*$/.test(cmd)) w.vars.movedHead = "1";
   return r;
 }
 

@@ -91,8 +91,12 @@ export function explain(cmd) {
                 if (rest[m + 1])
                     P(rest[m + 1], "the commit message itself (the quotes keep the words together as one value)", "value");
             }
-            if (rest.includes("-am"))
+            const am = rest.indexOf("-am");
+            if (am >= 0) {
                 P("-am", "two short flags written together: -a stages every changed file git already knows, -m takes the message.");
+                if (rest[am + 1])
+                    P(rest[am + 1], "the commit message itself", "value");
+            }
             A("git commit", "without -m, git opens an editor for you to write the message");
             A('git commit -am "message"', "stage all changed files and commit in one go (new files still need git add)");
             break;
@@ -228,6 +232,7 @@ export function explain(cmd) {
             if (sub)
                 P(sub, "a git command");
     }
-    return { parts, also, flags: parts.some((p) => p.kind === "flag"), docs: sub ? `https://git-scm.com/docs/git-${sub}` : undefined };
+    const known = ["init", "add", "commit", "restore", "log", "switch", "checkout", "branch", "remote", "push", "pull", "fetch", "merge", "clone", "worktree", "status", "diff"];
+    return { parts, also, flags: parts.some((p) => p.kind === "flag"), docs: sub && known.includes(sub) ? `https://git-scm.com/docs/git-${sub}` : undefined };
 }
 //# sourceMappingURL=explain.js.map

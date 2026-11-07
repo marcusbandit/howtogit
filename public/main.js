@@ -42,7 +42,7 @@ function explainPanelHtml(cmd) {
         ${e.also.length ? `<h4>Other ways to write it</h4>
         <dl class="xp__list xp__list--also">${e.also.map((a) => `<div><dt><code>${a.cmd.startsWith("git") || a.cmd.startsWith("gh") ? hl(a.cmd) : esc(a.cmd)}</code></dt><dd>${esc(a.means)}</dd></div>`).join("")}</dl>` : ""}
         ${e.flags ? `<p class="xp__note">A <b>flag</b> starts with a dash and changes how a command behaves. One dash is the short form (<code>-m</code>), two dashes the long one (<code>--message</code>). Some flags take a <b>value</b> right after them.</p>` : ""}
-        ${e.docs ? `<a class="xp__more" href="${e.docs}" target="_blank" rel="noopener">Read the official manual for this command ↗</a>` : ""}
+        ${e.docs ? `<a class="xp__more" href="${esc(e.docs)}" target="_blank" rel="noopener">Read the official manual for this command ↗</a>` : ""}
       </section>
     </div>`;
 }
@@ -146,6 +146,7 @@ const beat = () => chapters[ci].beats[bi];
 /* acts that look the same in every mode: Albert or Toby doing something, or a happening like the cat */
 const isWatch = (a) => a.who === "albert" || a.ai === "";
 const beatDesk = () => beat().desk ?? 0;
+const PR_CHAPTER = chapters.findIndex((c) => c.short === "pull request");
 const flat = chapters.flatMap((c, i) => c.beats.map((b, j) => ({ c: i, b: j, beat: b })));
 const flatIndex = (c, b) => flat.findIndex((x) => x.c === c && x.b === b);
 /* ------------------------------------------------------------ running */
@@ -275,6 +276,7 @@ function arrive() {
     beatDone = false;
     lastPlace = null;
     delete w.vars.rejected; // a beat only counts a rejected push that happened during it
+    delete w.vars.sawLog; // likewise a git log
     termDesk = beatDesk();
     log = [];
     if (beat().kind === "next")
@@ -719,7 +721,8 @@ function askAi(text) {
     const mine = (beat().acts ?? []).filter((a) => !isWatch(a));
     log.push({ kind: "me", text: text.trim() || "do the next step" });
     const cmds = hintCmds(mine);
-    const msgs = mine.flatMap((a) => (a.inputs ?? []).map((i) => i.key === "msg" ? `with the commit message <b>"${esc(i.def(w))}"</b>` : i.key === "name" ? `called <b>${esc(i.def(w))}</b>` : i.key === "title" ? `titled <b>"${esc(i.def(w))}"</b>` : ""));
+    const val = (a, i) => esc(valueFor(beat(), beat().acts.indexOf(a), i, w));
+    const msgs = mine.flatMap((a) => (a.inputs ?? []).map((i) => i.key === "msg" ? `with the commit message <b>"${val(a, i)}"</b>` : i.key === "name" ? `called <b>${val(a, i)}</b>` : i.key === "title" ? `titled <b>"${val(a, i)}"</b>` : ""));
     log.push({
         kind: "ai",
         text: `Sure${msgs.filter(Boolean).length ? `, ${msgs.filter(Boolean).join(" and ")}` : ""}. I'll run ${cmds.length > 1 ? "these git commands" : "this git command"}:
@@ -739,7 +742,7 @@ function aiRun() {
     let ok = true;
     for (const a of mine) {
         const v = {};
-        a.inputs?.forEach((i) => (v[i.key] = i.def(w)));
+        a.inputs?.forEach((i) => (v[i.key] = valueFor(beat(), beat().acts.indexOf(a), i, w)));
         if (ok)
             ok = runSteps(a, v);
     }
@@ -1014,7 +1017,7 @@ function prsHtml() {
         const base = [...G.ancestors(w, baseId)].filter((id) => G.ancestors(w, headId).has(id)).map((id) => w.commits[id]).sort((a, b) => b.n - a.n)[0];
         const diff = G.lineDiff(G.treeOf(w, base?.id)[MAIN_FILE], G.treeOf(w, headId)[MAIN_FILE]).filter((l) => l.t !== " ");
         const state = p.state === "merged" ? `<span class="pr__state pr__state--merged">Merged</span>` : `<span class="pr__state">Open</span>`;
-        if (p.state === "merged" && ci !== 6) {
+        if (p.state === "merged" && ci !== PR_CHAPTER) {
             return `<p class="pr pr--line">${state} <b>Pull request #${p.n}, ${esc(p.title)}</b> <span class="pr__meta">${esc(p.head)} → ${esc(p.base)}</span></p>`;
         }
         return `<article class="pr">
@@ -1278,7 +1281,7 @@ function snapshotFx() {
     for (const [id, r] of Object.entries(w.repos))
         have[id] = placeCommits(r);
     const staged = [...document.querySelectorAll("[data-state-key]")]
-        .filter((c) => /staged|changed|new/.test(c.dataset.state))
+        .filter((c) => /^staged/.test(c.dataset.state) && c.dataset.state !== "staged-deleted")
         .map((c) => ({ path: c.dataset.path, place: c.dataset.stateKey.split(":")[0], rect: c.closest(".file-row").getBoundingClientRect() }));
     return { have, staged };
 }
@@ -1497,7 +1500,8 @@ function hardRefresh() {
     if (nav?.type !== "reload")
         return false;
     const probe = performance.getEntriesByType("resource").find((e) => e.name.includes("reload-probe.js"));
-    return !!probe && probe.transferSize > 0;
+    // a full download carries headers plus body; a revalidated copy (304) only headers
+    return !!probe && probe.transferSize > 0 && probe.transferSize > probe.encodedBodySize;
 }
 function boot() {
     if (hardRefresh()) {

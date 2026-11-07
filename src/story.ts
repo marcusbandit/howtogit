@@ -637,7 +637,7 @@ export const chapters: Chapter[] = [
           check: (w) => changed(w, MAIN_FILE, 1) && !/helpd\b/.test(work(w, MAIN_FILE, 1)),
           canon: (w) => {
             const t = work(w, MAIN_FILE, 1);
-            setWork(w, MAIN_FILE, /helpd\b/.test(t) ? t.replace(/helpd\b/, "helped") : t + "Fry on medium heat.\n", 1);
+            setWork(w, MAIN_FILE, /helpd\b/.test(t) ? t.replace(/helpd\b/, "helped") : t + "Checked for typos.\n", 1);
           },
         },
         done: (w) => changed(w, MAIN_FILE, 1) && !/helpd\b/.test(work(w, MAIN_FILE, 1)),
