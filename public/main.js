@@ -149,7 +149,30 @@ const beatDesk = () => beat().desk ?? 0;
 const flat = chapters.flatMap((c, i) => c.beats.map((b, j) => ({ c: i, b: j, beat: b })));
 const flatIndex = (c, b) => flat.findIndex((x) => x.c === c && x.b === b);
 /* ------------------------------------------------------------ running */
+/* Undo takes back the last thing you did in this step (a lesson rewind, not a
+ * git command): before each action the step's state is kept, Undo restores it */
+let undoStack = [];
+const keepForUndo = () => {
+    undoStack.push({ w: JSON.stringify(w), log: JSON.stringify(log), beatDone });
+    if (undoStack.length > 30)
+        undoStack.shift();
+};
+function undo() {
+    const snap = undoStack.pop();
+    if (!snap)
+        return;
+    clearSelection();
+    w = JSON.parse(snap.w);
+    log = JSON.parse(snap.log);
+    beatDone = snap.beatDone;
+    termDesk = beatDesk();
+    renderWorld();
+    renderLesson();
+    renderDeck();
+    save();
+}
 function runSteps(act, vals) {
+    keepForUndo();
     const who = act.who ?? "you";
     const deskI = who === "you" ? (mode === "command" ? termDesk : beatDesk()) : 0;
     const before = snapshotFx();
@@ -179,6 +202,7 @@ function runSteps(act, vals) {
 function runTyped(line) {
     if (!line.trim())
         return;
+    keepForUndo();
     const before = snapshotFx();
     log.push({ kind: "cmd", text: line.trim(), who: "you" });
     const r = exec(w, line, "you", termDesk);
@@ -232,6 +256,7 @@ function afterChange() {
 let lastPlace = null;
 /* ------------------------------------------------------------ navigation */
 function arrive() {
+    undoStack = [];
     beatDone = false;
     lastPlace = null;
     delete w.vars.rejected; // a beat only counts a rejected push that happened during it
@@ -278,6 +303,7 @@ function next() {
  * the step before is rebuilt the typical way and shown finished. */
 function back() {
     clearSelection();
+    undoStack = [];
     const snap = history.pop();
     if (snap) {
         w = JSON.parse(snap.w);
@@ -310,6 +336,7 @@ function back() {
  * typical way (finished when it's behind you, fresh when it's ahead). */
 function jumpBeat(i) {
     clearSelection();
+    undoStack = [];
     if (i === bi)
         return;
     if (i < bi) {
@@ -422,6 +449,7 @@ function renderLesson() {
     ${beatDone && lastOfChapter && ch.goal ? `<div class="chapter-done ${fresh ? "is-new" : ""}"><span class="star" aria-hidden="true">★</span><div><b>Chapter ${ci + 1} done</b><p>You can now ${esc(ch.goal)}.</p></div></div>` : ""}
     <div class="lesson__nav">
       <button type="button" class="btn btn--ghost btn--back" data-back ${atStart ? "disabled" : ""}><span aria-hidden="true">←</span> Back</button>
+      <button type="button" class="btn btn--ghost btn--undo" data-undo ${undoStack.length ? "" : "disabled"} title="Take back what you just did in this step, to try it again. This rewinds the lesson; it isn't a git command."><span aria-hidden="true">↶</span> Undo</button>
       ${isLast ? `<button type="button" class="btn btn--next" data-restart>Start over</button>` : `
       <span class="step-of">${bi + 1} / ${total}</span>
       <button type="button" class="btn btn--next" data-next ${beatDone ? "" : "disabled"}>${bi + 1 < total ? "Next" : "Next chapter"} <span aria-hidden="true">→</span></button>`}
@@ -611,6 +639,7 @@ function wireLesson() {
     }));
     root.querySelector("[data-next]")?.addEventListener("click", next);
     root.querySelector("[data-back]")?.addEventListener("click", back);
+    root.querySelector("[data-undo]")?.addEventListener("click", undo);
     root.querySelectorAll("[data-beat]").forEach((b) => b.addEventListener("click", () => jumpBeat(Number(b.dataset.beat))));
     root.querySelector("[data-see]")?.addEventListener("click", (e) => document.querySelector(`.place--${e.currentTarget.dataset.see}`)?.scrollIntoView({ block: "start", behavior: prefersReduced ? "auto" : "smooth" }));
     root.querySelector("[data-restart]")?.addEventListener("click", () => {
@@ -705,7 +734,48 @@ function setPart(node, html) {
     return true;
 }
 const fileStateSeen = new Map();
+/* where each HEAD marker sat before a change: screen position and commit */
+function hereSpots() {
+    const m = new Map();
+    document.querySelectorAll("[data-here]").forEach((t) => {
+        const r = t.getBoundingClientRect();
+        m.set(t.dataset.here, { x: r.left + r.width / 2, y: r.top + r.height / 2, at: t.dataset.at, text: t.textContent ?? "" });
+    });
+    return m;
+}
+/* a HEAD marker that moved to another commit slides there from where it was
+ * (and if it was still "you are here", the new word appears as it lands) */
+function slideHere(before, place) {
+    if (prefersReduced)
+        return;
+    document.querySelectorAll(`[data-strip="${place}"] [data-here]`).forEach((t) => {
+        const was = before.get(t.dataset.here);
+        if (!was || was.at === t.dataset.at)
+            return;
+        const r = t.getBoundingClientRect();
+        const scale = parseFloat(getComputedStyle(t.closest(".strip")).getPropertyValue("--strip-scale")) || 1;
+        const dx = (was.x - (r.left + r.width / 2)) / scale, dy = (was.y - (r.top + r.height / 2)) / scale;
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1)
+            return;
+        t.classList.remove("is-new", "is-swap");
+        const word = t.textContent ?? "";
+        const tie = t.parentElement?.querySelector(`[data-tie="${t.dataset.at}"]`);
+        tie?.animate([{ opacity: 0 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }], { duration: 750 });
+        if (was.text !== word)
+            t.textContent = was.text;
+        // a straight, even glide along the line to the commit it now points at
+        t.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }], { duration: 650, easing: "cubic-bezier(.4,0,.2,1)" });
+        if (was.text !== word) {
+            setTimeout(() => {
+                // the new word appears mid-slide; only opacity here, so the slide keeps moving
+                t.textContent = word;
+                t.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 260, easing: "ease-out" });
+            }, 380);
+        }
+    });
+}
 function renderWorld() {
+    const heres = hereSpots();
     const root = $("#world");
     const view = "places";
     if (root.dataset.view !== view) {
@@ -746,6 +816,8 @@ function renderWorld() {
             setPart(strip, `<p class="strip__empty">No version history yet.<br>Just files.</p>`);
         setPart(sec.querySelector(".place__prs"), id === "github" ? prsHtml() : "");
         drawStrip(id, cols);
+        if (!instant)
+            slideHere(heres, id);
     }
     // file state chips that changed get a little pop, so you see what moved
     root.querySelectorAll("[data-state-key]").forEach((chip) => {
@@ -914,7 +986,13 @@ function drawStrip(id, cols) {
     const maxLane = Math.max(0, ...[...L.values()].map((v) => v.lane));
     const laneY = (l) => 26 + (maxLane - l) * 44;
     const baseY = laneY(0);
-    const x = (cid) => X0 + cols.indexOf(cid) * COL;
+    // a short history is drawn big and spread out to fill the space beside the
+    // folder; as it grows it shrinks back to normal and only then scrolls
+    const n = Math.max(1, cols.length - 1);
+    const avail = Math.max(0, host.clientWidth - 16); // a little slack so rounding never adds a scrollbar
+    const scale = Math.max(1, Math.min(1.6, avail / (X0 * 2 + 30 + n * COL)));
+    const col = cols.length > 1 ? Math.max(COL, Math.min(COL * 2.4, (avail / scale - X0 * 2 - 30) / n)) : COL;
+    const x = (cid) => X0 + cols.indexOf(cid) * col;
     // labels under each column: you-are-here markers, then branch names
     const labels = new Map();
     const push = (cid, v) => { const a = labels.get(cid) ?? []; a.push(v); labels.set(cid, a); };
@@ -924,15 +1002,16 @@ function drawStrip(id, cols) {
             const learned = earned().has("HEAD");
             if (h)
                 push(h, { text: learned ? (r.desks.length > 1 ? `HEAD, desk ${i + 1}` : id === "albert" ? "Albert's HEAD" : "HEAD")
-                        : (r.desks.length > 1 ? `desk ${i + 1} is here` : id === "albert" ? "Albert is here" : "you are here"), color: "var(--ink)", here: true });
+                        : (r.desks.length > 1 ? `desk ${i + 1} is here` : id === "albert" ? "Albert is here" : "you are here"), color: "var(--ink)", here: true, desk: i });
         });
     Object.entries(r.branches).sort(([a], [b]) => (a === "main" ? -1 : b === "main" ? 1 : 0)).forEach(([b, cid]) => push(cid, { text: b, color: colorOf(b) }));
     const maxLabels = Math.max(1, ...[...labels.values()].map((a) => a.length));
     const H = baseY + 34 + maxLabels * 21;
-    const W = X0 * 2 + 30 + Math.max(0, cols.length - 1) * COL;
+    const W = X0 * 2 + 30 + Math.max(0, cols.length - 1) * col;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    svg.setAttribute("width", String(W));
-    svg.setAttribute("height", String(H));
+    host.style.setProperty("--strip-scale", String(scale));
+    svg.setAttribute("width", String(Math.floor(W * scale)));
+    svg.setAttribute("height", String(Math.floor(H * scale)));
     svg.innerHTML = "";
     const seen = drawn.get(id) ?? new Set();
     drawn.set(id, seen);
@@ -984,10 +1063,10 @@ function drawStrip(id, cols) {
     for (const [cid, arr] of labels) {
         const cx = x(cid);
         const top = laneY(L.get(cid)?.lane ?? 0);
-        gLabels.append(el("path", { d: linePath(cx, top + 14, cx, baseY + 26, seed(cid)), class: "label__tie" }));
+        gLabels.append(el("path", { d: linePath(cx, top + 14, cx, baseY + 26, seed(cid)), class: "label__tie", "data-tie": cid }));
         arr.forEach((lb, i) => {
             const y = baseY + 42 + i * 21;
-            const tx = el("text", { x: cx, y, class: `label ${lb.here ? "label--here" : ""}`, fill: lb.color });
+            const tx = el("text", { x: cx, y, class: `label ${lb.here ? "label--here" : ""}`, fill: lb.color, ...(lb.here ? { "data-here": `${id}:${lb.desk}`, "data-at": cid } : {}) });
             tx.textContent = lb.here ? `▲ ${lb.text}` : lb.text;
             gLabels.append(tx);
             const k = `l:${cid}:${lb.text}`;
@@ -1202,6 +1281,7 @@ function renderResolver(text, readOnly) {
 function saveEditor(close) {
     if (!edit || edit.place !== "you")
         return;
+    keepForUndo();
     const r = w.repos.you;
     const text = $("#editor-text").value.replace(/\r/g, "");
     const fixed = text.endsWith("\n") ? text : text + "\n";

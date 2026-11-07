@@ -321,7 +321,7 @@ code { font-family: var(--mono); font-size: inherit; }
 .node__merge { fill: none; stroke-width: 2; }
 .node__who { font: 700 12px var(--ui); fill: var(--friend); text-anchor: middle; pointer-events: none; }
 .label { font: 600 16px var(--hand); text-anchor: middle; }
-.label--here { font: 700 12px var(--ui); fill: var(--ink); }
+.label--here { font: 700 16px var(--hand); fill: var(--ink); }
 .label__tie { stroke: var(--line-strong); stroke-width: 1.2; stroke-dasharray: 2 3; fill: none; }
 .label.is-new { animation: rise .5s ease both; }
 
@@ -873,3 +873,10 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 /* "you are here" turning into HEAD */
 .label.is-swap { animation: swap .7s cubic-bezier(.2,1.6,.4,1) both; transform-box: fill-box; transform-origin: center; }
 @keyframes swap { 0% { transform: translateY(-10px) scale(.6); opacity: 0; } 55% { transform: translateY(2px) scale(1.15); opacity: 1; } 100% { transform: none; } }
+.label--here { transform-box: fill-box; transform-origin: center; }
+.btn--undo { padding: 7px 12px; font-size: 14px; }
+/* the lesson's bottom row never wraps its words; the step count gives way first */
+.lesson__nav { gap: 8px; }
+.lesson__nav .btn, .lesson__nav .step-of { white-space: nowrap; }
+.lesson__nav .btn--back, .lesson__nav .btn--undo { padding: 7px 10px; }
+@media (max-width: 1240px) { .lesson__nav .step-of { display: none; } .lesson__nav .btn--next { margin-left: auto; } }
