@@ -15,7 +15,7 @@ import { chapters, MAIN_FILE, choices, choiceKey, valueFor, type Act, type Beat,
 import { exec, replayTo, finishBeat } from "./engine.js";
 import { showIntro, introSeen, whyGithub } from "./intro.js";
 import { explain } from "./explain.js";
-import { circlePath, linePath, smooth, drawOn, el, prefersReduced, type Point } from "./sketch.js";
+import { circlePath, linePath, elbowPath, drawOn, el, prefersReduced } from "./sketch.js";
 
 type Mode = "buttons" | "command" | "ai";
 type Place = "github" | "you" | "albert";
@@ -185,6 +185,7 @@ function runSteps(act: Act, vals: Record<string, string>): boolean {
   actN++;
   const who = act.who ?? "you";
   const deskI = who === "you" ? (mode === "command" ? termDesk : beatDesk()) : 0;
+  flushWorld();
   const before = snapshotFx();
   let ok = true;
   const startKey = worldKey(w);
@@ -201,6 +202,8 @@ function runSteps(act: Act, vals: Record<string, string>): boolean {
     }
   }
   if (ok && worldKey(w) !== startKey) ranActs.add(act);
+  if (worldKey(w) === startKey) focusPlace = null; // nothing changed: stay where you are
+  if (ok) markArrivals(before, who);
   afterChange();
   celebrate(before, ok, who);
   return ok;
@@ -235,7 +238,9 @@ function runTyped(line: string) {
   if (!line.trim()) return;
   keepForUndo();
   actN++;
+  flushWorld();
   const before = snapshotFx();
+  const startKey = worldKey(w);
   const entry: LogLine = { kind: "cmd", text: line.trim(), who: "you", act: actN };
   log.push(entry);
   const steps = taskSteps();
@@ -246,7 +251,9 @@ function runTyped(line: string) {
   const c = coach(line.trim(), r, steps);
   if (c) log.push({ kind: "coach", text: c.text, good: c.good, who: "you" });
   if (r.desk !== undefined) termDesk = r.desk;
-  focusPlace = placeFor(line, "you");
+  // a command that changed nothing (git status, a typo) keeps you at the terminal
+  focusPlace = r.ok && worldKey(w) !== startKey ? placeFor(line, "you") : null;
+  if (r.ok) markArrivals(before, "you");
   afterChange();
   celebrate(before, r.ok);
 }
@@ -269,14 +276,39 @@ function showPlace(id: string | null) {
 }
 
 function afterChange() {
+  if (focusPlace && (focusPlace === "you" || w.repos[focusPlace as Place])) phoneTab = focusPlace as Place;
   if (!beatDone && beat().done(w)) {
     beatDone = true;
     justDone = true;
     w.vars[`learned:${beat().id}`] = "1";
     beat().onDone?.(w);
   } else if (beatDone && beat().live && !beat().done(w)) beatDone = false;
-  renderWorld();
-  renderLesson();
+  // phones: the graph is usually below the screen. The card shows the result
+  // first, the page glides to the graph, and only then does the graph change,
+  // so HEAD moving and new versions landing happen where you can see them
+  const strip = narrow() && focusPlace && !instant && !prefersReduced
+    ? document.querySelector(`.place[data-place="${focusPlace}"] .strip`) : null;
+  if (strip) {
+    // the page glide is the motion here; the card snaps so the glide starts at once
+    skipEase = true;
+    renderLesson();
+    skipEase = false;
+    renderTabs();
+    worldPending = true;
+    worldReady = (async () => {
+      try {
+        await Promise.all($("#lesson").getAnimations().map((m) => m.finished.catch(() => undefined)));
+        await bringIntoView(overview(), strip);
+      } finally {
+        flushWorld();
+        armBackUp();
+      }
+    })();
+  } else {
+    renderWorld();
+    renderLesson();
+    worldReady = Promise.resolve();
+  }
   renderDeck();
   save();
   if (window.innerWidth >= 860) showPlace(focusPlace);
@@ -284,6 +316,39 @@ function afterChange() {
   focusPlace = null;
 }
 let lastPlace: string | null = null;
+let worldReady: Promise<void> = Promise.resolve();
+// a phone's world render waits for the page glide; the next action (or the
+// glide's end) draws it at once, so nothing ever reads a stale graph
+let worldPending = false;
+function flushWorld() {
+  if (!worldPending) return;
+  worldPending = false;
+  renderWorld();
+}
+
+/* phones show one place at a time, picked with tabs; a step's change switches
+ * to the place it happened in, and a dot marks any other place that changed */
+let phoneTab: Place = "you";
+const seenSig = new Map<string, string>();
+const placeSig = (id: Place) => JSON.stringify(w.repos[id] ?? null) + (id === "github" ? JSON.stringify(w.prs) : "");
+const narrow = () => window.innerWidth <= 860;
+function showTab(id: Place, scroll = false) {
+  phoneTab = id;
+  renderTabs();
+  if (scroll) $("#world").scrollIntoView({ block: "start", behavior: prefersReduced ? "auto" : "smooth" });
+}
+function renderTabs() {
+  const root = $("#world");
+  const present = (["github", "you", "albert"] as Place[]).filter((id) => id === "you" || !!w.repos[id]);
+  if (!present.includes(phoneTab)) phoneTab = "you";
+  const name = { github: "GitHub", you: "Your computer", albert: "Albert's" } as const;
+  const sig = new Map(present.map((id) => [id, placeSig(id)] as const));
+  if (instant) present.forEach((id) => seenSig.set(id, sig.get(id)!));
+  seenSig.set(phoneTab, sig.get(phoneTab)!);
+  setPart(root.querySelector(".world__tabs"), present.length < 2 ? "" : present.map((id) => `<button type="button" role="tab" class="wtab wtab--${id}" data-tab="${id}" aria-selected="${id === phoneTab}">
+      <span class="ico ${id === "github" ? "ico--cloud" : "ico--laptop"}" aria-hidden="true"></span>${name[id]}${seenSig.get(id) !== sig.get(id) ? `<span class="wtab__dot" aria-label="changed"></span>` : ""}</button>`).join(""));
+  root.querySelectorAll<HTMLElement>(".place[data-place]").forEach((p) => p.classList.toggle("is-shown", p.dataset.place === phoneTab));
+}
 
 /* ------------------------------------------------------------ navigation */
 
@@ -412,10 +477,16 @@ function renderChapters() {
       <span class="chap__n">${i < ci ? "✓" : i + 1}</span><span class="chap__t">${esc(c.short)}</span>
     </button>`).join("");
   nav.querySelector(".is-now")?.scrollIntoView({ block: "nearest", inline: "center" });
+  // phones: one pill in the header, the list lives in a sheet
+  $("#chap-pill").innerHTML = `<span class="chap-pill__n">${ci + 1}/${chapters.length}</span><span class="chap-pill__t">${esc(chapters[ci].title)}</span><span class="chap-pill__caret" aria-hidden="true"></span>`;
+  $("#chap-list").innerHTML = chapters.map((c, i) => `
+    <li><button type="button" class="sheet__chap ${i === ci ? "is-now" : ""} ${i < ci ? "is-done" : ""}" data-ch="${i}" ${i === ci ? 'aria-current="step"' : ""}>
+      <span class="chap__n">${i < ci ? "✓" : i + 1}</span><span class="sheet__chap-t"><b>${esc(c.title)}</b>${c.goal ? `<span>${esc(c.goal)}</span>` : ""}</span>
+    </button></li>`).join("");
 }
 
 function renderMode() {
-  document.querySelectorAll<HTMLButtonElement>("#mode [data-mode]").forEach((b) => {
+  document.querySelectorAll<HTMLButtonElement>("#mode [data-mode], #menu [data-mode]").forEach((b) => {
     b.setAttribute("aria-checked", String(b.dataset.mode === mode));
   });
   document.body.dataset.mode = mode;
@@ -487,6 +558,7 @@ function renderLesson() {
       <button type="button" class="btn btn--next" data-next ${beatDone ? "" : "disabled"}>${bi + 1 < total ? "Next" : "Next chapter"} <span aria-hidden="true">→</span></button>`}
     </div>`;
   wireLesson();
+  checkBackUp();
   easeHeight(box, oldH);
   if (xpFor && !document.body.contains(xpFor)) closeExplain();
   const term = box.querySelector(".term__out");
@@ -494,7 +566,8 @@ function renderLesson() {
   if (beatDone && justDone) {
     justDone = false;
     // steps you click around in (live) keep still; others bring the result into view
-    if (!b.live) box.querySelector(".after")?.scrollIntoView({ block: "nearest", behavior: prefersReduced ? "auto" : "smooth" });
+    // (on a phone, a change to a place scrolls to its graph instead, once, so nothing fights)
+    if (!b.live && !(narrow() && focusPlace)) box.querySelector(".after")?.scrollIntoView({ block: "nearest", behavior: prefersReduced ? "auto" : "smooth" });
   }
   if (beatDone) {
     const nb = box.querySelector<HTMLButtonElement>("[data-next]");
@@ -743,8 +816,11 @@ function wireLesson() {
   root.querySelector("[data-back]")?.addEventListener("click", back);
   root.querySelector("[data-undo]")?.addEventListener("click", undo);
   root.querySelectorAll<HTMLButtonElement>("[data-beat]").forEach((b) => b.addEventListener("click", () => jumpBeat(Number(b.dataset.beat))));
-  root.querySelector<HTMLButtonElement>("[data-see]")?.addEventListener("click", (e) =>
-    document.querySelector(`.place--${(e.currentTarget as HTMLElement).dataset.see}`)?.scrollIntoView({ block: "start", behavior: prefersReduced ? "auto" : "smooth" }));
+  root.querySelector<HTMLButtonElement>("[data-see]")?.addEventListener("click", (e) => {
+    const id = (e.currentTarget as HTMLElement).dataset.see as Place;
+    if (narrow()) return showTab(id, true);
+    document.querySelector(`.place--${id}`)?.scrollIntoView({ block: "start", behavior: prefersReduced ? "auto" : "smooth" });
+  });
   root.querySelector("[data-restart]")?.addEventListener("click", () => {
     for (const k of Object.keys(choices)) delete choices[k];
     goto(0, 0, { replay: true });
@@ -882,8 +958,9 @@ function slideHere(before: Map<string, { x: number; y: number; at: string; text:
 
 /* content that grows or shrinks eases to its new height instead of snapping
  * (fast: 240 ms); the element clips while it moves */
+let skipEase = false;
 function easeHeight(node: HTMLElement, from: number) {
-  if (instant || prefersReduced || !from) return;
+  if (instant || prefersReduced || !from || skipEase) return;
   const to = node.getBoundingClientRect().height;
   if (Math.abs(to - from) < 2) return;
   node.getAnimations().filter((a) => (a as Animation & { id?: string }).id === "ease-h").forEach((a) => a.cancel());
@@ -891,6 +968,24 @@ function easeHeight(node: HTMLElement, from: number) {
   const a = node.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
   (a as Animation & { id?: string }).id = "ease-h";
   a.finished.then(() => node.classList.remove("is-easing"), () => node.classList.remove("is-easing"));
+}
+
+/* phones: a place that just appeared opens up, its name and then its line,
+ * pushing what's below down smoothly instead of all at once */
+function growIn(place: HTMLElement) {
+  if (place.dataset.growing) return;
+  place.dataset.growing = "1";
+  const parts = [place.querySelector<HTMLElement>(":scope > .place__head"), ...place.querySelectorAll<HTMLElement>(".strip")].filter(Boolean) as HTMLElement[];
+  const anims = parts.map((el) => {
+    const h = el.getBoundingClientRect().height;
+    el.style.overflow = "hidden";
+    return el.animate([{ height: "0px", opacity: 0 }, { height: `${h}px`, opacity: 1 }], { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)" });
+  });
+  Promise.all(anims.map((a) => a.finished.catch(() => undefined))).then(() => {
+    parts.forEach((el) => (el.style.overflow = ""));
+    place.classList.remove("is-new");
+    delete place.dataset.growing;
+  });
 }
 
 /* places that move because something above them changed float to their new
@@ -914,14 +1009,14 @@ function renderWorld() {
   const root = $("#world");
   const view = "places";
   if (root.dataset.view !== view) {
-    root.innerHTML = view === "places" ? `<div class="world__recap"></div>` : "";
+    root.innerHTML = view === "places" ? `<div class="world__recap"></div><div class="world__tabs" role="tablist" aria-label="places"></div>` : "";
     root.dataset.view = view;
     parts.clear(); // everything cached for the old view is gone from the page
   }
   setPart(root.querySelector(".world__recap"), ci === chapters.length - 1 ? mapHtml(true) : "");
   const cols = columns();
   const order: Place[] = ["github", "you", "albert"];
-  let prev: Element = root.querySelector(".world__recap")!;
+  let prev: Element = root.querySelector(".world__tabs")!;
   for (const id of order) {
     let sec = root.querySelector<HTMLElement>(`[data-place="${id}"]`);
     const present = id === "you" || !!w.repos[id];
@@ -943,7 +1038,7 @@ function renderWorld() {
     const rowsBox = sec.querySelector<HTMLElement>(".place__rows")!;
     while (rowsBox.children.length > n) {
       const k = `${id}:${rowsBox.children.length - 1}`;
-      [lastLayout, lastHave, lastLabels, drawn].forEach((m) => m.delete(k));
+      [lastLayout, lastHave, lastLabels, drawn, lastBase].forEach((m) => m.delete(k));
       rowsBox.lastElementChild!.remove();
     }
     while (rowsBox.children.length < n) {
@@ -971,8 +1066,10 @@ function renderWorld() {
     if (was !== undefined && was !== s && !instant) chip.classList.add("pop");
     fileStateSeen.set(k, s);
   });
+  renderTabs();
   syncScroll();
   floatPlaces(placeRects);
+  if (narrow() && !instant && !prefersReduced) root.querySelectorAll<HTMLElement>(".place.is-new").forEach(growIn);
 }
 
 /* the idea in one picture: two computers, one shared copy online */
@@ -1122,7 +1219,12 @@ function layoutOf(host: HTMLElement, cols: string[]) {
 
 /* frame: an in-between drawing while the layout glides from the old spacing
  * to the new one; it draws only commits that were already there, inks nothing */
-function drawStrip(id: string, cols: string[], frame?: { scale: number; col: number; only: Set<string>; k: number }) {
+/* how long the pen takes over a new line: longer lines take longer, so every
+ * one reads as drawn, never snapped in */
+const lineMs = (p: SVGPathElement) => Math.max(300, Math.min(620, p.getTotalLength() * 4));
+
+// returns true when the final drawing waits for a lane glide to finish
+function drawStrip(id: string, cols: string[], frame?: { scale: number; col: number; only: Set<string>; k: number; dy?: number }): boolean {
   const [rid, dk] = id.split(":");
   const r = w.repos[rid];
   // a strip with a desk number shows that desk's HEAD; a repo with several desks
@@ -1130,13 +1232,17 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   const deskOnly = dk !== undefined ? Number(dk) : (r && r.desks.length > 1 ? 0 : undefined);
   const host = document.querySelector<HTMLElement>(`[data-strip="${id}"]`);
   const svg = host?.querySelector<SVGSVGElement>("svg");
-  if (!r || !svg) return;
+  if (!r || !svg) return false;
+  const hostH = frame ? 0 : host!.getBoundingClientRect().height;
+  // what was drawn before this change, for the glide down when a lane is added
+  const prevHave = frame ? undefined : lastHave.get(id), prevLabels = frame ? undefined : lastLabels.get(id);
   const all = placeCommits(r);
   const have = frame ? new Set([...all].filter((c) => frame.only.has(c))) : all;
   const L = lanes(r);
   const maxLane = Math.max(0, ...[...L.values()].map((v) => v.lane));
   let topPad = 0; // room above the top lane for labels of branch commits
-  const laneY = (l: number) => 26 + topPad + (maxLane - l) * 44;
+  let off = frame?.dy ?? 0; // mid-glide, everything drawn this much higher
+  const laneY = (l: number) => 26 + topPad + (maxLane - l) * 44 + off;
   const { scale, col } = frame ?? layoutOf(host!, cols);
   if (!frame) { lastLayout.set(id, { scale, col }); lastHave.set(id, all); }
   const x = (cid: string) => X0 + cols.indexOf(cid) * col;
@@ -1172,24 +1278,69 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   // top branch lane sit right above them (lower lanes keep theirs below), so a branch name is next to its branch
   const above = (cid: string) => { const l = L.get(cid)?.lane ?? 0; return l > 0 && l === maxLane; };
   topPad = Math.max(0, ...[...labels].filter(([c]) => above(c)).map(([, a]) => a.length * 21 + 8));
+  // a sideways glide keeps main where it was; the lane glide then moves it
+  if (frame && frame.dy === undefined && lastBase.has(id)) off = lastBase.get(id)! - laneY(0);
   const baseY = laneY(0);
   const maxLabels = Math.max(1, ...[...labels].filter(([c]) => !above(c)).map(([, a]) => a.length));
-  const H = baseY + 34 + maxLabels * 21;
+  const H = baseY - off + 34 + maxLabels * 21;
   const W = X0 * 2 + 30 + Math.max(0, cols.length - 1) * col;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   host!.style.setProperty("--strip-scale", String(scale));
   svg.setAttribute("width", String(Math.floor(W * scale)));
   svg.setAttribute("height", String(Math.floor(H * scale)));
+  // a new lane makes the graph taller and moves main down: main glides down
+  // while the room above opens, instead of everything jumping at once
+  // It redraws frame by frame, like the sideways glide, with no CSS transform
+  // (Firefox on Android stops repainting lines inked under one), and only
+  // then draws the new lines and dots.
+  // (lane geometry is compared unscaled: a change of scale alone is the
+  // sideways glide's job, not a new lane)
+  if (!frame) {
+    const was = lastBase.get(id);
+    lastBase.set(id, baseY);
+    if (was !== undefined && Math.abs(baseY - was) > 0.5 && !instant && !prefersReduced && prevHave) {
+      easeHeight(host!, hostH);
+      if (prevLabels) lastLabels.set(id, prevLabels);
+      const from = was - baseY, t0 = performance.now(), dur = 320;
+      settleUntil = Math.max(settleUntil, t0 + dur + 20);
+      const step = () => {
+        const t = Math.min(1, (performance.now() - t0) / dur);
+        if (t >= 1) { drawStrip(id, cols); syncScroll(false); return; }
+        drawStrip(id, cols, { scale, col, only: prevHave, k: 1, dy: from * Math.pow(1 - t, 3) });
+        tweens.set(id, window.requestAnimationFrame(step));
+      };
+      step();
+      return true;
+    }
+  }
   svg.innerHTML = "";
   const seen = drawn.get(id) ?? new Set<string>();
   drawn.set(id, seen);
   const gEdges = el("g", { class: "edges" }), gNodes = el("g", { class: "nodes" }), gLabels = el("g", { class: "labels" });
   svg.append(gEdges, gNodes, gLabels);
-  const ink = (p: SVGPathElement, key: string, dur = 400) => {
+  // a new commit's line draws first, at an even pace that takes longer the
+  // longer it is (a branch's corner about half a second), and its dot is
+  // inked as the line arrives
+  const inkedInto = new Map<string, number>();
+  const ink = (p: SVGPathElement, key: string, dur = 400, into?: string) => {
     if (frame) return;
     if (instant || seen.has(key)) { seen.add(key); return; }
     seen.add(key);
-    void drawOn(p, { duration: dur });
+    if (into) {
+      dur = lineMs(p);
+      inkedInto.set(into, Math.max(inkedInto.get(into) ?? 0, dur));
+      inkUntil = Math.max(inkUntil, performance.now() + dur);
+      void drawOn(p, { duration: dur, even: true });
+      return;
+    }
+    const delay = inkedInto.has(key.slice(2)) ? Math.round(inkedInto.get(key.slice(2))! * 0.85) : 0;
+    inkUntil = Math.max(inkUntil, performance.now() + delay + dur);
+    // a dot waiting for its line shows no fill either, until the pen gets there
+    if (delay) {
+      p.style.fillOpacity = "0";
+      setTimeout(() => { p.style.transition = "fill-opacity .2s ease"; p.style.fillOpacity = ""; }, delay + dur * 0.4);
+    }
+    void drawOn(p, { duration: dur, delay });
   };
   const seed = (s: string) => [...s].reduce((a, c) => a + c.charCodeAt(0), 0);
   for (const cid of cols) {
@@ -1201,15 +1352,20 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
       if (!have.has(p)) return;
       const pl = L.get(p)!;
       const px = x(p), py = laneY(pl.lane);
-      const d = py === cy ? linePath(px + 13, py, cx - 13, cy, seed(cid) + pi)
-        : smooth([[px + 10, py] as Point, [px + (cx - px) * 0.55, py + (cy - py) * 0.15], [cx - 12, cy]]);
+      const d = py === cy ? linePath(px + 13, py, cx - 13, cy, seed(cid) + pi) : (me.lane > pl.lane
+        // between lanes, one rounded corner with the same pen: a branch leaves
+        // its commit straight up (or down) and then runs along; a merge runs
+        // along its own lane and then drops into the merge commit
+        ? elbowPath(px, py + 12 * Math.sign(cy - py), cx - 13, cy, true, seed(cid) + pi)
+        : elbowPath(px + 13, py, cx, cy - 12 * Math.sign(cy - py), false, seed(cid) + pi));
       const col = colorOf(pi === 1 ? L.get(p)!.br : me.br);
       const path = el("path", { d, class: "edge", stroke: col, "data-to": cid }) as SVGPathElement;
       gEdges.append(path);
-      ink(path, `e:${p}>${cid}`);
+      if (arriving.has(`${rid}:${cid}`)) path.style.opacity = "0";
+      ink(path, `e:${p}>${cid}`, 400, cid);
     });
     const col = colorOf(me.br);
-    const g = el("g", { class: "commit", "data-c": cid, style: `transform-origin:${cx}px ${cy}px` });
+    const g = el("g", { class: "commit", "data-c": cid, style: `transform-origin:${cx}px ${cy}px${arriving.has(`${rid}:${cid}`) ? ";opacity:0" : ""}` });
     const node = el("path", { d: circlePath(cx, cy, 12, seed(cid)), class: "node", stroke: col }) as SVGPathElement;
     const t = el("title");
     t.textContent = `${c.msg}\nby ${c.author} · ${G.short(cid)}`;
@@ -1261,15 +1417,30 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
       seen.add(k);
     });
   }
+  if (!frame) hideArrivingLabels(rid, gLabels);
+  return false;
 }
 
 /* when a change re-spaces a strip (a new commit makes room), everything that
  * was already there glides to its new spot; new commits are inked once it lands */
+/* a version still on its way shows no branch names yet (a HEAD marker moving
+ * onto it keeps sliding, so you see where it is going) */
+function hideArrivingLabels(rid: string, g: SVGElement) {
+  // visibility, not opacity: a label's own pop-in animation would override opacity
+  g.querySelectorAll<SVGElement>("text.label[data-at]").forEach((t) => { if (arriving.has(`${rid}:${t.dataset.at}`)) t.style.visibility = "hidden"; });
+  g.querySelectorAll<SVGElement>("[data-tie]").forEach((t) => {
+    const cid = t.dataset.tie!;
+    if (arriving.has(`${rid}:${cid}`) && !g.querySelector(`.here[data-at="${cid}"]`)) t.style.visibility = "hidden";
+  });
+}
+
 const lastLayout = new Map<string, { scale: number; col: number }>();
+const lastBase = new Map<string, number>();
 const lastHave = new Map<string, Set<string>>();
 const lastLabels = new Map<string, Map<string, { text: string; color: string; here?: boolean; desk?: number }[]>>();
 const tweens = new Map<string, number>();
 let settleUntil = 0;
+let inkUntil = 0; // when the pen finishes the newest lines and dots
 function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpots>) {
   const host = document.querySelector<HTMLElement>(`[data-strip="${id}"]`);
   const prev = lastLayout.get(id), had = lastHave.get(id);
@@ -1280,8 +1451,8 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
     const from = glided ? hereSpots() : heres;
     const grew = !!had && [...placeCommits(w.repos[id.split(":")[0]])].some((c) => !had.has(c));
     host?.classList.remove("is-gliding");
-    drawStrip(id, cols);
-    if (!instant) slideHere(from, id, grew ? 380 : 0);
+    // labels only slide on the final drawing, never on a lane glide's first frame
+    if (!drawStrip(id, cols) && !instant) slideHere(from, id, grew ? 380 : 0);
     syncScroll();
   };
   if (instant || prefersReduced || !host || !prev || !had || !w.repos[id.split(":")[0]]) return finish();
@@ -1291,7 +1462,8 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
   host.classList.add("is-gliding"); // no scrollbar flashing while it moves
   settleUntil = Math.max(settleUntil, t0 + dur);
   const ease = (t: number) => 1 - Math.pow(1 - t, 3);
-  const step = (now: number) => {
+  const step = () => {
+    const now = performance.now(); // one clock, as in drawOn
     const k = ease(Math.min(1, (now - t0) / dur));
     if (k >= 1) return finish(true);
     drawStrip(id, cols, { scale: prev.scale + (next.scale - prev.scale) * k, col: prev.col + (next.col - prev.col) * k, only: had, k });
@@ -1300,27 +1472,123 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
   tweens.set(id, window.requestAnimationFrame(step));
 }
 
-/* keep every strip scrolled together, and pinned to the newest versions */
-function syncScroll() {
+/* keep every strip scrolled together, and pinned to the newest versions.
+ * Phones: the strips don't scroll themselves; one invisible scroller laid over
+ * the whole overview takes the swipe (with the phone's own momentum) and every
+ * strip copies its one position in the same frame, so they can't drift apart.
+ * Wider screens: only the strip you're touching leads; the rest follow it and
+ * never echo their own scroll back. */
+let lead: HTMLElement | null = null;
+// pin: jump to the newest versions, after the graph itself changed. A resize
+// (a phone's address bar sliding away mid-scroll is one) keeps where you are.
+function syncScroll(pin = true) {
   const strips = [...document.querySelectorAll<HTMLElement>(".strip")];
+  if (lead && !lead.isConnected) lead = null;
+  const ov = ovScroller();
   strips.forEach((s) => {
-    s.scrollLeft = s.scrollWidth;
-    s.onscroll = () => strips.forEach((o) => { if (o !== s && Math.abs(o.scrollLeft - s.scrollLeft) > 1) o.scrollLeft = s.scrollLeft; });
+    if (pin) s.scrollLeft = s.scrollWidth;
+    const take = () => { lead = s; };
+    s.onpointerdown = take; s.onwheel = take; s.ontouchstart = take;
+    s.onscroll = () => {
+      if (narrow() || (lead && lead !== s)) return;
+      strips.forEach((o) => { if (o !== s) o.scrollLeft = s.scrollLeft; });
+    };
   });
+  placeOv();
+  if (pin) ov.scrollLeft = ov.scrollWidth;
+  else if (narrow()) strips.forEach((s) => { s.scrollLeft = ov.scrollLeft; });
+}
+function ovScroller(): HTMLElement {
+  let ov = document.querySelector<HTMLElement>("#world > .ov-scroll");
+  if (ov) return ov;
+  ov = document.createElement("div");
+  ov.className = "ov-scroll";
+  ov.setAttribute("aria-hidden", "true");
+  ov.innerHTML = `<div class="ov-scroll__w"></div>`;
+  $("#world").append(ov);
+  ov.addEventListener("scroll", () => {
+    const x = ov!.scrollLeft;
+    document.querySelectorAll<HTMLElement>("#world .strip").forEach((s) => { s.scrollLeft = x; });
+  }, { passive: true });
+  new ResizeObserver(placeOv).observe($("#world"));
+  return ov;
+}
+/* the scroller covers the overview, from the first place's name down to the last line */
+function placeOv() {
+  const ov = document.querySelector<HTMLElement>("#world > .ov-scroll");
+  if (!ov) return;
+  if (!narrow()) { ov.hidden = true; return; }
+  const parts = overview();
+  const strips = [...document.querySelectorAll<HTMLElement>("#world .strip")].filter((e) => e.getBoundingClientRect().height > 0);
+  if (!parts.length || !strips.length) { ov.hidden = true; return; }
+  ov.hidden = false;
+  const box = $("#world").getBoundingClientRect();
+  const top = Math.min(...parts.map((e) => e.getBoundingClientRect().top)) - box.top;
+  const bottom = Math.max(...parts.map((e) => e.getBoundingClientRect().bottom)) - box.top;
+  const s0 = strips[0].getBoundingClientRect();
+  ov.style.top = `${top}px`;
+  ov.style.height = `${bottom - top}px`;
+  // same inner width as the lines, so both reach their ends together
+  ov.style.left = `${s0.left - box.left + strips[0].clientLeft}px`;
+  ov.style.width = `${strips[0].clientWidth}px`;
+  const w = Math.max(...strips.map((s) => s.scrollWidth));
+  (ov.firstElementChild as HTMLElement).style.width = `${w}px`;
 }
 
 /* --------------------------------------------------------------- feedback */
 
 /* what each place held before an action, and where its staged files sat on
  * screen, so the change can be animated from the old picture to the new */
-interface FxSnap { have: Record<string, Set<string>>; staged: { path: string; place: string; rect: DOMRect }[] }
+interface FxSnap { have: Record<string, Set<string>>; staged: { path: string; place: string; rect: DOMRect }[]; y: number }
 function snapshotFx(): FxSnap {
   const have: Record<string, Set<string>> = {};
   for (const [id, r] of Object.entries(w.repos)) have[id] = placeCommits(r);
   const staged = [...document.querySelectorAll<HTMLElement>("[data-state-key]")]
     .filter((c) => /^staged/.test(c.dataset.state!) && c.dataset.state !== "staged-deleted")
     .map((c) => ({ path: c.dataset.path!, place: c.dataset.stateKey!.split(":")[0], rect: c.closest(".file-row")!.getBoundingClientRect() }));
-  return { have, staged };
+  return { have, staged, y: window.scrollY };
+}
+
+/* phones: after the page glides down to the graphs, what the step just
+ * explained is above the screen. A pill over the step bar points back up to
+ * it, and goes away once you're back there or on another step */
+let backUpFor = "";
+function armBackUp() {
+  const after = document.querySelector<HTMLElement>("#lesson .after");
+  if (!after || after.getBoundingClientRect().top >= topEdge()) return;
+  backUpFor = `${ci}:${bi}`;
+  $("#back-up").hidden = false;
+}
+const topEdge = () => Math.max(0, $(".top").getBoundingClientRect().bottom);
+function checkBackUp() {
+  const pill = $("#back-up");
+  if (pill.hidden) return;
+  const after = document.querySelector<HTMLElement>("#lesson .after");
+  if (backUpFor !== `${ci}:${bi}` || !after || after.getBoundingClientRect().top >= topEdge()) pill.hidden = true;
+}
+
+/* phones: every place's history line sits together in one overview. Before
+ * anything changes in it, the page glides just far enough that the overview
+ * sits above the step bar (or, if it's too tall, the line that changes) */
+const overview = () => [...document.querySelectorAll("#world .place > .place__head, #world .strip")].filter((e) => e.getBoundingClientRect().height > 0);
+function bringIntoView(els: Element[], focus: Element | null): Promise<void> {
+  if (!els.length) return Promise.resolve();
+  const rs = els.map((e) => e.getBoundingClientRect());
+  let r = { top: Math.min(...rs.map((x) => x.top)), bottom: Math.max(...rs.map((x) => x.bottom)) };
+  const bar = document.querySelector<HTMLElement>(".lesson__nav");
+  const floor = (bar && getComputedStyle(bar).position === "fixed" ? bar.getBoundingClientRect().top : window.innerHeight) - 16;
+  if (r.bottom - r.top > floor - 12 && focus) r = focus.getBoundingClientRect();
+  let dy = r.bottom > floor ? r.bottom - floor : 0;
+  const top = topEdge() + 12; // below the header, which stays pinned on phones
+  if (r.top - dy < top) dy = r.top - top;
+  if (Math.abs(dy) < 4) return Promise.resolve();
+  window.scrollBy({ top: dy, behavior: prefersReduced ? "auto" : "smooth" });
+  return new Promise((res) => {
+    let done = false;
+    const fin = () => { if (!done) { done = true; res(); } };
+    window.addEventListener("scrollend", fin, { once: true });
+    setTimeout(fin, 700);
+  });
 }
 
 const nodeEl = (place: string, cid: string) =>
@@ -1334,28 +1602,93 @@ function celebrate(before: FxSnap, ok: boolean, who: Who = "you") {
     return;
   }
   if (prefersReduced) return;
-  const wait = Math.max(0, settleUntil - performance.now());
-  if (wait > 0) { setTimeout(() => celebrate(before, ok, who), wait + 20); return; }
-  requestAnimationFrame(() => {
+  void worldReady.then(() => celebrateNow(before, who));
+}
+function celebrateNow(before: FxSnap, who: Who) {
+  // wait for the graph to stop moving, and for the pen to (nearly) reach the
+  // new dot: the files then fly in as it is finished, and the pop lands on it
+  const wait = Math.max(0, settleUntil - performance.now(), inkUntil - 420 - performance.now());
+  if (wait > 0) { setTimeout(() => celebrateNow(before, who), wait + 20); return; }
+  requestAnimationFrame(async () => {
     let delay = 0;
-    for (const [id, r] of Object.entries(w.repos)) {
-      const was = before.have[id] ?? new Set<string>();
-      const fresh = [...placeCommits(r)].filter((c) => !was.has(c)).sort((a, b) => w.commits[a].n - w.commits[b].n);
-      for (const cid of fresh) {
-        const target = nodeEl(id, cid);
-        if (!target) continue;
-        // came from another place: a dot travels from there to here
-        // what lands on a laptop (clone, pull) always comes from GitHub; what
-        // lands on GitHub comes from whoever pushed it
-        const order = id === "github" ? [who, ...Object.keys(before.have)] : ["github"];
-        const from = order.find((o) => o !== id && before.have[o]?.has(cid) && nodeEl(o, cid));
-        // a place that just appeared slides in first; wait for it to settle
-        if (target.closest(".place.is-new")) delay = Math.max(delay, 480);
-        if (from) travel(nodeEl(from, cid)!, target, id === "github" ? "push" : "pull", delay);
-        else saved(target, w.commits[cid], before.staged.filter((s) => s.place === id), delay);
-        delay += 110;
-      }
+    let staged = before.staged;
+    const shifting = [...document.querySelectorAll("#world .strip, #world .strip__svg")].flatMap((el) => el.getAnimations());
+    await Promise.all(shifting.map((m) => m.finished.catch(() => undefined)));
+    if (narrow()) {
+      // the card above grows with the result first; measure only once it has
+      const moving = [$("#lesson"), ...document.querySelectorAll("#world .place")].flatMap((el) => el.getAnimations());
+      await Promise.all(moving.map((m) => m.finished.catch(() => undefined)));
+      await bringIntoView(overview(), document.querySelector(`.place[data-place="${phoneTab}"] .strip`));
+      // the files fly from where their rows sit now, not where they sat before
+      staged = staged.flatMap((s) => {
+        const row = document.querySelector(`.place[data-place="${s.place}"] [data-file="${CSS.escape(s.path)}"]`)?.closest(".file-row");
+        const rect = row?.getBoundingClientRect();
+        return rect && rect.height ? [{ ...s, rect }] : [];
+      });
     }
+    // new versions made here pop first; then the ones that came from
+    // another place fly over, staggered. A version made and sent in one go
+    // (Albert commits and pushes) leaves its new dot once that dot has popped.
+    const list = arrivalsOf(before, who);
+    const poppedAt = new Map<string, number>();
+    for (const a of list.filter((x) => !x.from)) {
+      const target = nodeEl(a.id, a.cid);
+      if (!target) continue;
+      if (target.closest(".place.is-new")) delay = Math.max(delay, 480);
+      const files = staged.filter((s) => s.place === a.id);
+      saved(target, w.commits[a.cid], files, delay);
+      poppedAt.set(a.cid, delay + (files.length ? 420 + files.length * 40 : 0));
+      delay += 110;
+    }
+    for (const a of list.filter((x) => x.from)) {
+      const target = nodeEl(a.id, a.cid), src = nodeEl(a.from!, a.cid);
+      if (!target || !src) { landed(a.id, a.cid); continue; }
+      if (target.closest(".place.is-new")) delay = Math.max(delay, 480);
+      const start = poppedAt.has(a.cid) ? Math.max(delay, poppedAt.get(a.cid)! + 420) : delay;
+      travel(src, target, a.id === "github" ? "push" : "pull", start);
+      delay = start + 110;
+    }
+  });
+}
+
+/* which versions are new in each place after an action, and where each came
+ * from: what lands on a laptop (clone, pull) comes from GitHub; what lands on
+ * GitHub comes from whoever pushed it, even if they only just made it */
+interface Arrival { id: string; cid: string; from?: string }
+function arrivalsOf(before: FxSnap, who: Who): Arrival[] {
+  const out: Arrival[] = [];
+  const maker = who === "albert" ? "albert" : "you";
+  for (const [id, r] of Object.entries(w.repos)) {
+    const was = before.have[id] ?? new Set<string>();
+    const fresh = [...placeCommits(r)].filter((c) => !was.has(c)).sort((a, b) => w.commits[a].n - w.commits[b].n);
+    for (const cid of fresh) {
+      const order = id === "github" ? [who, ...Object.keys(before.have)] : ["github"];
+      let from = order.find((o) => o !== id && before.have[o]?.has(cid) && w.repos[o] && placeCommits(w.repos[o]).has(cid));
+      if (!from && id === "github" && w.repos[maker] && placeCommits(w.repos[maker]).has(cid)) from = maker;
+      out.push({ id, cid, from });
+    }
+  }
+  return out;
+}
+
+/* versions on their way stay hidden in the graph until their dot lands, so a
+ * graph never shows them first, hides them, then flies them in */
+const arriving = new Set<string>();
+function markArrivals(before: FxSnap, who: Who) {
+  if (prefersReduced) return;
+  const list = arrivalsOf(before, who).filter((a) => a.from);
+  list.forEach((a) => arriving.add(`${a.id}:${a.cid}`));
+  // never leave one hidden if its flight is skipped
+  if (list.length) setTimeout(() => list.forEach((a) => landed(a.id, a.cid)), 6000);
+}
+function landed(place: string, cid: string) {
+  if (!arriving.delete(`${place}:${cid}`)) return;
+  document.querySelectorAll<SVGElement>(`[data-strip^="${place}"] [data-c="${cid}"], [data-strip^="${place}"] .edge[data-to="${cid}"]`).forEach((n) => (n.style.opacity = ""));
+  // its branch names pop in with it
+  document.querySelectorAll<SVGElement>(`[data-strip^="${place}"] text.label[data-at="${cid}"], [data-strip^="${place}"] [data-tie="${cid}"]`).forEach((n) => {
+    if (!n.style.visibility) return;
+    n.style.visibility = "";
+    if (n.matches("text.label")) { n.classList.remove("is-new"); void n.getBoundingClientRect(); n.classList.add("is-new"); }
   });
 }
 
@@ -1398,14 +1731,17 @@ function saved(target: SVGGElement, c: G.Commit, files: { path: string; rect: DO
 }
 
 /* a commit travels between places: a dot flies from one row to the other */
-function travel(from: SVGGElement, to: SVGGElement, kind: "push" | "pull", delay: number) {
+function travel(from: Element, to: Element, kind: "push" | "pull", delay: number) {
+  if (!(to instanceof SVGGElement)) { setTimeout(() => fly(from, to, kind), delay); return; }
+  arriving.add(`${placeOf(to)}:${to.dataset.c}`);
   to.style.opacity = "0";
   // the line into this commit waits for it too, and is drawn as the dot lands
   const lines = [...(to.ownerSVGElement?.querySelectorAll<SVGPathElement>(`.edge[data-to="${to.dataset.c}"]`) ?? [])];
   lines.forEach((l) => { l.style.opacity = "0"; void drawOn(l, { duration: 1 }); });
   setTimeout(() => fly(from, to, kind, lines), delay);
 }
-function fly(from: SVGGElement, to: SVGGElement, kind: "push" | "pull", lines: SVGPathElement[] = []) {
+const placeOf = (n: Element) => (n.closest<HTMLElement>("[data-strip]")?.dataset.strip ?? "").split(":")[0];
+function fly(from: Element, to: Element, kind: "push" | "pull", lines: SVGPathElement[] = []) {
   const delay = 0;
   const a = centre(from.getBoundingClientRect()), b = centre(to.getBoundingClientRect());
   const dot = document.createElement("span");
@@ -1413,7 +1749,7 @@ function fly(from: SVGGElement, to: SVGGElement, kind: "push" | "pull", lines: S
   dot.style.left = `${a.x}px`;
   dot.style.top = `${a.y}px`;
   fx().append(dot);
-  to.style.opacity = "0";
+  if (to instanceof SVGGElement) to.style.opacity = "0";
   const lift = Math.min(60, Math.abs(b.y - a.y) * 0.25);
   dot.animate([
     { transform: "translate(-50%,-50%) scale(.6)" },
@@ -1421,14 +1757,22 @@ function fly(from: SVGGElement, to: SVGGElement, kind: "push" | "pull", lines: S
     { transform: `translate(calc(-50% + ${b.x - a.x}px), calc(-50% + ${b.y - a.y}px)) scale(.9)` },
   ], { duration: 460, delay, easing: "cubic-bezier(.45,0,.35,1)" }).finished.then(() => {
     dot.remove();
-    lines.forEach((l) => { l.style.opacity = ""; void drawOn(l, { duration: 240 }); });
-    to.style.opacity = "";
+    if (to instanceof SVGGElement) {
+      // the graph may have been redrawn mid-flight: land on what is there now
+      const place = placeOf(to), cid = to.dataset.c!;
+      landed(place, cid);
+      const now = nodeEl(place, cid);
+      if (now && now !== to) { to = now; lines = [...(now.ownerSVGElement?.querySelectorAll<SVGPathElement>(`.edge[data-to="${cid}"]`) ?? [])]; }
+    }
+    // its line grows into it at the same even pace as a new commit's
+    lines.forEach((l) => { l.style.opacity = ""; void drawOn(l, { duration: lineMs(l), even: true }); });
+    (to as SVGGElement).style.opacity = "";
     pop(to);
     ring(b, kind === "push" ? "var(--pen-remote)" : "var(--pen-blue)");
   });
 }
 
-function pop(g: SVGGElement) {
+function pop(g: Element) {
   g.classList.remove("is-pop");
   void g.getBoundingClientRect();
   g.classList.add("is-pop");
@@ -1606,7 +1950,32 @@ function boot() {
     if (c === ci) return;
     goto(c, 0, { replay: true });
   });
-  document.querySelectorAll<HTMLButtonElement>("#mode [data-mode]").forEach((b) => b.addEventListener("click", () => {
+  const sheet = (id: string) => $(id) as unknown as HTMLDialogElement;
+  const openSheet = (id: string) => {
+    sheet(id).showModal();
+    sheet(id).querySelector(".is-now")?.scrollIntoView({ block: "nearest" });
+  };
+  $("#chap-pill").addEventListener("click", () => openSheet("#chap-sheet"));
+  $("#back-up").addEventListener("click", () => {
+    $("#back-up").hidden = true;
+    document.querySelector("#lesson .after")?.scrollIntoView({ block: "center", behavior: prefersReduced ? "auto" : "smooth" });
+  });
+  let backUpTick = 0;
+  window.addEventListener("scroll", () => { if (!backUpTick) backUpTick = requestAnimationFrame(() => { backUpTick = 0; checkBackUp(); }); }, { passive: true });
+  $("#chap-list").addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-ch]");
+    if (!b) return;
+    sheet("#chap-sheet").close();
+    const c = Number(b.dataset.ch);
+    if (c !== ci) goto(c, 0, { replay: true });
+  });
+  const syncThemeRow = () => $("#menu-theme").setAttribute("aria-pressed", String(document.documentElement.dataset.theme === "dark"));
+  $("#menu-btn").addEventListener("click", () => { syncThemeRow(); openSheet("#menu"); });
+  $("#menu-theme").addEventListener("click", () => { $<HTMLButtonElement>("#theme-toggle").click(); syncThemeRow(); });
+  $("#menu-intro").addEventListener("click", () => { sheet("#menu").close(); intro(); });
+  // a tap on the dimmed backdrop closes a sheet, as on any phone
+  document.querySelectorAll<HTMLDialogElement>("dialog.sheet").forEach((d) => d.addEventListener("click", (e) => { if (e.target === d) d.close(); }));
+  document.querySelectorAll<HTMLButtonElement>("#mode [data-mode], #menu [data-mode]").forEach((b) => b.addEventListener("click", () => {
     mode = b.dataset.mode as Mode;
     log = log.filter((l) => l.kind !== "me" && l.kind !== "ai");
     renderMode();
@@ -1616,6 +1985,8 @@ function boot() {
   }));
   // files in the world open the editor (one listener, since parts are replaced)
   $("#world").addEventListener("click", (e) => {
+    const tab = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-tab]");
+    if (tab) return showTab(tab.dataset.tab as Place);
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-file]");
     if (b) openEditor(b.dataset.place as Place, Number(b.dataset.desk), b.dataset.file!);
   });
@@ -1715,7 +2086,7 @@ function boot() {
     if (e.key !== "Enter" || dlg.open || (e.target as HTMLElement).matches("input, textarea, button, summary")) return;
     if (beatDone) $("#lesson").querySelector<HTMLButtonElement>("[data-next]")?.click();
   });
-  window.addEventListener("resize", () => syncScroll());
+  window.addEventListener("resize", () => syncScroll(false));
 }
 
 boot();

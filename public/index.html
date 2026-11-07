@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>howtogit: git and GitHub, explained by doing</title>
   <meta name="description" content="Learn how git and GitHub work by doing it: save versions, go back in time, share with a friend, open a pull request. With buttons, commands or an AI assistant." />
   <meta name="color-scheme" content="light dark" />
@@ -36,12 +36,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Hanken+Grotesk:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=story49" />
+  <link rel="stylesheet" href="style.css?v=story79" />
 </head>
 <body>
   <header class="top">
     <a class="brand" href="./" aria-label="howtogit home">howtogit<span>.dev</span></a>
     <nav class="chapters" id="chapters" aria-label="chapters"></nav>
+    <button type="button" class="chap-pill" id="chap-pill" aria-haspopup="dialog" aria-label="chapters"></button>
     <div class="top__right">
       <button type="button" class="deck-btn" id="deck-btn" aria-label="your git words"></button>
       <div class="mode" id="mode" role="radiogroup" aria-label="how you want to do things">
@@ -52,6 +53,9 @@
       </div>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V17h5.2v-1.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"/><path d="M9.6 19.5h4.8M10.4 21.5h3.2"/></svg>
+      </button>
+      <button type="button" class="menu-btn" id="menu-btn" aria-haspopup="dialog" aria-label="Menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
     </div>
   </header>
@@ -89,11 +93,32 @@
       <ul class="deck__list" id="deck-list"></ul>
     </form>
   </dialog>
+  <dialog class="sheet" id="chap-sheet" aria-labelledby="chap-sheet-title">
+    <form method="dialog" class="sheet__inner">
+      <header class="sheet__head"><h2 id="chap-sheet-title" class="sheet__title">Chapters</h2><button class="editor__x" value="close" aria-label="Close">✕</button></header>
+      <ol class="sheet__chaps" id="chap-list"></ol>
+    </form>
+  </dialog>
+
+  <dialog class="sheet" id="menu" aria-labelledby="menu-title">
+    <form method="dialog" class="sheet__inner">
+      <header class="sheet__head"><h2 id="menu-title" class="sheet__title">howtogit<span>.dev</span></h2><button class="editor__x" value="close" aria-label="Close">✕</button></header>
+      <p class="sheet__label" id="menu-mode-label">Do it with</p>
+      <div class="sheet__modes mode-pick" role="radiogroup" aria-labelledby="menu-mode-label">
+        <button type="button" role="radio" data-mode="buttons"><b>Buttons</b><span>Click, like in VS Code</span></button>
+        <button type="button" role="radio" data-mode="command"><b>Commands</b><span>Type real git commands</span></button>
+        <button type="button" role="radio" data-mode="ai"><b>An AI</b><span>Ask in plain words</span></button>
+      </div>
+      <button type="button" class="sheet__row" id="menu-theme"><span>Dark mode</span><span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="sheet__row" id="menu-intro"><span>Watch the intro again</span><span aria-hidden="true">→</span></button>
+    </form>
+  </dialog>
   <div class="xp" id="xp" role="dialog" aria-label="what this command means" hidden>
     <button type="button" class="xp__x" aria-label="Close">✕</button>
     <div class="xp__body"></div>
   </div>
+  <button type="button" class="back-up" id="back-up" hidden><span aria-hidden="true">↑</span> Read what happened</button>
   <div class="fx" id="fx" aria-hidden="true"></div>
-  <script type="module" src="main.js?v=story49"></script>
+  <script type="module" src="main.js?v=story79"></script>
 </body>
 </html>

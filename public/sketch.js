@@ -120,6 +120,37 @@ export function linePath(x1, y1, x2, y2, seed = 1, roughness = 1) {
     }
     return smooth(pts, false);
 }
+/* a hand-drawn line that turns one rounded corner: along one axis first,
+ * then the other, drawn with the same pen (and wobble) as linePath, so a
+ * branch or merge line reads as one of the family */
+export function elbowPath(x1, y1, x2, y2, verticalFirst, seed = 1) {
+    const rand = rng(seed);
+    const C = verticalFirst ? [x1, y2] : [x2, y1];
+    const unit = (a, b) => { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; };
+    const u = unit([x1, y1], C), v = unit(C, [x2, y2]);
+    const l1 = Math.hypot(C[0] - x1, C[1] - y1), l2 = Math.hypot(x2 - C[0], y2 - C[1]);
+    const r = Math.max(2, Math.min(16, l1 * 0.6, l2 * 0.6));
+    const pts = [];
+    // one straight leg, bowed a touch off-true in the middle like linePath
+    const leg = (a, b, last) => {
+        const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len, ny = dx / len, segs = Math.max(2, Math.round(len / 36)), amp = Math.min(len * 0.04, 4);
+        for (let i = 0; i <= segs; i++) {
+            if ((i === segs && !last) || (i === 0 && pts.length))
+                continue;
+            const t = i / segs, env = Math.sin(t * Math.PI), off = (rand() * 2 - 1) * amp * env;
+            pts.push([a[0] + dx * t + nx * off, a[1] + dy * t + ny * off]);
+        }
+    };
+    const c1 = [C[0] - u[0] * r, C[1] - u[1] * r], c2 = [C[0] + v[0] * r, C[1] + v[1] * r];
+    leg([x1, y1], c1, false);
+    // the corner: a quarter circle from the first leg into the second
+    const O = [c1[0] + v[0] * r, c1[1] + v[1] * r];
+    for (const th of [0, Math.PI / 6, Math.PI / 3, Math.PI / 2])
+        pts.push([O[0] - v[0] * r * Math.cos(th) + u[0] * r * Math.sin(th), O[1] - v[1] * r * Math.cos(th) + u[1] * r * Math.sin(th)]);
+    leg(c2, [x2, y2], true);
+    return smooth(pts, false);
+}
 export function el(name, attrs = {}) {
     const node = document.createElementNS(SVGNS, name);
     for (const k in attrs)
@@ -129,7 +160,7 @@ export function el(name, attrs = {}) {
 const drawIds = new WeakMap();
 /* draw a path element on, like a pen laying down ink, with a leading nib */
 export function drawOn(pathEl, opts = {}) {
-    const { duration = 650, nibGroup = null, color = "#2a2521" } = opts;
+    const { duration = 650, delay = 0, even = false, nibGroup = null, color = "#2a2521" } = opts;
     // a newer drawOn on the same path takes over; the older one stops quietly
     const id = (drawIds.get(pathEl) ?? 0) + 1;
     drawIds.set(pathEl, id);
@@ -147,15 +178,19 @@ export function drawOn(pathEl, opts = {}) {
             nib = el("circle", { r: 3.4, fill: color, class: "nib" });
             nibGroup.appendChild(nib);
         }
-        const start = performance.now();
-        const tick = (now) => {
+        // one clock only: a frame's own timestamp can sit on a different base or
+        // precision than performance.now() (Firefox with stricter privacy), and
+        // mixing the two can make a line jump straight to finished
+        const start = performance.now() + delay;
+        const tick = () => {
+            const now = performance.now();
             if (drawIds.get(pathEl) !== id) {
                 nib?.remove();
                 resolve();
                 return;
             }
-            const t = Math.min(1, (now - start) / duration);
-            const e = 1 - Math.pow(1 - t, 3); // ease-out cubic
+            const t = Math.max(0, Math.min(1, (now - start) / duration));
+            const e = even ? (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2) : 1 - Math.pow(1 - t, 3); // in-out, or out, cubic
             pathEl.style.strokeDashoffset = `${len * (1 - e)}`;
             if (nib) {
                 const pt = pathEl.getPointAtLength(len * e);
