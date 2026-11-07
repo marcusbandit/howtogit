@@ -777,31 +777,79 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 :root[data-theme="dark"] .cmd-hint .tk-arg, .term-box .tk-arg { color: #f1e9d8; }
 :root[data-theme="dark"] .cmd-hint.is-friend { background: color-mix(in srgb, var(--friend) 14%, #0f1013); }
 
-/* "explain" beside a command: quiet until you hover or tap it */
-.cmd-row { position: relative; display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+
+
+/* ---------------------------------------------------------- explain */
+
+.cmd-row { position: relative; display: flex; align-items: center; gap: 10px; margin: 4px 0; }
 .cmd-row .cmd-hint { flex: 1; margin: 0; }
-.explain { flex: none; font-size: 12px; color: var(--ink-soft); text-decoration: underline dotted; text-underline-offset: 3px; cursor: var(--cur-go); outline: none; }
-.explain:hover, .explain:focus-visible, .explain.is-open { color: var(--accent-deep); }
+.explain { flex: none; font: 600 12.5px var(--ui); color: var(--ink-soft); background: none; border: 0; padding: 4px 2px;
+  text-decoration: underline dotted; text-underline-offset: 3px; }
+.explain:hover, .explain.is-open { color: var(--accent-deep); text-decoration-style: solid; }
 :root[data-theme="dark"] .explain:hover, :root[data-theme="dark"] .explain.is-open { color: var(--accent); }
-.explain__tip { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 45; display: grid; gap: 5px;
-  background: var(--card); border: 1.5px solid var(--line-strong); border-radius: 10px; padding: 10px 12px;
-  box-shadow: 0 12px 28px -14px rgba(0,0,0,.45); font-size: 13px; color: var(--ink); text-decoration: none; cursor: auto;
-  opacity: 0; pointer-events: none; transform: translateY(4px); transition: opacity .15s ease .08s, transform .15s ease .08s; }
-.explain:hover .explain__tip, .explain:focus-visible .explain__tip, .explain.is-open .explain__tip { opacity: 1; pointer-events: auto; transform: none; }
-.explain__k { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-top: 2px; }
-.explain__row { display: grid; grid-template-columns: minmax(0, max-content) 1fr; gap: 10px; align-items: baseline; }
-.explain__row code { font-family: var(--mono); font-size: 12px; background: #efe6d3; border-radius: 4px; padding: 1px 6px; white-space: nowrap; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
-:root[data-theme="dark"] .explain__row code { background: #0f1013; }
-.explain__row code .tk-prog { color: #2357a8; } .explain__row code .tk-sub { color: #ad3b10; font-weight: 700; } .explain__row code .tk-flag { color: #6a43c0; }
-.explain__row code .tk-str { color: #266b33; } .explain__row code .tk-url { color: #825407; } .explain__row code .tk-arg { color: var(--ink); }
-:root[data-theme="dark"] .explain__row code .tk-prog { color: #a9c9ff; } :root[data-theme="dark"] .explain__row code .tk-sub { color: #ffa877; }
-:root[data-theme="dark"] .explain__row code .tk-flag { color: #d4b8ff; } :root[data-theme="dark"] .explain__row code .tk-str { color: #a8e29a; }
-:root[data-theme="dark"] .explain__row code .tk-url { color: #f5cf7e; } :root[data-theme="dark"] .explain__row code .tk-arg { color: #f1e9d8; }
-.kind { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 0 5px; border-radius: 4px; margin-right: 2px; vertical-align: 1px; border: 1px solid currentColor; }
-.kind--program { color: #2357a8; } .kind--command { color: #ad3b10; } .kind--flag { color: #6a43c0; } .kind--value { color: var(--ink-soft); }
-:root[data-theme="dark"] .kind--program { color: #a9c9ff; } :root[data-theme="dark"] .kind--command { color: #ffa877; } :root[data-theme="dark"] .kind--flag { color: #d4b8ff; }
-.explain__note { font-size: 12.5px; color: var(--ink-soft); background: var(--card-2); border-radius: 6px; padding: 6px 8px; }
-.explain__note code { font-family: var(--mono); font-size: 11.5px; }
-.explain__more { font-size: 12.5px; color: var(--accent-deep); justify-self: start; }
-:root[data-theme="dark"] .explain__more { color: var(--accent); }
-.explain__note code { white-space: nowrap; }
+
+.xp { position: fixed; z-index: 50; width: 620px; max-height: calc(100dvh - 92px); overflow: auto;
+  background: var(--card); color: var(--ink); border: 2px solid var(--ink); border-radius: 14px;
+  box-shadow: 5px 6px 0 var(--line-strong); padding: 22px 26px 20px;
+  opacity: 0; transform: translateX(-6px); transition: opacity .16s ease, transform .2s cubic-bezier(.2,1,.4,1); }
+.xp[hidden] { display: none; }
+.xp.is-in { opacity: 1; transform: none; }
+.xp.is-below { transform: translateY(-6px); }
+.xp.is-below.is-in { transform: none; }
+/* a little ink tick pointing back at the command it explains */
+.xp::before { content: ""; position: absolute; left: -9px; top: calc(var(--arrow-y, 30px) - 8px); width: 14px; height: 14px;
+  background: var(--card); border-left: 2px solid var(--ink); border-bottom: 2px solid var(--ink); transform: rotate(45deg); }
+.xp.is-below::before { display: none; }
+.xp__x { position: absolute; top: 10px; right: 12px; border: 0; background: none; font-size: 15px; color: var(--ink-soft); padding: 4px 6px; border-radius: 6px; }
+.xp__x:hover { color: var(--ink); background: var(--card-2); }
+
+/* the command, written large and marked up like a teacher would */
+.xp__cmd { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: flex-start; padding: 2px 30px 18px 0; border-bottom: 1.5px dashed var(--line-strong); }
+.xp__part { display: grid; justify-items: center; gap: 2px; }
+.xp__part code { font-family: var(--mono); font-size: 19px; line-height: 1.3; padding-bottom: 3px; white-space: nowrap;
+  background-image: linear-gradient(currentColor, currentColor); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; }
+.xp__part i { font: 600 17px/1 var(--hand); font-style: normal; color: var(--ink-soft); }
+.xp__part--flag i { color: #6a43c0; } .xp__part--command i { color: #ad3b10; } .xp__part--program i { color: #2357a8; }
+:root[data-theme="dark"] .xp__part--flag i { color: #d4b8ff; } :root[data-theme="dark"] .xp__part--command i { color: #ffa877; } :root[data-theme="dark"] .xp__part--program i { color: #a9c9ff; }
+
+/* two even columns; every row uses the same rhythm so descriptions line up */
+.xp__cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 0 28px; padding-top: 16px; }
+.xp__col { display: grid; align-content: start; gap: 10px; }
+.xp__col + .xp__col { border-left: 1.5px solid var(--line); padding-left: 28px; }
+.xp h4 { font: 700 14px var(--ui); color: var(--ink); margin: 0; }
+.xp__list { display: grid; gap: 10px; margin: 0; }
+.xp__list > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: baseline; }
+.xp__list--also > div { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+.xp__list dt { min-width: 0; }
+.xp__list dd { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink); }
+.xp__list--also dd { color: var(--ink-soft); font-size: 13.5px; }
+.xp__list code { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;
+  font-family: var(--mono); font-size: 12.5px; background: #efe6d3; border-radius: 5px; padding: 2px 7px; }
+:root[data-theme="dark"] .xp__list code { background: #0f1013; }
+.xp__note { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-soft); padding-top: 10px; border-top: 1.5px dashed var(--line); }
+.xp__note code { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+.xp__more { font-size: 13px; font-weight: 600; color: var(--accent-deep); justify-self: start; }
+:root[data-theme="dark"] .xp__more { color: var(--accent); }
+/* token colours inside the panel follow the light chips / dark chips rules */
+.xp .tk-prog { color: #2357a8; } .xp .tk-sub { color: #ad3b10; font-weight: 700; } .xp .tk-flag { color: #6a43c0; }
+.xp .tk-str { color: #266b33; } .xp .tk-url { color: #825407; } .xp .tk-arg { color: var(--ink); }
+:root[data-theme="dark"] .xp .tk-prog { color: #a9c9ff; } :root[data-theme="dark"] .xp .tk-sub { color: #ffa877; }
+:root[data-theme="dark"] .xp .tk-flag { color: #d4b8ff; } :root[data-theme="dark"] .xp .tk-str { color: #a8e29a; }
+:root[data-theme="dark"] .xp .tk-url { color: #f5cf7e; } :root[data-theme="dark"] .xp .tk-arg { color: #f1e9d8; }
+
+/* phones and narrow windows: a sheet along the bottom, columns stacked */
+@media (max-width: 899px) {
+  .xp { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto !important; max-height: 72dvh;
+    border-radius: 16px 16px 0 0; border-width: 2px 0 0; box-shadow: 0 -10px 30px -12px rgba(0,0,0,.35); padding: 20px 18px 24px;
+    transform: translateY(24px); }
+  .xp::before { display: none; }
+  .xp__cols { grid-template-columns: 1fr; gap: 18px; }
+  .xp__col + .xp__col { border-left: 0; padding-left: 0; border-top: 1.5px dashed var(--line); padding-top: 16px; }
+  .xp__part code { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .xp { transition: none; } }
+/* the token column is as wide as the widest token in that list (capped), so short
+   tokens don't leave a gap and long ones aren't cut early */
+.xp__list:not(.xp__list--also) { grid-template-columns: max-content minmax(0, 1fr); column-gap: 14px; row-gap: 10px; }
+.xp__list:not(.xp__list--also) > div { display: contents; }
+.xp__list:not(.xp__list--also) code { max-width: 170px; }

@@ -25,17 +25,72 @@ interface Snap { ci: number; bi: number; w: string; log: string; beatDone: boole
 const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/* a quiet "explain" next to a command: hover or tap shows each part and other ways to write it */
+/* a quiet "explain" next to a command. It opens one shared panel beside the
+ * lesson (a sheet from the bottom on phones): the command written large with
+ * each part underlined and labelled, then what each part means and other ways
+ * to write it. */
+const tokClass = (kind: string, t: string) => kind === "program" ? "tk-prog" : kind === "command" ? "tk-sub" : kind === "flag" ? "tk-flag"
+  : /^["']/.test(t) ? "tk-str" : /:\/\/|^\.\.?\/|github\.com/.test(t) ? "tk-url" : "tk-arg";
 function explainHtml(cmd: string): string {
   const e = explain(cmd);
   if (!e || e.parts.length < 2) return "";
-  return `<span class="explain" tabindex="0" role="button" aria-label="explain this command">explain<span class="explain__tip" role="tooltip">
-    <span class="explain__k">What each part means</span>
-    ${e.parts.map((p) => `<span class="explain__row"><code><span class="${p.kind === "program" ? "tk-prog" : p.kind === "command" ? "tk-sub" : p.kind === "flag" ? "tk-flag" : /^["']/.test(p.t) ? "tk-str" : /:\/\/|^\.\.?\/|github\.com/.test(p.t) ? "tk-url" : "tk-arg"}">${esc(p.t)}</span></code><span><i class="kind kind--${p.kind}">${p.kind}</i> ${esc(p.means)}</span></span>`).join("")}
-    ${e.flags ? `<span class="explain__note">A <b>flag</b> starts with a dash and changes how a command behaves. Short flags use one dash (<code>-m</code>), long ones two (<code>--message</code>). Some flags take a <b>value</b> right after them.</span>` : ""}
-    ${e.also.length ? `<span class="explain__k">Other ways</span>${e.also.map((a) => `<span class="explain__row"><code>${a.cmd.startsWith("git") || a.cmd.startsWith("gh") ? hl(a.cmd) : esc(a.cmd)}</code><span>${esc(a.means)}</span></span>`).join("")}` : ""}
-    ${e.docs ? `<a class="explain__more" href="${e.docs}" target="_blank" rel="noopener">Learn more: the official manual ↗</a>` : ""}
-  </span></span>`;
+  return `<button type="button" class="explain" data-explain="${esc(cmd).replace(/"/g, "&quot;")}" aria-haspopup="dialog">explain</button>`;
+}
+function explainPanelHtml(cmd: string): string {
+  const e = explain(cmd)!;
+  return `
+    <div class="xp__cmd" aria-label="${esc(cmd).replace(/"/g, "&quot;")}">${e.parts.map((p) =>
+      `<span class="xp__part xp__part--${p.kind}"><code class="${tokClass(p.kind, p.t)}">${esc(p.t)}</code><i>${p.kind}</i></span>`).join("")}</div>
+    <div class="xp__cols">
+      <section class="xp__col">
+        <h4>What each part means</h4>
+        <dl class="xp__list">${e.parts.map((p) => `<div><dt><code class="${tokClass(p.kind, p.t)}">${esc(p.t)}</code></dt><dd>${esc(p.means)}</dd></div>`).join("")}</dl>
+      </section>
+      <section class="xp__col">
+        ${e.also.length ? `<h4>Other ways to write it</h4>
+        <dl class="xp__list xp__list--also">${e.also.map((a) => `<div><dt><code>${a.cmd.startsWith("git") || a.cmd.startsWith("gh") ? hl(a.cmd) : esc(a.cmd)}</code></dt><dd>${esc(a.means)}</dd></div>`).join("")}</dl>` : ""}
+        ${e.flags ? `<p class="xp__note">A <b>flag</b> starts with a dash and changes how a command behaves. One dash is the short form (<code>-m</code>), two dashes the long one (<code>--message</code>). Some flags take a <b>value</b> right after them.</p>` : ""}
+        ${e.docs ? `<a class="xp__more" href="${e.docs}" target="_blank" rel="noopener">Read the official manual for this command ↗</a>` : ""}
+      </section>
+    </div>`;
+}
+
+let xpTimer = 0;
+let xpFor: HTMLElement | null = null;
+function openExplain(trigger: HTMLElement, pinned: boolean) {
+  const panel = $("#xp");
+  window.clearTimeout(xpTimer);
+  if (xpFor !== trigger) panel.querySelector(".xp__body")!.innerHTML = explainPanelHtml(trigger.dataset.explain!);
+  xpFor = trigger;
+  document.querySelectorAll(".explain.is-open").forEach((x) => x.classList.toggle("is-open", x === trigger));
+  trigger.classList.add("is-open");
+  panel.hidden = false;
+  panel.classList.toggle("is-pinned", pinned);
+  placeExplain(trigger);
+  requestAnimationFrame(() => panel.classList.add("is-in"));
+}
+function closeExplain(soon = false) {
+  const panel = $("#xp");
+  window.clearTimeout(xpTimer);
+  const go = () => { panel.classList.remove("is-in", "is-pinned"); panel.hidden = true; xpFor?.classList.remove("is-open"); xpFor = null; };
+  if (soon) xpTimer = window.setTimeout(go, 160); else go();
+}
+/* desktop: beside the lesson card, level with the command, kept on screen.
+ * phones: a sheet along the bottom (placed by CSS) */
+function placeExplain(trigger: HTMLElement) {
+  const panel = $("#xp");
+  if (window.innerWidth < 900) { panel.style.left = panel.style.top = ""; return; }
+  const card = $("#lesson").getBoundingClientRect(), row = trigger.closest(".cmd-row")!.getBoundingClientRect();
+  const w = Math.min(640, window.innerWidth - card.right - 40);
+  const roomRight = w >= 440;
+  panel.style.width = `${roomRight ? w : card.width}px`;
+  const left = roomRight ? card.right + 18 : card.left;
+  const h = panel.offsetHeight;
+  const top = roomRight ? Math.max(76, Math.min(row.top - 18, window.innerHeight - h - 16)) : Math.min(row.bottom + 8, window.innerHeight - h - 16);
+  panel.style.left = `${left}px`;
+  panel.style.top = `${Math.max(76, top)}px`;
+  panel.style.setProperty("--arrow-y", `${Math.max(18, Math.min(h - 18, row.top + row.height / 2 - Math.max(76, top)))}px`);
+  panel.classList.toggle("is-below", !roomRight);
 }
 
 /* syntax colours for a command line: the program, what it should do, flags,
@@ -350,6 +405,7 @@ function renderLesson() {
       <button type="button" class="btn btn--next" data-next ${beatDone ? "" : "disabled"}>${bi + 1 < total ? "Next" : "Next chapter"} <span aria-hidden="true">→</span></button>`}
     </div>`;
   wireLesson();
+  if (xpFor && !document.body.contains(xpFor)) closeExplain();
   const term = box.querySelector(".term__out");
   if (term) term.scrollTop = term.scrollHeight;
   if (beatDone && justDone) {
@@ -1144,6 +1200,27 @@ function boot() {
   });
   $("#lesson").addEventListener("animationend", (e) => (e.target as HTMLElement).classList.remove("shake"));
   $("#deck-btn").addEventListener("click", openDeck);
+  // explain: hover opens it (and it stays while the pointer is on the panel),
+  // a click or tap pins it open, Escape or a click elsewhere closes it
+  const xp = $("#xp");
+  document.addEventListener("pointerover", (e) => {
+    const t = (e.target as HTMLElement).closest<HTMLElement>(".explain");
+    if (t && (e as PointerEvent).pointerType === "mouse" && !xp.classList.contains("is-pinned")) openExplain(t, false);
+  });
+  document.addEventListener("pointerout", (e) => {
+    const from = (e.target as HTMLElement).closest(".explain, #xp"), to = (e.relatedTarget as HTMLElement | null)?.closest(".explain, #xp");
+    if (from && !to && !xp.classList.contains("is-pinned")) closeExplain(true);
+  });
+  xp.addEventListener("pointerenter", () => window.clearTimeout(xpTimer));
+  document.addEventListener("click", (e) => {
+    const t = (e.target as HTMLElement).closest<HTMLElement>(".explain");
+    if (t) { if (xpFor === t && xp.classList.contains("is-pinned")) closeExplain(); else openExplain(t, true); return; }
+    if (!(e.target as HTMLElement).closest("#xp") && !xp.hidden) closeExplain();
+  });
+  xp.querySelector(".xp__x")!.addEventListener("click", () => closeExplain());
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !xp.hidden) closeExplain(); });
+  $("#lesson").addEventListener("scroll", () => { if (!xp.hidden && xpFor) placeExplain(xpFor); });
+  window.addEventListener("resize", () => { if (!xp.hidden && xpFor) placeExplain(xpFor); });
   $("#editor-text").addEventListener("input", fitEditor);
   // the pressing hand stays while the mouse button is held, wherever it is,
   // and each click drops a little ink ring
@@ -1182,9 +1259,9 @@ function boot() {
   window.addEventListener("blur", release);
   // the "why GitHub?" note opens on tap too (phones have no hover), and closes on the next tap anywhere
   document.addEventListener("click", (e) => {
-    const why = (e.target as HTMLElement).closest(".why, .explain");
-    if (why && (e.target as HTMLElement).closest(".explain__tip, .why__tip")) return; // clicks inside an open note keep it open
-    document.querySelectorAll(".why.is-open, .explain.is-open").forEach((x) => { if (x !== why) x.classList.remove("is-open"); });
+    const why = (e.target as HTMLElement).closest(".why");
+    if (why && (e.target as HTMLElement).closest(".why__tip")) return; // clicks inside an open note keep it open
+    document.querySelectorAll(".why.is-open").forEach((x) => { if (x !== why) x.classList.remove("is-open"); });
     why?.classList.toggle("is-open");
   });
   const dlg = $("#editor") as unknown as HTMLDialogElement;
