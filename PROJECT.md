@@ -9,6 +9,29 @@ type, the commit graph, a file tree, and (later) a remote repo get drawn for
 them, by hand, on a paper-like infinite board. Guided and constrained, so a
 total beginner is never lost.
 
+## Direction (set 2026-11-07, tracker #1)
+
+The command-by-command lesson taught command names, not understanding. The new
+target: someone with zero git knowledge understands it on the first try.
+
+- **The idea comes first, the git word last.** Each chapter opens with a plain
+  picture, the visitor does the action themselves, then the term is named.
+- **One story with a second person.** You and a friend build a small recipe
+  page. Two computers, GitHub between them as the shared copy.
+- **Any tool.** Every action can be done with buttons (default), a typed
+  command, or by asking an AI. The drawing is the same in all three (#5).
+- **Chapters:** 1 the problem (final_v2_REAL.docx) · 2 folder and snapshots
+  (working tree, staging, commit) · 3 go back in time (history, HEAD) · 4 the
+  shared copy (remote, push) · 5 a friend joins (clone, pull) · 6 try an idea
+  safely (branch) · 7 ask to add it (pull request, review, merge) · 8 both
+  changed line 3 (conflict) · 9 two desks at once (worktree).
+- **Keep:** ink engine, paper look, real isomorphic-git, curiosity companion.
+- **Fix first in the current flow:** wrong drawings (#2), overlaps (#3), copy
+  and dashes (#4).
+
+Issues: #1 tracker, #2 to #4 bugs, #5 to #8 chapters and modes. The "Next up"
+section below predates this direction and is superseded by it.
+
 ## Architecture (today)
 
 - TypeScript, no framework, no bundler. `src/*.ts` compiles to `public/*.js`
