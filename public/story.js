@@ -133,7 +133,7 @@ export const chapters = [
                         ai: "commit the staged report change with a note",
                     }],
                 done: (w) => count(w, you(w)?.branches.main) >= 2,
-                after: () => `Two dots now. notes.txt still says <b>changed</b>: it wasn't staged, so it isn't in that version.`,
+                after: () => `Two commits now. notes.txt still says <b>changed</b>: it wasn't staged, so it isn't in that version.`,
             },
         ],
     },
@@ -163,21 +163,26 @@ export const chapters = [
                 after: () => `Back exactly as it was in your last version. Changes you haven't committed can be thrown away; versions you committed stay safe.`,
             },
             {
+                id: "history",
+                kind: "act",
+                say: () => `Every commit you made is kept in the <b>history</b>. Have a look at it.`,
+                acts: [{ label: "Show history", steps: () => ["git log --oneline"], ai: "show me the history of this project" }],
+                done: (w) => w.vars.sawLog === "1",
+                after: () => `That's your history: every commit, newest at the top, each with its ID and commit message. It's the same as the line of commits in the picture, read from right to left.`,
+                more: [["What's a code like 3fa9c21?", "Every commit gets a unique ID made from its contents. Tools show it so you can point at an exact version."]],
+            },
+            {
                 id: "travel",
                 kind: "act",
-                say: () => `The <b>you are here</b> marker has a git name: <b>HEAD</b>, the version your files match right now. You can move HEAD to any older version. Open the very first one.`,
-                acts: [
-                    { label: "Show history", steps: () => ["git log --oneline"], ai: "show me the history of this project" },
-                    {
+                say: () => `The <b>you are here</b> marker has a git name: <b>HEAD</b>, the commit your files match right now. You can move HEAD to any older commit. Open the very first one.`,
+                acts: [{
                         label: "Open the first version",
                         steps: (w) => [`git switch --detach ${G.short([...G.ancestors(w, you(w).branches.main)].map((id) => w.commits[id]).sort((a, b) => a.n - b.n)[0].id)}`],
                         ai: "show me the very first version of the report",
-                    },
-                ],
+                    }],
                 done: (w) => !!desk(w)?.detached && w.commits[desk(w).detached].parents.length === 0,
-                after: () => `Your files now match the first version. <b>You are here</b> moved back a dot. The newer version is still on the line.`,
-                term: ["HEAD", "Git's name for <b>you are here</b>: the version your files currently match."],
-                more: [["What's a code like 3fa9c21?", "Every version gets a unique ID made from its contents. Tools show it so you can point at an exact version."]],
+                after: () => `Your files now match the first version, and HEAD moved back to the first commit. The newer commits are still on the line.`,
+                term: ["HEAD", "Git's name for <b>you are here</b>: the commit your files match right now."],
             },
             {
                 id: "return",
@@ -185,7 +190,7 @@ export const chapters = [
                 say: () => `Go back to the newest version.`,
                 acts: [{ label: "Back to main", steps: () => ["git switch main"], ai: "go back to the latest version" }],
                 done: (w) => desk(w)?.branch === "main" && !desk(w).detached,
-                after: () => `Back at the newest dot. <b>main</b> is the name of this line of versions. More lines are coming.`,
+                after: () => `Back at the newest commit, and HEAD with it. <b>main</b> is the name of this line of commits. More lines are coming.`,
             },
             {
                 id: "save-shop",
@@ -237,7 +242,7 @@ export const chapters = [
                 say: () => `Save it as a new version.`,
                 acts: [commitAct("Add results")],
                 done: (w) => clean(w) && !!gh(w) && you(w).branches.main !== gh(w).branches.main,
-                after: () => `GitHub doesn't have this dot. Saving only happens on your laptop. It says <b>1 version not uploaded</b>.`,
+                after: () => `GitHub doesn't have this commit. Saving only happens on your laptop. It says <b>1 version not uploaded</b>.`,
             },
             {
                 id: "push",
@@ -277,7 +282,7 @@ export const chapters = [
                         ],
                     }],
                 done: (w) => !!gh(w) && w.commits[gh(w).branches.main]?.author === "Albert",
-                after: () => `GitHub has Albert's dot. Your laptop doesn't. Nothing on your laptop changes until you ask.`,
+                after: () => `GitHub has Albert's commit. Your laptop doesn't. Nothing on your laptop changes until you ask.`,
             },
             {
                 id: "pull",
@@ -285,7 +290,7 @@ export const chapters = [
                 say: () => `Bring Albert's version down to your laptop. Getting new versions from GitHub is a <b>pull</b>.`,
                 acts: [pullAct],
                 done: (w) => synced(w, "main") && desk(w).branch === "main",
-                after: () => `report.md has Albert's line now, and his dot is on your line with his name on it. <b>Push</b> sends up, <b>pull</b> brings down.`,
+                after: () => `report.md has Albert's line now, and his commit is on your line with his name on it. <b>Push</b> sends up, <b>pull</b> brings down.`,
                 term: ["pull", "Download new versions from GitHub and update your files to match."],
             },
         ],
@@ -307,7 +312,7 @@ export const chapters = [
                     }],
                 done: (w) => !!desk(w)?.branch && desk(w).branch !== "main",
                 onDone: (w) => { w.vars.branch = desk(w).branch; },
-                after: (w) => `<b>${br(w)}</b> sits on the same dot as main. You're on it now, so your next version goes there.`,
+                after: (w) => `<b>${br(w)}</b> sits on the same commit as main. You're on it now, so your next version goes there.`,
                 term: ["branch", "A named line of versions. <b>main</b> is the one everyone treats as the real version."],
             },
             {
@@ -328,7 +333,7 @@ export const chapters = [
                 say: (w) => `Save it on ${br(w)}.`,
                 acts: [commitAct("Add a summary")],
                 done: (w) => clean(w) && you(w).branches[br(w)] !== you(w).branches.main,
-                after: () => `Your dot sits on its own lane. main didn't move.`,
+                after: () => `Your new commit sits on its own lane. main didn't move.`,
             },
             {
                 id: "peek",
@@ -425,7 +430,7 @@ export const chapters = [
                 say: () => `Approved. Press merge: it <b>merges</b> your branch into main.`,
                 acts: [{ label: "Merge pull request", look: "github", steps: () => ["gh pr merge 1 --merge"], ai: "merge the approved pull request" }],
                 done: (w) => w.prs[0]?.state === "merged",
-                after: (w) => `main on GitHub has your summary. A dot with two parents joins ${br(w)} back into main.`,
+                after: (w) => `main on GitHub has your summary. A merge commit with two parents joins ${br(w)} back into main.`,
                 term: ["merge", "Combine the versions from one branch into another."],
             },
             {

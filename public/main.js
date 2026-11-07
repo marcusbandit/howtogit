@@ -472,6 +472,8 @@ function doHtml(b) {
         if (mode === "ai")
             html += aiHtml(mine);
     }
+    if (b.id === "travel" || log.some((l) => l.kind === "cmd" && /^git\s+log\b/.test(l.text)))
+        html += historyHtml();
     if (mode !== "command")
         html += hoodHtml();
     if (watch.length && mode === "command")
@@ -550,6 +552,22 @@ function aiHtml(mine) {
         : `<div class="bubble bubble--ai"><span class="ai-name">Assistant</span>${l.text}</div>`).join("")}
     ${beatDone || waiting ? "" : `<div class="chat__picks"><span class="chat__k">Send:</span>
       <button type="button" class="say-pick" data-say="${esc(ask)}">“${esc(ask)}” <span aria-hidden="true">↵</span></button></div>`}
+  </div>`;
+}
+/* the history, the way a tool shows it: every commit on main, newest first */
+function historyHtml() {
+    const r = w.repos.you;
+    if (!r?.branches.main)
+        return "";
+    const d = r.desks[beatDesk()];
+    const head = G.headId(r, d);
+    const list = [...G.ancestors(w, r.branches.main)].map((id) => w.commits[id]).sort((a, b) => b.n - a.n);
+    return `<div class="hist">
+    <p class="hist__k">History of main, newest first</p>
+    <ol class="hist__list">${list.map((c, i) => `<li class="${c.id === head ? "is-head" : ""}">
+      <code class="hist__id">${G.short(c.id)}</code><span class="hist__msg">${esc(c.msg)}</span>
+      <span class="hist__who">${esc(c.author)}</span>${c.id === head ? `<span class="hist__head">${earned().has("HEAD") ? "HEAD" : "you are here"}</span>` : i === list.length - 1 ? `<span class="hist__first">first</span>` : ""}
+    </li>`).join("")}</ol>
   </div>`;
 }
 /* in buttons and AI mode, show which git commands actually ran */
@@ -897,8 +915,10 @@ function drawStrip(id, cols) {
     if (!r.bare)
         r.desks.forEach((d, i) => {
             const h = G.headId(r, d);
+            const learned = earned().has("HEAD");
             if (h)
-                push(h, { text: r.desks.length > 1 ? `desk ${i + 1} is here` : id === "albert" ? "Albert is here" : "you are here", color: "var(--ink)", here: true });
+                push(h, { text: learned ? (r.desks.length > 1 ? `HEAD, desk ${i + 1}` : id === "albert" ? "Albert's HEAD" : "HEAD")
+                        : (r.desks.length > 1 ? `desk ${i + 1} is here` : id === "albert" ? "Albert is here" : "you are here"), color: "var(--ink)", here: true });
         });
     Object.entries(r.branches).sort(([a], [b]) => (a === "main" ? -1 : b === "main" ? 1 : 0)).forEach(([b, cid]) => push(cid, { text: b, color: colorOf(b) }));
     const maxLabels = Math.max(1, ...[...labels.values()].map((a) => a.length));
@@ -965,8 +985,10 @@ function drawStrip(id, cols) {
             tx.textContent = lb.here ? `▲ ${lb.text}` : lb.text;
             gLabels.append(tx);
             const k = `l:${cid}:${lb.text}`;
+            // the plain label turning into the git word gets a little bounce
+            const swapped = lb.here && /HEAD/.test(lb.text) && !seen.has(k) && [...seen].some((x) => x.startsWith(`l:${cid}:`) && /is here$/.test(x));
             if (!instant && !seen.has(k))
-                tx.classList.add("is-new");
+                tx.classList.add(swapped ? "is-swap" : "is-new");
             seen.add(k);
         });
     }

@@ -9,6 +9,7 @@ export const authorOf = (who: "you" | "albert") => (who === "albert" ? "Albert" 
 export function exec(w: G.World, cmd: string, who: "you" | "albert", desk: number): Result {
   const r = run(w, { repo: who, desk, author: authorOf(who) }, cmd);
   if (/\[rejected\]/.test(r.out)) w.vars.rejected = "1";
+  if (r.ok && /^\s*git\s+log\b/.test(cmd)) w.vars.sawLog = "1";
   return r;
 }
 

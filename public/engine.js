@@ -8,6 +8,8 @@ export function exec(w, cmd, who, desk) {
     const r = run(w, { repo: who, desk, author: authorOf(who) }, cmd);
     if (/\[rejected\]/.test(r.out))
         w.vars.rejected = "1";
+    if (r.ok && /^\s*git\s+log\b/.test(cmd))
+        w.vars.sawLog = "1";
     return r;
 }
 /* the world as it is at the start of beat (ci, bi), reached the typical way */

@@ -857,3 +857,19 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .pv-app { grid-template-columns: 26px 176px 1fr; }
 .pv-app__head { white-space: nowrap; gap: 8px; }
 .pv-app__code p { overflow: hidden; text-overflow: ellipsis; }
+
+/* the history list (git log), as a tool would show it */
+.hist { border: 1.5px solid var(--line-strong); border-radius: 10px; background: var(--card); padding: 10px 12px; }
+.hist__k { font-size: 12px; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; }
+.hist__list { list-style: none; display: grid; gap: 2px; margin: 0; padding: 0; }
+.hist__list li { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content max-content; gap: 10px; align-items: baseline; padding: 4px 6px; border-radius: 6px; font-size: 14px; }
+.hist__list li.is-head { background: color-mix(in srgb, var(--pen-blue) 10%, transparent); }
+.hist__id { font-family: var(--mono); font-size: 12px; color: var(--pen-blue); }
+.hist__msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist__who { font-size: 12px; color: var(--ink-soft); }
+.hist__head, .hist__first { font-size: 12px; font-weight: 700; padding: 0 6px; border-radius: 999px; }
+.hist__head { color: var(--card); background: var(--ink); }
+.hist__first { color: var(--ink-soft); border: 1px solid var(--line-strong); }
+/* "you are here" turning into HEAD */
+.label.is-swap { animation: swap .7s cubic-bezier(.2,1.6,.4,1) both; transform-box: fill-box; transform-origin: center; }
+@keyframes swap { 0% { transform: translateY(-10px) scale(.6); opacity: 0; } 55% { transform: translateY(2px) scale(1.15); opacity: 1; } 100% { transform: none; } }
