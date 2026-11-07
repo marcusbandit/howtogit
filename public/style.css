@@ -89,7 +89,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button, input, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; }
+button { cursor: var(--cur-go); }
 code { font-family: var(--mono); font-size: 0.86em; }
 :focus-visible { outline: 2.5px solid var(--pen-blue); outline-offset: 3px; border-radius: 6px; }
 
@@ -203,7 +203,7 @@ code { font-family: var(--mono); font-size: 0.86em; }
 .hood { border-top: 1.5px dashed var(--line-strong); padding-top: 10px; font-size: 14px; }
 .hood__k { color: var(--ink-soft); font-size: 13px; margin-bottom: 2px; }
 .hood details { margin-top: 6px; }
-.hood summary, .hint-cmds summary, .more summary { cursor: pointer; color: var(--ink-soft); font-size: 13.5px; }
+.hood summary, .hint-cmds summary, .more summary { cursor: var(--cur-go); color: var(--ink-soft); font-size: 13.5px; }
 .hood pre { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; background: var(--card-2); padding: 8px 10px; border-radius: 6px; margin-top: 6px; max-height: 220px; overflow: auto; }
 .hood .hood__err { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, var(--card)); }
 
@@ -658,3 +658,65 @@ body[data-intro] .app, body[data-intro] .chapters, body[data-intro] .mode, body[
   .preview { height: 104px; }
   .intro__opt { padding: 8px 12px; }
 }
+
+/* the preview sizes itself to the tallest demo, so nothing hides behind it */
+.preview { display: grid; height: auto !important; }
+.preview__pane { position: relative; inset: auto; grid-area: 1 / 1; }
+
+/* buttons demo: an editor window, our colours, VS Code's layout */
+.pv-app { display: grid; grid-template-columns: 26px 150px 1fr; padding: 0; overflow: hidden; min-height: 112px; }
+.pv-app__rail { background: var(--card-2); border-right: 1px solid var(--line); display: grid; align-content: start; gap: 9px; padding: 9px 0; justify-items: center; }
+.pv-app__rail i { width: 12px; height: 12px; border: 1.6px solid var(--ink-soft); border-radius: 3px; opacity: .6; }
+.pv-app__rail i.is-on { border-color: var(--accent); opacity: 1; border-radius: 50%; }
+.pv-app__side { padding: 7px 9px; border-right: 1px solid var(--line); display: grid; align-content: start; gap: 4px; }
+.pv-app__head { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; color: var(--ink-soft); display: flex; justify-content: space-between; }
+.pv-app__head span { letter-spacing: 0; font-weight: 600; color: var(--pen-blue); }
+.pv-app__msg { margin: 0; font-size: 11px; padding: 2px 6px; }
+.pv-app__btn { text-align: center; font-size: 11px; padding: 3px 0; }
+.pv-app__sec { font-size: 9.5px; font-weight: 700; color: var(--ink-soft); margin-top: 2px; }
+.pv-app__file { font-size: 11px; display: flex; justify-content: space-between; }
+.pv-app__file i { margin: 0; }
+.pv-app__code { font-family: var(--mono); font-size: 10.5px; padding: 8px 6px; color: var(--ink-soft); }
+.pv-app__code p { white-space: nowrap; }
+.pv-app__code b { display: inline-block; width: 16px; color: var(--line-strong); font-weight: 400; }
+.pv-app__code .is-add { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ink); }
+@keyframes pv-cursor { 0% { opacity: 0; left: 80%; top: 90%; } 15% { opacity: 1; } 45%, 60% { left: 18%; top: 52%; opacity: 1; } 90%, 100% { left: 18%; top: 52%; opacity: 0; } }
+
+/* buttons mode in the lesson: git actions sit in an editor panel... */
+.ide { display: grid; grid-template-columns: 34px 1fr; border: 1.5px solid var(--line-strong); border-radius: 10px; overflow: hidden; background: var(--card); }
+.ide__rail { background: var(--card-2); border-right: 1px solid var(--line); display: grid; align-content: start; gap: 12px; justify-items: center; padding: 12px 0; }
+.ide__ico { width: 15px; height: 15px; border: 1.8px solid var(--ink-soft); border-radius: 3px; opacity: .55; }
+.ide__ico--git { border-radius: 50%; }
+.ide__ico.is-on { border-color: var(--accent); opacity: 1; box-shadow: -10px 0 0 -6px var(--accent); }
+.ide__main { padding: 10px 14px 14px; }
+.ide__head { font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft); display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.ide__br { letter-spacing: 0; text-transform: none; color: var(--pen-blue); font-weight: 600; font-size: 12.5px; }
+.ide .act .btn { justify-self: stretch; }
+/* ...and GitHub actions in a browser window */
+.webwin { border: 1.5px solid var(--line-strong); border-radius: 10px; overflow: hidden; background: var(--card); }
+.webwin__bar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--card-2); border-bottom: 1px solid var(--line); }
+.webwin__dots { display: flex; gap: 4px; }
+.webwin__dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+.webwin__url { flex: 1; font-size: 12px; color: var(--ink-soft); background: var(--card); border-radius: 999px; padding: 2px 12px; font-family: var(--mono); }
+.webwin__body { padding: 12px 14px 14px; }
+
+/* AI mode: written-for-you messages */
+.chat__note { font-size: 13.5px; color: var(--ink-soft); background: var(--card-2); border-radius: 8px; padding: 8px 10px; }
+.chat__note b { color: var(--ink); }
+.chat__picks { display: grid; gap: 6px; justify-items: end; }
+.chat__k { font-size: 12.5px; color: var(--ink-soft); }
+.say-pick { text-align: left; border: 2px solid var(--accent); background: var(--accent-soft); color: var(--ink); border-radius: 14px 14px 4px 14px; padding: 8px 14px; font-size: 15px; max-width: 92%; transition: transform .12s ease; }
+.say-pick:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.say-pick span { color: var(--accent-deep); font-weight: 700; margin-left: 4px; }
+/* the demo cursor: ink fill with a card-coloured outline, so it shows on any button */
+.pv-cursor { position: absolute; width: 15px; height: 20px; border: 0; transform: none; overflow: visible; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.25)); }
+.pv-cursor path { fill: var(--ink); stroke: var(--card); stroke-width: 1.8; stroke-linejoin: round; }
+
+/* a custom cursor in the page's ink: an outlined arrow that turns orange over
+   anything you can click. Text fields keep the normal text cursor. */
+:root { --cur: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2230%22%20viewBox%3D%220%200%2016%2021%22%3E%3Cpath%20d%3D%22M2%201.5%20L2%2016.5%20L5.8%2012.8%20L8.6%2019.5%20L11.4%2018.3%20L8.6%2011.7%20L13.8%2011.7%20Z%22%20fill%3D%22%2326221f%22%20stroke%3D%22%23fbf7ee%22%20stroke-width%3D%221.6%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E") 3 2, auto; --cur-go: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2230%22%20viewBox%3D%220%200%2016%2021%22%3E%3Cpath%20d%3D%22M2%201.5%20L2%2016.5%20L5.8%2012.8%20L8.6%2019.5%20L11.4%2018.3%20L8.6%2011.7%20L13.8%2011.7%20Z%22%20fill%3D%22%23e2622b%22%20stroke%3D%22%23fbf7ee%22%20stroke-width%3D%221.6%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E") 3 2, pointer; }
+:root[data-theme="dark"] { --cur: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2230%22%20viewBox%3D%220%200%2016%2021%22%3E%3Cpath%20d%3D%22M2%201.5%20L2%2016.5%20L5.8%2012.8%20L8.6%2019.5%20L11.4%2018.3%20L8.6%2011.7%20L13.8%2011.7%20Z%22%20fill%3D%22%23eeece6%22%20stroke%3D%22%2317181c%22%20stroke-width%3D%221.6%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E") 3 2, auto; --cur-go: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2230%22%20viewBox%3D%220%200%2016%2021%22%3E%3Cpath%20d%3D%22M2%201.5%20L2%2016.5%20L5.8%2012.8%20L8.6%2019.5%20L11.4%2018.3%20L8.6%2011.7%20L13.8%2011.7%20Z%22%20fill%3D%22%23ff8a50%22%20stroke%3D%22%2317181c%22%20stroke-width%3D%221.6%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E") 3 2, pointer; }
+html, body { cursor: var(--cur); }
+button, a, summary, label, [role="radio"], [data-file], [data-ch], .why, .say-pick, .chap, .fname { cursor: var(--cur-go); }
+button:disabled { cursor: var(--cur); }
+input, textarea { cursor: text; }

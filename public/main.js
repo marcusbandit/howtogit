@@ -339,12 +339,27 @@ function doHtml(b) {
         html += termHtml(true);
     return html;
 }
+/* buttons mode looks like the tools people use: an editor's source control
+ * panel for git actions, and a browser window for things done on GitHub */
 function buttonsHtml(mine, acts) {
-    return `<div class="acts">${mine.map((a) => `
-    <div class="act ${a.look === "github" ? "act--github" : ""}">
+    const act = (a) => `<div class="act">
       ${inputsHtml(a, acts.indexOf(a))}
-      <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go"}" data-run="${acts.indexOf(a)}">${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}</button>
-    </div>`).join("")}</div>`;
+      <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go btn--ide"}" data-run="${acts.indexOf(a)}">${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}</button>
+    </div>`;
+    const local = mine.filter((a) => a.look !== "github"), web = mine.filter((a) => a.look === "github");
+    const d = w.repos.you?.desks[beatDesk()];
+    const where = d ? (d.detached ? `old version ${G.short(d.detached)}` : d.branch ?? "") : "";
+    return `${local.length ? `<div class="ide">
+      <div class="ide__rail" aria-hidden="true"><i class="ide__ico ide__ico--files"></i><i class="ide__ico ide__ico--git is-on"></i><i class="ide__ico ide__ico--search"></i></div>
+      <div class="ide__main">
+        <p class="ide__head">Source control${where ? `<span class="ide__br">⎇ ${esc(where)}</span>` : ""}</p>
+        <div class="acts">${local.map(act).join("")}</div>
+      </div>
+    </div>` : ""}
+    ${web.length ? `<div class="webwin">
+      <p class="webwin__bar"><span class="webwin__dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="webwin__url">github.com/you/my-recipe</span></p>
+      <div class="webwin__body acts">${web.map(act).join("")}</div>
+    </div>` : ""}`;
 }
 function hintCmds(mine) {
     return mine.flatMap((a) => {
@@ -382,19 +397,20 @@ function commandHtml(mine) {
       ${cmds.map((c) => `<code class="cmd-hint">${esc(c)}</code>`).join("")}
     </details>`;
 }
+/* AI mode: there is no real AI on this page (running one costs money and
+ * isn't needed to learn), so the messages are written for you; pick one and
+ * the assistant answers the way a real one would */
 function aiHtml(mine) {
     const ask = mine.map((a) => a.ai).filter(Boolean).join(", then ");
     const chat = log.filter((l) => l.kind === "me" || l.kind === "ai");
+    const waiting = chat.some((l) => l.kind === "ai" && l.cmds);
     return `<div class="chat">
+    <p class="chat__note"><b>No real AI here.</b> Running one would cost money, and you don't need it to learn. Pick a message; the assistant answers the way a real one (ChatGPT, Claude, Copilot) would.</p>
     ${chat.map((l) => l.kind === "me"
         ? `<p class="bubble bubble--me">${esc(l.text)}</p>`
         : `<div class="bubble bubble--ai"><span class="ai-name">Assistant</span>${l.text}</div>`).join("")}
-    ${chat.length ? "" : `<p class="chat__empty">Tell the assistant what you want, in your own words.</p>`}
-    ${beatDone ? "" : `<form class="chat__in" data-chat>
-      <input type="text" name="ask" value="${esc(ask)}" aria-label="message to the assistant" autocomplete="off" />
-      <button class="btn btn--go" type="submit">Send</button>
-    </form>`}
-    <p class="chat__fine">A pretend assistant, part of the lesson. Real ones (ChatGPT, Claude, Copilot) do the same: they run git commands like these for you.</p>
+    ${beatDone || waiting ? "" : `<div class="chat__picks"><span class="chat__k">Send:</span>
+      <button type="button" class="say-pick" data-say="${esc(ask)}">“${esc(ask)}” <span aria-hidden="true">↵</span></button></div>`}
   </div>`;
 }
 /* in buttons and AI mode, show which git commands actually ran */
@@ -452,8 +468,7 @@ function wireLesson() {
             }
         });
     }
-    const chat = root.querySelector("[data-chat]");
-    chat?.addEventListener("submit", (e) => { e.preventDefault(); askAi(chat.querySelector("input").value); });
+    root.querySelectorAll("[data-say]").forEach((b) => b.addEventListener("click", () => askAi(b.dataset.say)));
     root.querySelectorAll("[data-ai-run]").forEach((b) => b.addEventListener("click", aiRun));
 }
 let histI = -1;

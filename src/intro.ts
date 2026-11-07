@@ -51,11 +51,16 @@ export function showIntro(mode: Mode, onStart: (mode: Mode) => void) {
         <div class="preview" data-show="${mode}" aria-hidden="true">
           <div class="preview__pane preview__pane--buttons">
             <div class="pv-app">
-              <p class="pv-app__bar"><span></span><span></span><span></span> Source control</p>
-              <p class="pv-app__file"><i>M</i> report.md</p>
-              <p class="pv-app__msg">First version</p>
-              <span class="pv-app__btn">✓ Commit</span>
-              <span class="pv-cursor"></span>
+              <div class="pv-app__rail"><i></i><i class="is-on"></i><i></i></div>
+              <div class="pv-app__side">
+                <p class="pv-app__head">SOURCE CONTROL <span>⎇ main</span></p>
+                <p class="pv-app__msg">First version</p>
+                <span class="pv-app__btn">✓ Commit</span>
+                <p class="pv-app__sec">Changes</p>
+                <p class="pv-app__file">report.md <i>M</i></p>
+              </div>
+              <div class="pv-app__code"><p><b>1</b># Team report</p><p><b>2</b></p><p class="is-add"><b>3</b>We tested three ideas.</p><p><b>4</b>The second one worked.</p></div>
+              <svg class="pv-cursor" viewBox="0 0 16 21"><path d="M2 1.5 L2 16.5 L5.8 12.8 L8.6 19.5 L11.4 18.3 L8.6 11.7 L13.8 11.7 Z"/></svg>
             </div>
           </div>
           <div class="preview__pane preview__pane--command">
