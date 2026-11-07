@@ -168,6 +168,7 @@ function arrive() {
         beatDone = true;
 }
 function goto(c, b, opts = {}) {
+    clearSelection();
     if (opts.replay) {
         w = replayTo(c, b);
         history = [];
@@ -232,9 +233,9 @@ function back() {
  * exactly as you left it when there's a record; otherwise it's rebuilt the
  * typical way (finished when it's behind you, fresh when it's ahead). */
 function jumpBeat(i) {
+    clearSelection();
     if (i === bi)
         return;
-    clearSelection();
     if (i < bi) {
         const k = history.map((h) => h.ci === ci && h.bi === i).lastIndexOf(true);
         if (k >= 0) {
@@ -1203,6 +1204,9 @@ function boot() {
         if (e.pointerType !== "mouse" || e.button !== 0 || e.target.closest?.("input, textarea"))
             return;
         const target = e.target.closest?.("button:not(:disabled), a, summary, label, [role=radio], [data-file], .why");
+        // pressing a control never starts or keeps a text selection
+        if (target)
+            clearSelection();
         // clicking a control twice fast is not a request to select a word
         if (e.detail > 1 && e.target.closest?.("button, [role=radio], .chap, .say-pick"))
             e.preventDefault();
@@ -1221,6 +1225,18 @@ function boot() {
     document.addEventListener("pointerup", release);
     document.addEventListener("pointercancel", release);
     document.addEventListener("contextmenu", release);
+    // Firefox swaps the normal right-click menu (back, forward, reload) for the
+    // copy menu whenever anything on the page is selected, wherever you click.
+    // So a right-click outside the selected text clears the selection first;
+    // right-clicking on text you selected on purpose still offers Copy.
+    document.addEventListener("contextmenu", (e) => {
+        const sel = getSelection();
+        if (!sel || sel.isCollapsed || e.target.closest?.("input, textarea"))
+            return;
+        const onIt = [...Array(sel.rangeCount).keys()].some((i) => [...sel.getRangeAt(i).getClientRects()].some((r) => e.clientX >= r.left - 2 && e.clientX <= r.right + 2 && e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2));
+        if (!onIt)
+            sel.removeAllRanges();
+    }, true);
     window.addEventListener("blur", release);
     // the "why GitHub?" note opens on tap too (phones have no hover), and closes on the next tap anywhere
     document.addEventListener("click", (e) => {
