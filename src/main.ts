@@ -749,33 +749,37 @@ function typeOver(t: SVGTextElement, from: string, to: string, ms: number) {
 /* where each HEAD marker sat before a change: screen position and commit */
 function hereSpots(): Map<string, { x: number; y: number; at: string; text: string }> {
   const m = new Map<string, { x: number; y: number; at: string; text: string }>();
-  document.querySelectorAll<SVGGElement>("[data-here]").forEach((t) => {
+  document.querySelectorAll<SVGGraphicsElement>("[data-lab]").forEach((t) => {
     const r = t.getBoundingClientRect();
-    m.set(t.dataset.here!, { x: r.left + r.width / 2, y: r.top + r.height / 2, at: t.dataset.at!, text: t.querySelector("text")?.textContent ?? "" });
+    const text = t.tagName === "text" ? t.textContent : t.querySelector("text")?.textContent;
+    m.set(t.dataset.lab!, { x: r.left + r.width / 2, y: r.top + r.height / 2, at: t.dataset.at!, text: text ?? "" });
   });
   return m;
 }
 /* a HEAD marker that moved to another commit slides there from where it was
  * (and if it was still "you are here", the new word appears as it lands) */
-function slideHere(before: Map<string, { x: number; y: number; at: string; text: string }>, place: string) {
+/* labels (HEAD and branch names) that moved to another commit step there
+ * together from where they were; `wait` holds them in place first, e.g. until
+ * a new commit has been drawn */
+function slideHere(before: Map<string, { x: number; y: number; at: string; text: string }>, place: string, wait = 0) {
   if (prefersReduced) return;
-  document.querySelectorAll<SVGGElement>(`[data-strip="${place}"] [data-here]`).forEach((t) => {
-    const was = before.get(t.dataset.here!);
+  document.querySelectorAll<SVGGraphicsElement>(`[data-strip="${place}"] [data-lab]`).forEach((t) => {
+    const was = before.get(t.dataset.lab!);
     if (!was || was.at === t.dataset.at) return;
     const r = t.getBoundingClientRect();
     const scale = parseFloat(getComputedStyle(t.closest(".strip")!).getPropertyValue("--strip-scale")) || 1;
     const dx = (was.x - (r.left + r.width / 2)) / scale, dy = (was.y - (r.top + r.height / 2)) / scale;
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-    const label = t.querySelector("text")!;
+    const label = (t.tagName === "text" ? t : t.querySelector("text")!) as SVGTextElement;
     label.classList.remove("is-new", "is-swap");
     const word = label.textContent ?? "";
     const tie = t.parentElement?.querySelector<SVGPathElement>(`[data-tie="${t.dataset.at}"]`);
-    tie?.animate([{ opacity: 0 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }], { duration: 750 });
+    tie?.animate([{ opacity: 0 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }], { duration: 650 + wait });
     // a straight, even glide along the line to the commit it now points at
     t.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
-      { duration: 650, easing: "cubic-bezier(.4,0,.2,1)" });
+      { duration: 650, delay: wait, fill: "backwards", easing: "cubic-bezier(.4,0,.2,1)" });
     // and on the way, the old words are backspaced and the new ones typed in
-    if (was.text !== word) typeOver(label, was.text, word, 900);
+    if (was.text !== word) { label.textContent = was.text; setTimeout(() => typeOver(label, was.text, word, 900), wait); }
   });
 }
 
@@ -1002,9 +1006,6 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   Object.entries(r.branches).sort(([a], [b]) => (a === "main" ? -1 : b === "main" ? 1 : 0)).forEach(([b, cid]) => push(cid, { text: b, color: colorOf(b) }));
   // mid-glide, labels stay where they were before the change and move with
   // their commit; they reach their new spots once the glide lands
-  // HEAD markers are the exception: they head straight for their new commit
-  const hereNow = new Map<number, string>();
-  labels.forEach((arr, cid) => arr.forEach((lb) => { if (lb.here) hereNow.set(lb.desk ?? 0, cid); }));
   if (frame) { labels.clear(); (lastLabels.get(id) ?? new Map()).forEach((v, k) => labels.set(k, v)); }
   else lastLabels.set(id, new Map(labels));
   const maxLabels = Math.max(1, ...[...labels.values()].map((a) => a.length));
@@ -1065,14 +1066,13 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
     arr.forEach((lb, i) => {
       const y = baseY + 42 + i * 21;
       // mid-glide a HEAD marker moves from its old column toward its new one
-      const to = lb.here && frame ? hereNow.get(lb.desk ?? 0) : undefined;
-      const lx = to && to !== cid ? X0 + (cols.indexOf(cid) + (cols.indexOf(to) - cols.indexOf(cid)) * frame!.k) * col : cx;
+      const lx = cx; // mid-glide, labels ride along with their commit
       const tx = el("text", { x: lx, y, class: `label ${lb.here ? "label--here" : ""}`, fill: lb.color });
       tx.textContent = lb.text;
       if (lb.here) {
         // HEAD (or "you are here") travels as one piece: a little hand-drawn
         // ink arrowhead pointing up at the commit, with the word under it
-        const g = el("g", { class: "here", "data-here": `${id}:${lb.desk}`, "data-at": cid });
+        const g = el("g", { class: "here", "data-here": `${id}:${lb.desk}`, "data-lab": `${id}:here:${lb.desk}`, "data-at": cid });
         const s = seed(cid) % 7;
         g.append(el("path", {
           class: "here__arrow",
@@ -1080,7 +1080,11 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
           d: `M ${lx - 4.6} ${y - 12.6} L ${lx + 0.2 + s * 0.05} ${y - 20.6} L ${lx + 4.7} ${y - 12.3} Q ${lx} ${y - 11.5} ${lx - 4.6} ${y - 12.6} Z`,
         }), tx);
         gLabels.append(g);
-      } else gLabels.append(tx);
+      } else {
+        tx.setAttribute("data-lab", `${id}:br:${lb.text}`);
+        tx.setAttribute("data-at", cid);
+        gLabels.append(tx);
+      }
       if (frame) return;
       const k = `l:${cid}:${lb.text}`;
       // the plain label turning into the git word gets a little bounce
@@ -1103,12 +1107,13 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
   const prev = lastLayout.get(id), had = lastHave.get(id);
   window.cancelAnimationFrame(tweens.get(id) ?? 0);
   const finish = (glided = false) => {
-    // if the strip just glided, HEAD's slide starts where the glide left it,
-    // not where it was before the change
+    // labels start from where the glide left them; if a new commit appeared,
+    // they hold still while it is drawn and connected, then step onto it
     const from = glided ? hereSpots() : heres;
+    const grew = !!had && [...placeCommits(w.repos[id])].some((c) => !had.has(c));
     host?.classList.remove("is-gliding");
     drawStrip(id, cols);
-    if (!instant) slideHere(from, id);
+    if (!instant) slideHere(from, id, grew ? 520 : 0);
     syncScroll();
   };
   if (instant || prefersReduced || !host || !prev || !had || !w.repos[id]) return finish();
