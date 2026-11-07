@@ -118,7 +118,7 @@ export const chapters: Chapter[] = [
       {
         id: "commit1",
         kind: "act",
-        say: () => `Now <b>commit</b>: tape the box shut and keep it as a version.<br><br>Every commit carries a short note saying what changed, called the <b>commit message</b>, so you know later what each version was.`,
+        say: () => `Now <b>commit</b>: tape the box shut and keep it as a version.<br><br>Every commit carries a short note saying what changed, called the <b>commit message</b>, so you know later what each version changed.`,
         acts: [{
           label: "Commit",
           inputs: [{ key: "msg", label: "Commit message", def: () => "First version" }],

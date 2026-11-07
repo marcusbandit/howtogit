@@ -13,9 +13,21 @@ import * as G from "./model.js";
 import { chapters, MAIN_FILE } from "./story.js";
 import { exec, replayTo } from "./engine.js";
 import { showIntro, introSeen, whyGithub } from "./intro.js";
+import { explain } from "./explain.js";
 import { circlePath, linePath, smooth, drawOn, el, prefersReduced } from "./sketch.js";
 const $ = (s) => document.querySelector(s);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/* a quiet "explain" next to a command: hover or tap shows each part and other ways to write it */
+function explainHtml(cmd) {
+    const e = explain(cmd);
+    if (!e || e.parts.length < 2)
+        return "";
+    return `<span class="explain" tabindex="0" role="button" aria-label="explain this command">explain<span class="explain__tip" role="tooltip">
+    <span class="explain__k">What each part means</span>
+    ${e.parts.map((p) => `<span class="explain__row"><code>${hl(p.t)}</code><span>${esc(p.means)}</span></span>`).join("")}
+    ${e.also.length ? `<span class="explain__k">Other ways</span>${e.also.map((a) => `<span class="explain__row"><code>${a.cmd.startsWith("git") || a.cmd.startsWith("gh") ? hl(a.cmd) : esc(a.cmd)}</code><span>${esc(a.means)}</span></span>`).join("")}` : ""}
+  </span></span>`;
+}
 /* syntax colours for a command line: the program, what it should do, flags,
  * quoted text, addresses and paths, and everything else (names, ids) */
 function hl(cmd) {
@@ -455,7 +467,7 @@ function commandHtml(mine) {
     return `${termHtml()}
     <details class="hint-cmds"><summary>Not sure what to type?</summary>
       <p>Type ${cmds.length > 1 ? "these, one at a time" : "this"}:</p>
-      ${cmds.map((c) => `<code class="cmd-hint">${hl(c)}</code>`).join("")}
+      ${cmds.map((c) => `<div class="cmd-row"><code class="cmd-hint">${hl(c)}</code>${explainHtml(c)}</div>`).join("")}
     </details>`;
 }
 /* AI mode: there is no real AI on this page (running one costs money and
@@ -489,7 +501,7 @@ function hoodHtml() {
         else
             acc.push({ l, n: 1 });
         return acc;
-    }, []).map(({ l, n }) => `<code class="cmd-hint ${l.who === "albert" ? "is-friend" : ""}">${l.who === "albert" ? "Albert: " : ""}${hl(l.text)}${n > 1 ? `<span class="cmd-n">×${n}</span>` : ""}</code>`).join("")}
+    }, []).map(({ l, n }) => `<div class="cmd-row"><code class="cmd-hint ${l.who === "albert" ? "is-friend" : ""}">${l.who === "albert" ? "Albert: " : ""}${hl(l.text)}${n > 1 ? `<span class="cmd-n">×${n}</span>` : ""}</code>${explainHtml(l.text)}</div>`).join("")}
     ${errs.length ? `<pre class="hood__err">${esc(errs[errs.length - 1].text)}</pre>` : ""}
     <details><summary>Show git's full answer</summary><pre>${esc(log.filter((l) => l.kind === "out" || l.kind === "err").map((l) => l.text).join("\n\n")) || "(nothing printed)"}</pre></details>
   </div>`;
@@ -1237,8 +1249,10 @@ function boot() {
     window.addEventListener("blur", release);
     // the "why GitHub?" note opens on tap too (phones have no hover), and closes on the next tap anywhere
     document.addEventListener("click", (e) => {
-        const why = e.target.closest(".why");
-        document.querySelectorAll(".why.is-open").forEach((x) => { if (x !== why)
+        const why = e.target.closest(".why, .explain");
+        if (why && e.target.closest(".explain__tip, .why__tip"))
+            return; // clicks inside an open note keep it open
+        document.querySelectorAll(".why.is-open, .explain.is-open").forEach((x) => { if (x !== why)
             x.classList.remove("is-open"); });
         why?.classList.toggle("is-open");
     });

@@ -776,3 +776,24 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 :root[data-theme="dark"] .cmd-hint .tk-url, .term-box .tk-url { color: #f5cf7e; }
 :root[data-theme="dark"] .cmd-hint .tk-arg, .term-box .tk-arg { color: #f1e9d8; }
 :root[data-theme="dark"] .cmd-hint.is-friend { background: color-mix(in srgb, var(--friend) 14%, #0f1013); }
+
+/* "explain" beside a command: quiet until you hover or tap it */
+.cmd-row { position: relative; display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.cmd-row .cmd-hint { flex: 1; margin: 0; }
+.explain { flex: none; font-size: 12px; color: var(--ink-soft); text-decoration: underline dotted; text-underline-offset: 3px; cursor: var(--cur-go); outline: none; }
+.explain:hover, .explain:focus-visible, .explain.is-open { color: var(--accent-deep); }
+:root[data-theme="dark"] .explain:hover, :root[data-theme="dark"] .explain.is-open { color: var(--accent); }
+.explain__tip { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 45; display: grid; gap: 5px;
+  background: var(--card); border: 1.5px solid var(--line-strong); border-radius: 10px; padding: 10px 12px;
+  box-shadow: 0 12px 28px -14px rgba(0,0,0,.45); font-size: 13px; color: var(--ink); text-decoration: none; cursor: auto;
+  opacity: 0; pointer-events: none; transform: translateY(4px); transition: opacity .15s ease .08s, transform .15s ease .08s; }
+.explain:hover .explain__tip, .explain:focus-visible .explain__tip, .explain.is-open .explain__tip { opacity: 1; pointer-events: auto; transform: none; }
+.explain__k { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-top: 2px; }
+.explain__row { display: grid; grid-template-columns: minmax(0, max-content) 1fr; gap: 10px; align-items: baseline; }
+.explain__row code { font-family: var(--mono); font-size: 12px; background: #efe6d3; border-radius: 4px; padding: 1px 6px; white-space: nowrap; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
+:root[data-theme="dark"] .explain__row code { background: #0f1013; }
+.explain__row code .tk-prog { color: #2357a8; } .explain__row code .tk-sub { color: #ad3b10; font-weight: 700; } .explain__row code .tk-flag { color: #6a43c0; }
+.explain__row code .tk-str { color: #266b33; } .explain__row code .tk-url { color: #825407; } .explain__row code .tk-arg { color: var(--ink); }
+:root[data-theme="dark"] .explain__row code .tk-prog { color: #a9c9ff; } :root[data-theme="dark"] .explain__row code .tk-sub { color: #ffa877; }
+:root[data-theme="dark"] .explain__row code .tk-flag { color: #d4b8ff; } :root[data-theme="dark"] .explain__row code .tk-str { color: #a8e29a; }
+:root[data-theme="dark"] .explain__row code .tk-url { color: #f5cf7e; } :root[data-theme="dark"] .explain__row code .tk-arg { color: #f1e9d8; }
