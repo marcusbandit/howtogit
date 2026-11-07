@@ -41,7 +41,8 @@ bun install        # one-time: installs typescript + wrangler
 bun run typecheck  # type-check only, emits nothing
 bun run watch      # recompile src -> public on every save
 bun run dev        # compile, then run wrangler dev
-bun run check      # compile, then replay every beat and check it completes
+bun run check      # compile, replay every beat, check the type scale
+bun run check:ui   # the right-click menu stays normal (needs Chrome and python3 serve.py)
 ```
 
 For a quick look without wrangler, serve the folder:

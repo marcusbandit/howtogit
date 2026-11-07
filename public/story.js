@@ -1,8 +1,9 @@
 /* story.ts: the lesson, as data.
  *
- * One story: you write down Grandma's pancake recipe, put it online, and work
- * on it with your sister Sam. Every chapter shows the idea in plain words
- * first, lets you do it yourself, and only then names the git word for it.
+ * The story is kept small on purpose: a short report you save, undo and
+ * put on GitHub; a friend (Albert) joins, another (Toby) reviews a pull
+ * request, you clash on one line, and you fix a typo from a second worktree.
+ * Every idea is shown in plain words first; the git word comes after.
  *
  * A beat is one small thing to do. Its `acts` are what the buttons do; the
  * command mode and the AI mode run the very same command strings, and a beat
@@ -10,19 +11,22 @@
  */
 import * as G from "./model.js";
 /* ------------------------------------------------------------- helpers */
+export const MAIN_FILE = "report.md";
 const you = (w) => w.repos.you;
 const desk = (w, i = 0) => w.repos.you?.desks[i];
 const head = (w, i = 0) => (you(w) ? G.headId(you(w), desk(w, i)) : undefined);
 const headTree = (w, i = 0) => G.treeOf(w, head(w, i));
 const work = (w, f, i = 0) => desk(w, i)?.work[f] ?? "";
 const gh = (w) => w.repos.github;
-const sam = (w) => w.repos.sam;
-const br = (w) => w.vars.branch || "blueberries";
-const q = (s) => s.replace(/"/g, "'").trim() || "update";
+const albert = (w) => w.repos.albert;
+const br = (w) => w.vars.branch || "summary";
+const q = (s) => (s ?? "").replace(/"/g, "'").trim() || "update";
 const count = (w, id) => G.ancestors(w, id).size;
 const clean = (w, i = 0) => !!you(w) && !G.isDirty(w, you(w), desk(w, i));
 const synced = (w, b) => !!gh(w) && !!you(w)?.branches[b] && gh(w).branches[b] === you(w).branches[b];
-/* put a line into recipe.md right after the first line matching `after` */
+const firstCommit = (w) => [...G.ancestors(w, you(w).branches.main)].map((id) => w.commits[id]).sort((a, b) => a.n - b.n)[0];
+const changed = (w, f = MAIN_FILE, i = 0) => work(w, f, i) !== headTree(w, i)[f];
+/* put a line into a file right after the first line matching `after` */
 function insertAfter(text, after, line) {
     const lines = text.split("\n");
     const i = lines.findIndex((l) => after.test(l));
@@ -30,229 +34,228 @@ function insertAfter(text, after, line) {
     return lines.join("\n");
 }
 const setWork = (w, f, text, i = 0) => { desk(w, i).work[f] = text; };
-const eggLine = (s) => s.split("\n").find((l) => /egg/i.test(l)) ?? "";
-const commitAct = (def, files = ".") => ({
-    label: "Stage and commit",
-    inputs: [{ key: "msg", label: "Note for this version", def: () => def }],
+export const keyLine = (s) => s.split("\n").find((l) => /deadline/i.test(l)) ?? "";
+const commitAct = (def, files = "-A") => ({
+    label: files === "-A" ? "Stage all and commit" : `Stage ${files} and commit`,
+    inputs: [{ key: "msg", label: "Commit message", def: () => def }],
     steps: (_w, v) => [`git add ${files}`, `git commit -m "${q(v.msg)}"`],
-    ai: `save my changes with a short note`,
+    ai: "commit my changes with a short note",
 });
-const pushAct = { label: "Push", steps: () => ["git push"], ai: "upload my saved versions to GitHub" };
+const pushAct = { label: "Push", steps: () => ["git push"], ai: "upload my versions to GitHub" };
 const pullAct = { label: "Pull", steps: () => ["git pull"], ai: "get the latest changes from GitHub" };
 /* ------------------------------------------------------------- chapters */
 export const chapters = [
     {
-        title: "The problem",
-        short: "why",
-        beats: [
-            {
-                id: "mess",
-                kind: "next",
-                say: () => `You're writing down Grandma's pancake recipe. Over a few weeks you change it, and to be safe you keep copies. Maybe your folder looks like the one on the right.<br><br>Which one is the newest? What changed between <i>final</i> and <i>final_REALLY</i>? And if your sister edits her own copy, how do you put the two together?`,
-                done: () => true,
-            },
-            {
-                id: "promise",
-                kind: "next",
-                say: () => `<b>Git</b> fixes this. You keep <b>one</b> recipe file. Whenever you like, you tell git "remember this version", with a short note. Git keeps every version you saved, who saved it and why, and can bring any of them back.<br><br><b>GitHub</b> is a website that keeps a copy of all of that online, so your sister can work on the same recipe from her own computer.<br><br>You'll do all of it yourself in the next few minutes. No experience needed.`,
-                done: () => true,
-            },
-        ],
-    },
-    {
         title: "Save versions",
         short: "commit",
+        goal: "save versions of your work",
         beats: [
             {
                 id: "init",
                 kind: "act",
-                say: () => `This is your recipe folder, on your computer. Right now it's just two ordinary files.<br><br>First, switch on version history for this folder.`,
-                acts: [{ label: "Turn on version history", steps: () => ["git init"], ai: "set up git for this folder" }],
+                say: () => `This is your project folder: a report and some notes. For now they're plain files.<br><br>To give the folder a version history, you turn it into a <b>repository</b> (<b>repo</b> for short): a folder where git keeps every version of your files.`,
+                acts: [{ label: "Create repository", steps: () => ["git init"], ai: "turn this folder into a git repository" }],
                 done: (w) => !!you(w),
-                after: () => `Done. Git added a hidden <code>.git</code> folder inside <b>my-recipe</b>. That's where it will keep every version. Your own files didn't change at all.`,
-                term: ["repository", "A folder with version history switched on. People say <b>repo</b> for short."],
-                more: [["Do I do this for every project?", "Once per project, at the start. Or you never do it at all, because you copy an existing project from GitHub, which you'll see in chapter 5."]],
-            },
-            {
-                id: "edit1",
-                kind: "edit",
-                say: () => `Let's change something. Open <b>recipe.md</b> and add an ingredient. A pinch of salt, maybe.`,
-                edit: {
-                    files: ["recipe.md"],
-                    ask: () => "Add an ingredient",
-                    check: (w) => work(w, "recipe.md") !== G.freshWorld().folder["recipe.md"],
-                    canon: (w) => setWork(w, "recipe.md", insertAfter(work(w, "recipe.md"), /milk/i, "- a pinch of salt")),
-                },
-                done: (w) => work(w, "recipe.md") !== G.freshWorld().folder["recipe.md"],
-                after: () => `The files on your computer are exactly how you left them, saved or not. Git only watches; it hasn't stored anything yet.`,
-                term: ["working tree", "Your files as they are right now, in the folder on your computer."],
+                after: () => `The folder is a repository now. Both files say <b>new</b>: git can see them, but it hasn't kept a version of them yet.`,
+                term: ["repository", "A folder with version history switched on. People say <b>repo</b>."],
+                more: [["Do I do this for every project?", "Once per project. Often not even that: you copy an existing project from GitHub instead, which you'll do in chapter 4."]],
             },
             {
                 id: "stage-all",
                 kind: "act",
-                say: () => `Before git saves a version, you pick which files go into it. Think of packing a box before you tape it shut.<br><br>This first time, put both files in the box.`,
-                acts: [{ label: "Stage all changes", steps: () => ["git add ."], ai: "get all my files ready to save" }],
-                done: (w) => !!you(w) && ["recipe.md", "shopping.txt"].every((f) => desk(w).index[f] === desk(w).work[f]),
-                after: () => `Both files now say <b>ready to save</b>. Nothing is saved yet. You've only chosen what goes in.`,
-                term: ["staging", "Picking what goes into the next saved version. The command is <code>git add</code>."],
+                say: () => `A brand new repository starts out as if the folder were empty: git hasn't kept anything yet. So both files count as a change. They're <b>new</b> files.<br><br>Keeping a version takes two moves. First you <b>stage</b> the changes you want in it, like packing a box. Stage both files.`,
+                acts: [{ label: "Stage all changes", steps: () => ["git add -A"], ai: "stage all my files" }],
+                done: (w) => !!you(w) && Object.keys(desk(w).work).every((f) => desk(w).index[f] === desk(w).work[f]),
+                after: () => `Both files say <b>staged</b>. Nothing is kept yet: the box is packed, not taped shut.`,
+                term: ["staging", "Choosing what goes into the next version. The command is <code>git add</code>."],
             },
             {
                 id: "commit1",
                 kind: "act",
-                say: () => `Now tape the box shut: save this version. Give it a short note, so future you knows what it was.`,
+                say: () => `Now <b>commit</b>: tape the box shut and keep it as a version.<br><br>Every commit carries a short note saying what changed, called the <b>commit message</b>, so you know later what each version changed.`,
                 acts: [{
                         label: "Commit",
-                        inputs: [{ key: "msg", label: "Note for this version", def: () => "First version of the recipe" }],
+                        inputs: [{ key: "msg", label: "Commit message", def: () => "First version" }],
                         steps: (_w, v) => [`git commit -m "${q(v.msg)}"`],
-                        ai: "save this version with a note saying it's the first version",
+                        ai: "commit this as the first version",
                     }],
                 done: (w) => !!you(w)?.branches.main,
-                after: () => `A dot appeared on the line next to your folder. That dot is a saved version. It holds both files exactly as they were, your note, your name and the time.<br><br>The <b>you are here</b> marker shows which version your files match right now.`,
-                term: ["commit", "One saved version of the whole project, with a note. The line of dots is the project's <b>history</b>."],
-                more: [["Does a commit copy every file?", "In effect, yes: each commit is a full snapshot you can go back to. Git is clever about not storing the same content twice, so it stays small."]],
+                after: () => `See the dot next to the folder? That's your first version: both files exactly as they are now, with your commit message, your name and the time. The files now say <b>no changes</b>: they match that version.`,
+                term: ["commit", "One kept version of the whole project, with a commit message saying what changed. The line of dots is the <b>history</b>."],
+                more: [["Does a commit copy every file?", "It works like a full snapshot you can always go back to. Git avoids storing the same content twice, so it stays small."]],
+            },
+            {
+                id: "edit1",
+                kind: "edit",
+                say: () => `Now change something. Open <b>report.md</b>, fix a word or add a sentence, and press <b>Save file</b>.`,
+                edit: {
+                    files: [MAIN_FILE],
+                    ask: () => "Fix a word or add a sentence",
+                    check: (w) => changed(w),
+                    canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /worked best/i, "It was also the cheapest.")),
+                },
+                done: (w) => changed(w),
+                after: () => `report.md now says <b>changed</b>. Saving the file only changed the file; your version from before is untouched. The preview under the folder shows the <b>diff</b> (short for <i>difference</i>): what's different since that version. Green lines are new, red crossed-out lines are gone.`,
+                term: ["diff", "Short for <i>difference</i>: what's different between your files now and the last version. Green was added, red was removed."],
             },
             {
                 id: "edit2",
                 kind: "edit",
-                say: () => `Change both files this time. Add sugar to <b>recipe.md</b>, and add milk to <b>shopping.txt</b>.`,
+                say: () => `Add a line to <b>notes.txt</b> too.`,
                 edit: {
-                    files: ["recipe.md", "shopping.txt"],
-                    ask: () => "Change both files",
-                    check: (w) => ["recipe.md", "shopping.txt"].every((f) => work(w, f) !== headTree(w)[f]),
-                    canon: (w) => {
-                        setWork(w, "recipe.md", insertAfter(work(w, "recipe.md"), /flour/i, "- 1 tbsp sugar"));
-                        setWork(w, "shopping.txt", work(w, "shopping.txt") + "milk\n");
-                    },
+                    files: ["notes.txt"],
+                    ask: () => "Add a line",
+                    check: (w) => changed(w, "notes.txt") && changed(w),
+                    canon: (w) => setWork(w, "notes.txt", work(w, "notes.txt") + "- ask about the budget\n"),
                 },
-                done: (w) => ["recipe.md", "shopping.txt"].every((f) => work(w, f) !== headTree(w)[f]),
-                after: () => `Both files say <b>changed</b>: they're different from the last version you saved.`,
+                done: (w) => changed(w, "notes.txt") && changed(w),
+                after: () => `Both files say <b>changed</b> now.`,
             },
             {
                 id: "stage-one",
                 kind: "act",
-                say: () => `The recipe change is finished, but the shopping list isn't. Put <b>only recipe.md</b> in the box and leave the shopping list out for now.`,
-                acts: [{ label: "Stage recipe.md", steps: () => ["git add recipe.md"], ai: "get only recipe.md ready to save, not the shopping list" }],
+                say: () => `The report is finished, the notes aren't. Stage <b>only report.md</b>.`,
+                acts: [{ label: "Stage report.md", steps: () => [`git add ${MAIN_FILE}`], ai: "stage only report.md, not the notes" }],
                 done: (w) => {
                     const d = desk(w), h = headTree(w);
-                    return d.index["recipe.md"] === d.work["recipe.md"] && d.index["recipe.md"] !== h["recipe.md"] &&
-                        d.index["shopping.txt"] === h["shopping.txt"] && d.work["shopping.txt"] !== h["shopping.txt"];
+                    return d.index[MAIN_FILE] === d.work[MAIN_FILE] && d.index[MAIN_FILE] !== h[MAIN_FILE] &&
+                        d.index["notes.txt"] === h["notes.txt"] && d.work["notes.txt"] !== h["notes.txt"];
                 },
-                after: () => `recipe.md is <b>ready to save</b>. shopping.txt is still <b>changed</b>, but it stays out of this version. This is the whole reason staging exists: you decide exactly what goes into each version.`,
+                after: () => `report.md is <b>staged</b>, notes.txt stays out. That's what staging is for: you choose exactly what goes into each version.`,
             },
             {
                 id: "commit2",
                 kind: "act",
-                say: () => `Save the version with just the recipe in it.`,
+                say: () => `Commit the staged report change.`,
                 acts: [{
                         label: "Commit",
-                        inputs: [{ key: "msg", label: "Note for this version", def: () => "Add sugar" }],
+                        inputs: [{ key: "msg", label: "Commit message", def: () => "Improve the report" }],
                         steps: (_w, v) => [`git commit -m "${q(v.msg)}"`],
-                        ai: "save the staged recipe change with a note",
+                        ai: "commit the staged report change with a note",
                     }],
                 done: (w) => count(w, you(w)?.branches.main) >= 2,
-                after: () => `Two dots now, and the marker moved to the newest one. shopping.txt still says <b>changed</b>, because it wasn't in this version.`,
+                after: () => `Two commits now. notes.txt still says <b>changed</b>: it wasn't staged, so it isn't in that version.`,
             },
         ],
     },
     {
-        title: "Go back in time",
+        title: "Undo and look back",
         short: "undo",
+        goal: "undo mistakes and open old versions",
         beats: [
             {
                 id: "spill",
                 kind: "act",
-                say: () => `Accidents happen. Spill some coffee on the recipe: it'll scramble the file.`,
+                say: () => `A cat walks across your keyboard.`,
                 acts: [{
-                        label: "Spill coffee on recipe.md",
-                        steps: () => [(w) => { setWork(w, "recipe.md", "# Grandma's pa☕☕kes\n\n- 2 e☕s\n☕☕☕☕\n"); return "☕ splash"; }],
+                        label: "Let the cat walk over report.md",
+                        steps: () => [(w) => { setWork(w, MAIN_FILE, "# Team rep🐾rt\n\nfffffffffff\nWe te🐾ted\n;;;;;;;;;;;;\n"); return "🐾 the cat walked over report.md"; }],
                         ai: "",
                     }],
-                done: (w) => work(w, "recipe.md").includes("☕"),
-                after: () => `Half the recipe is gone. Open it if you dare.`,
+                done: (w) => work(w, MAIN_FILE).includes("🐾"),
+                after: () => `The report is mostly gone. Open it if you want to see the damage.`,
             },
             {
                 id: "restore",
                 kind: "act",
-                say: () => `No panic. Git still has the last version you saved. Throw the coffee away.`,
-                acts: [{ label: "Discard changes to recipe.md", steps: () => ["git restore recipe.md"], ai: "undo my unsaved changes to recipe.md" }],
-                done: (w) => !work(w, "recipe.md").includes("☕"),
-                after: () => `recipe.md is back exactly as it was in your last saved version. Changes you haven't saved can be thrown away. Saved versions stay safe.`,
-            },
-            {
-                id: "travel",
-                kind: "act",
-                say: () => `You can also look at any older version. Open the very first one you saved.`,
-                acts: [
-                    { label: "Show history", steps: () => ["git log --oneline"], ai: "show me the history of this project" },
-                    {
-                        label: "Open the first version",
-                        steps: (w) => [`git switch --detach ${G.short([...G.ancestors(w, you(w).branches.main)].map((id) => w.commits[id]).sort((a, b) => a.n - b.n)[0].id)}`],
-                        ai: "show me the very first version of the recipe",
-                    },
-                ],
-                done: (w) => !!desk(w)?.detached && w.commits[desk(w).detached].parents.length === 0,
-                after: () => `Your files now look exactly like the first version: no sugar. The <b>you are here</b> marker moved back to the first dot. The newer version is still there on the line. Nothing is lost.`,
-                term: ["HEAD", "Git's name for the <b>you are here</b> marker: the version your files currently match."],
-                more: [["What's that code like 3fa9c21?", "Every commit gets a unique ID made from its contents. You rarely type it; tools show it so you can point at an exact version."]],
-            },
-            {
-                id: "return",
-                kind: "act",
-                say: () => `Go back to the newest version.`,
-                acts: [{ label: "Back to main", steps: () => ["git switch main"], ai: "go back to the latest version" }],
-                done: (w) => desk(w)?.branch === "main" && !desk(w).detached,
-                after: () => `Back at the newest dot. <b>main</b> is the name of that line of versions. You'll meet more lines soon.`,
+                say: () => `Git still has your last version. Throw away what the cat did.`,
+                acts: [{ label: "Discard changes to report.md", steps: () => [`git restore ${MAIN_FILE}`], ai: "undo my changes to report.md since the last version" }],
+                done: (w) => !work(w, MAIN_FILE).includes("🐾"),
+                after: () => `Back exactly as it was in your last version. Changes you haven't committed can be thrown away; versions you committed stay safe.`,
             },
             {
                 id: "save-shop",
                 kind: "act",
-                say: () => `Before moving on, save the shopping list too.`,
-                acts: [commitAct("Add milk to the shopping list", "shopping.txt")],
+                say: () => `One loose end first. <b>notes.txt</b> still says <b>changed</b>: you left it out of your last commit.<br><br>Stage it and commit it. This button does both moves at once, the way most tools offer it: first it stages notes.txt, then it commits.`,
+                acts: [commitAct("Add a note about the budget", "notes.txt")],
                 done: (w) => clean(w) && count(w, you(w).branches.main) >= 3,
-                after: () => `Three versions, and nothing left unsaved.`,
+                after: () => `notes.txt says <b>no changes</b> again, and there are three commits on the line. Under the hood you can see both moves: <code>git add</code>, then <code>git commit</code>.`,
+            },
+            {
+                id: "history",
+                kind: "act",
+                say: () => `Every commit you made is kept in the <b>history</b>. Have a look at it.`,
+                acts: [{ label: "Show history", steps: () => ["git log --oneline"], ai: "show me the history of this project" }],
+                done: (w) => w.vars.sawLog === "1",
+                after: () => `That's your history: every commit, newest at the top, each with its ID and commit message. It's the same as the line of commits in the picture, read from right to left.`,
+                more: [["What's a code like 3fa9c21?", "Every commit gets a unique ID made from its contents. Tools show it so you can point at an exact version."]],
+            },
+            {
+                id: "travel",
+                kind: "act",
+                say: (w) => `The <b>you are here</b> marker has a git name: <b>HEAD</b>, the commit your files match right now. You can move HEAD to any commit.<br><br>`
+                    + `To point at one commit, git uses its <b>ID</b>: the short code in front of each commit, like <code>${G.short(firstCommit(w).id)}</code>. It's made from the commit's contents, so no two are alike.<br><br>`
+                    + `Open your very first commit. Feel free to open the others too.`,
+                live: true,
+                status: (w) => {
+                    const d = desk(w);
+                    if (!d?.detached)
+                        return "";
+                    const c = w.commits[d.detached];
+                    return c.id === firstCommit(w).id ? `Opened <code>${G.short(c.id)}</code>: your first commit. From now on we'll call the marker <b>HEAD</b>.`
+                        : `Opened <code>${G.short(c.id)}</code>, "${c.msg.replace(/</g, "&lt;")}". The oldest one is at the bottom.`;
+                },
+                acts: [{
+                        label: "Open",
+                        pick: "commit",
+                        steps: (w, v) => [`git checkout ${v.id || G.short(firstCommit(w).id)}`],
+                        ai: "show me the very first version of the report",
+                    }],
+                done: (w) => !!desk(w)?.detached && desk(w).detached === firstCommit(w).id,
+                after: (w) => `Your files now match <code>${G.short(firstCommit(w).id)}</code>, your first commit, and HEAD moved there. The newer commits are still on the line: nothing is lost.`,
+                term: ["HEAD", "Git's name for <b>you are here</b>: the commit your files match right now."],
+            },
+            {
+                id: "return",
+                kind: "act",
+                say: () => `Go back to the newest version on the <b>main</b> line.`,
+                acts: [{ label: "Check out main", steps: () => ["git checkout main"], ai: "go back to the newest version on main" }],
+                done: (w) => desk(w)?.branch === "main" && !desk(w).detached,
+                after: () => `Back at the newest commit, and HEAD with it. <b>main</b> is the name of this line of commits. More lines are coming.`,
             },
         ],
     },
     {
         title: "Put it online",
         short: "push",
+        goal: "keep a copy on GitHub",
         beats: [
             {
                 id: "publish",
                 kind: "act",
-                say: () => `So far everything lives on your computer only. If your laptop dies, the recipe dies with it, and nobody else can see it.<br><br>Put a copy on GitHub.`,
+                say: () => `Everything is on your laptop only. If it breaks, the report is gone, and nobody else can see it.<br><br>Put a copy on GitHub. A copy of your repository somewhere else is called a <b>remote</b>, and sending your versions to it is a <b>push</b>.`,
                 acts: [{
                         label: "Publish to GitHub",
                         steps: () => [`git remote add origin ${G.REPO_URL}`, "git push -u origin main"],
                         ai: "put this project on GitHub",
                     }],
                 done: (w) => synced(w, "main"),
-                after: () => `GitHub now has the same three versions: same dots, same notes, same order.<br><br>Your computer is the <b>local</b> copy. GitHub is the <b>remote</b> copy. <code>origin</code> is just the nickname for its address.`,
+                after: () => `GitHub has the same three versions now. Your laptop is the <b>local</b> copy, GitHub is the <b>remote</b> one. <code>origin</code> is the nickname for its address.`,
                 term: ["push", "Upload your saved versions to GitHub."],
                 more: [
-                    ["Is this a backup?", "It works like one, but it's more: it's the shared copy everyone works from. Your computer and GitHub each have the full history."],
-                    ["Do I need to make the GitHub page first?", "With the command line, yes: you click New repository on github.com first. Buttons like Publish in GitHub Desktop or VS Code do that for you."],
+                    ["Is this a backup?", "It works like one, and it's also the shared copy everyone works from. Your laptop and GitHub each hold the full history."],
+                    ["Do I make the GitHub page first?", "With commands, yes: New repository on github.com. Buttons like Publish in VS Code or GitHub Desktop do it for you."],
                 ],
             },
             {
                 id: "edit3",
                 kind: "edit",
-                say: () => `Make another change: add a topping to <b>recipe.md</b>. Maple syrup?`,
+                say: () => `Add a line to <b>report.md</b>: a result, a number, anything.`,
                 edit: {
-                    files: ["recipe.md"],
-                    ask: () => "Add a topping",
-                    check: (w) => work(w, "recipe.md") !== headTree(w)["recipe.md"],
-                    canon: (w) => setWork(w, "recipe.md", work(w, "recipe.md") + "Serve with maple syrup.\n"),
+                    files: [MAIN_FILE],
+                    ask: () => "Add a line",
+                    check: (w) => changed(w),
+                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE) + "Results: two of three ideas worked.\n"),
                 },
-                done: (w) => work(w, "recipe.md") !== headTree(w)["recipe.md"],
+                done: (w) => changed(w),
             },
             {
                 id: "commit3",
                 kind: "act",
                 say: () => `Save it as a new version.`,
-                acts: [commitAct("Serve with maple syrup")],
+                acts: [commitAct("Add results")],
                 done: (w) => clean(w) && !!gh(w) && you(w).branches.main !== gh(w).branches.main,
-                after: () => `Look at the GitHub line: it doesn't have your new dot. Saving only ever happens on your own computer. Your computer says it has <b>1 version not uploaded</b>.`,
+                after: () => `GitHub doesn't have this commit. Saving only happens on your laptop. It says <b>1 version not uploaded</b>.`,
             },
             {
                 id: "push",
@@ -260,46 +263,47 @@ export const chapters = [
                 say: () => `Send it up.`,
                 acts: [pushAct],
                 done: (w) => synced(w, "main"),
-                after: () => `The two lines match again. That's the rhythm of git: save versions on your computer as often as you like, and push when you want them online.`,
+                after: () => `The two lines match again. That's the rhythm: save versions as often as you like, push when you want them online.`,
             },
         ],
     },
     {
-        title: "A friend joins",
+        title: "Working together",
         short: "clone, pull",
+        goal: "work with a friend through GitHub",
         beats: [
             {
-                id: "sam-clone",
+                id: "albert-clone",
                 kind: "watch",
-                say: () => `Your sister Sam wants to help with the recipe. She copies the project from GitHub onto her own computer.`,
-                acts: [{ label: "Watch Sam copy it", who: "sam", steps: () => [`git clone ${G.REPO_URL}`] }],
-                done: (w) => !!sam(w),
-                after: () => `Sam now has the whole project on her computer: the files and the full history, every version.`,
-                term: ["clone", "Copy a project from GitHub to your computer, history and all. It's usually the first git thing anyone does."],
+                say: () => `A friend, Albert, wants to help. He makes a <b>clone</b>: a full copy of the project from GitHub onto his laptop, history and all.`,
+                acts: [{ label: "Watch Albert clone it", who: "albert", steps: () => [`git clone ${G.REPO_URL}`] }],
+                done: (w) => !!albert(w),
+                after: () => `Albert has his clone: the files and every version.`,
+                term: ["clone", "Copy a project from GitHub to your computer, history and all. Usually the first git thing anyone does."],
             },
             {
-                id: "sam-push",
+                id: "albert-push",
                 kind: "watch",
-                say: () => `Sam adds her secret ingredient, saves a version and pushes it to GitHub.`,
+                say: () => `Albert adds his idea, saves a version and pushes it.`,
                 acts: [{
-                        label: "Watch Sam do it",
-                        who: "sam",
+                        label: "Watch Albert do it",
+                        who: "albert",
                         steps: () => [
-                            (w) => { const d = sam(w).desks[0]; d.work["recipe.md"] = insertAfter(d.work["recipe.md"], /milk/i, "- 1 tsp vanilla (Sam's secret)"); return "(Sam edits recipe.md)"; },
-                            `git commit -am "Add Sam's secret vanilla"`,
+                            (w) => { const d = albert(w).desks[0]; d.work[MAIN_FILE] = insertAfter(d.work[MAIN_FILE], /next step/i, "See the chart in the appendix."); return "(Albert edits report.md)"; },
+                            `git commit -am "Point to the chart"`,
                             "git push",
                         ],
                     }],
-                done: (w) => !!gh(w) && w.commits[gh(w).branches.main]?.author === "Sam",
-                after: () => `GitHub has Sam's new dot. Your computer doesn't. Nothing on your computer changes until you ask for it.`,
+                done: (w) => !!gh(w) && w.commits[gh(w).branches.main]?.author === "Albert",
+                after: () => `GitHub has Albert's commit. Your laptop doesn't. Nothing on your laptop changes until you ask.`,
             },
             {
                 id: "pull",
                 kind: "act",
-                say: () => `Bring Sam's work down to your computer.`,
+                say: () => `Bring Albert's version down to your laptop. Getting new versions from GitHub is a <b>pull</b>.`,
                 acts: [pullAct],
                 done: (w) => synced(w, "main") && desk(w).branch === "main",
-                after: () => `Open recipe.md: the vanilla is there. Sam's dot is on your line too, with her name on it.<br><br><b>Push</b> sends your versions up. <b>Pull</b> brings other people's down.`,
+                after: () => `report.md has Albert's line now, and his commit is on your line with his name on it. <b>Push</b> sends up, <b>pull</b> brings down.`,
                 term: ["pull", "Download new versions from GitHub and update your files to match."],
             },
         ],
@@ -307,320 +311,334 @@ export const chapters = [
     {
         title: "Try an idea safely",
         short: "branch",
+        goal: "try ideas without breaking main",
         beats: [
             {
                 id: "mkbranch",
                 kind: "act",
-                say: () => `You want to try blueberry pancakes. But Sam is cooking from the main recipe, and you don't want to break it with a half-tested idea.<br><br>Start a <b>branch</b>: a separate line of versions just for this experiment.`,
+                say: () => `You want to try a summary at the top, but main is the version everyone reads. Don't break it with a half-finished idea.<br><br>Start a <b>branch</b>: a separate line of versions for the experiment.`,
                 acts: [{
                         label: "New branch",
-                        inputs: [{ key: "name", label: "Branch name", def: () => "blueberries" }],
-                        steps: (_w, v) => [`git switch -c ${v.name.trim().replace(/\s+/g, "-") || "blueberries"}`],
-                        ai: "start a new branch for trying blueberries",
+                        inputs: [{ key: "name", label: "Branch name", def: () => "summary" }],
+                        steps: (_w, v) => [`git checkout -b ${(v.name ?? "").trim().replace(/\s+/g, "-") || "summary"}`],
+                        ai: "start a new branch for trying a summary",
                     }],
                 done: (w) => !!desk(w)?.branch && desk(w).branch !== "main",
                 onDone: (w) => { w.vars.branch = desk(w).branch; },
-                after: (w) => `A new label, <b>${br(w)}</b>, sits on the same dot as main. The marker now follows ${br(w)}, so your next saved version goes there.`,
-                term: ["branch", "A named line of versions. <b>main</b> is the branch everyone agrees is the real one."],
+                after: (w) => `<b>${br(w)}</b> sits on the same commit as main. You're on it now, so your next version goes there.`,
+                term: ["branch", "A named line of versions. <b>main</b> is the one everyone treats as the real version."],
             },
             {
                 id: "edit4",
                 kind: "edit",
-                say: () => `Add blueberries to <b>recipe.md</b>.`,
+                say: () => `Add a one-line summary under the title in <b>report.md</b>.`,
                 edit: {
-                    files: ["recipe.md"],
-                    ask: () => "Add blueberries",
-                    check: (w) => work(w, "recipe.md") !== headTree(w)["recipe.md"],
-                    canon: (w) => setWork(w, "recipe.md", insertAfter(work(w, "recipe.md"), /milk/i, "- a handful of blueberries")),
+                    files: [MAIN_FILE],
+                    ask: () => "Add a summary",
+                    check: (w) => changed(w),
+                    canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /^# /, "Summary: idea two wins.")),
                 },
-                done: (w) => work(w, "recipe.md") !== headTree(w)["recipe.md"],
+                done: (w) => changed(w),
             },
             {
                 id: "commit4",
                 kind: "act",
                 say: (w) => `Save it on ${br(w)}.`,
-                acts: [commitAct("Add blueberries")],
+                acts: [commitAct("Add a summary")],
                 done: (w) => clean(w) && you(w).branches[br(w)] !== you(w).branches.main,
-                after: () => `Your new dot sits on its own lane, above main. main didn't move: Sam's recipe is untouched.`,
+                after: () => `Your new commit sits on its own lane. main didn't move.`,
             },
             {
                 id: "peek",
                 kind: "act",
                 say: () => `Peek at main.`,
-                acts: [{ label: "Switch to main", steps: () => ["git switch main"], ai: "switch to the main branch" }],
+                acts: [{ label: "Check out main", steps: () => ["git checkout main"], ai: "check out the main branch" }],
                 done: (w) => desk(w)?.branch === "main",
-                after: () => `Open recipe.md: no blueberries! When you switch branches, git changes the files in your folder to match that branch. Your experiment is safe on its own line.`,
+                after: () => `No summary! Checking out a branch swaps the files in your folder to match. The experiment waits on its own line.`,
             },
             {
                 id: "back",
                 kind: "act",
-                say: (w) => `Switch back to ${br(w)}.`,
-                acts: [{ label: "Switch back", steps: (w) => [`git switch ${br(w)}`], ai: "go back to my blueberry branch" }],
+                say: (w) => `Check out ${br(w)} again.`,
+                acts: [{ label: "Check out the branch again", steps: (w) => [`git checkout ${br(w)}`], ai: "go back to my summary branch" }],
                 done: (w) => desk(w)?.branch === br(w),
-                after: () => `Blueberries are back.`,
+                after: () => `The summary is back.`,
             },
         ],
     },
     {
-        title: "Ask to add it",
+        title: "Ask before it goes in",
         short: "pull request",
+        goal: "get your change reviewed and merged",
         beats: [
             {
                 id: "pubbranch",
                 kind: "act",
-                say: (w) => `The blueberries are ready. Before they go into the real recipe, you'd like Sam to check them. Start by putting <b>${br(w)}</b> on GitHub.`,
+                say: (w) => `The summary is ready. Before it goes into main, you want someone to check it. Start by putting <b>${br(w)}</b> on GitHub.`,
                 acts: [{ label: "Publish branch", steps: (w) => [`git push -u origin ${br(w)}`], ai: "put my branch on GitHub" }],
                 done: (w) => synced(w, br(w)),
-                after: (w) => `GitHub now has two lines: main and ${br(w)}.`,
+                after: (w) => `GitHub has two lines now: main and ${br(w)}.`,
             },
             {
                 id: "openpr",
                 kind: "act",
-                say: () => `Now open a <b>pull request</b> on GitHub. It's a page that says: "here's my change, can it go into main?"`,
+                say: () => `Open a <b>pull request</b>: a page on GitHub that says "here's my change, can it go into main?"`,
                 acts: [{
                         label: "Create pull request",
                         look: "github",
-                        inputs: [{ key: "title", label: "Title", def: () => "Add blueberries" }],
+                        inputs: [{ key: "title", label: "Title", def: () => "Add a summary" }],
                         steps: (w, v) => [`gh pr create --title "${q(v.title)}" --base main --head ${br(w)}`],
                         ai: "open a pull request for my branch",
                     }],
                 done: (w) => w.prs.length >= 1,
-                after: () => `The pull request is on GitHub: what changed, line by line, and a place to talk about it.<br><br>This is how almost every team works today. Nobody changes main directly: they open a pull request, someone looks at it, then it goes in.`,
-                term: ["pull request (PR)", "A request on GitHub to bring one branch's changes into another. It's a GitHub feature, not part of git itself."],
+                after: () => `The pull request shows what changed, line by line, with room to talk about it. This is how nearly every team works: nobody changes main directly.`,
+                term: ["pull request (PR)", "A request on GitHub to bring one branch into another. It's a GitHub feature, not part of git."],
             },
             {
                 id: "review",
                 kind: "watch",
-                say: () => `Sam gets a notification and reviews your pull request.`,
+                say: () => `Toby, who also works on the report, gets a notification and reviews it.`,
                 acts: [{
-                        label: "Watch Sam review it",
-                        who: "sam",
-                        steps: () => [(w) => { w.prs[0].comments.push({ who: "Sam", text: "Looks tasty! Could you add a squeeze of lemon? It makes berries pop." }); return "(Sam comments on the pull request)"; }],
+                        label: "Watch Toby review it",
+                        ai: "",
+                        steps: () => [(w) => { w.prs[0].comments.push({ who: "Toby", text: "Nice. Can you mark it as a draft, so nobody quotes it yet?" }); return "(Toby comments on the pull request)"; }],
                     }],
                 done: (w) => (w.prs[0]?.comments.length ?? 0) >= 1,
-                after: () => `Sam's comment is on the pull request. Reviews happen right there, before anything reaches main.`,
+                after: () => `Toby's comment is on the pull request. Reviews happen there, before anything reaches main.`,
             },
             {
-                id: "lemon",
+                id: "draft",
                 kind: "edit",
-                say: () => `Fair point. Add a squeeze of lemon to <b>recipe.md</b>.`,
+                say: () => `Fair. Add the word <b>draft</b> to the summary in <b>report.md</b>.`,
                 edit: {
-                    files: ["recipe.md"],
-                    ask: () => "Add lemon",
-                    check: (w) => /lemon/i.test(work(w, "recipe.md")) && work(w, "recipe.md") !== headTree(w)["recipe.md"],
-                    canon: (w) => setWork(w, "recipe.md", insertAfter(work(w, "recipe.md"), /blueberr/i, "- a squeeze of lemon")),
+                    files: [MAIN_FILE],
+                    ask: () => "Mark it as a draft",
+                    check: (w) => /draft/i.test(work(w, MAIN_FILE)) && changed(w),
+                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE).replace(/^Summary:/m, "Summary (draft):")),
                 },
-                done: (w) => /lemon/i.test(work(w, "recipe.md")) && work(w, "recipe.md") !== headTree(w)["recipe.md"],
+                done: (w) => /draft/i.test(work(w, MAIN_FILE)) && changed(w),
             },
             {
                 id: "pushfix",
                 kind: "act",
-                say: (w) => `Save it and push. You don't need a new pull request: it follows the ${br(w)} branch and updates by itself.`,
-                acts: [commitAct("Add lemon"), pushAct],
-                done: (w) => synced(w, br(w)) && /lemon/i.test(G.treeOf(w, gh(w).branches[br(w)])["recipe.md"] ?? ""),
-                after: () => `The pull request now shows the lemon too.`,
+                say: (w) => `Save and push. No new pull request needed: it follows ${br(w)} and updates itself.`,
+                acts: [commitAct("Mark the summary as a draft"), pushAct],
+                done: (w) => synced(w, br(w)) && /draft/i.test(G.treeOf(w, gh(w).branches[br(w)])[MAIN_FILE] ?? ""),
+                after: () => `The pull request shows the change too.`,
             },
             {
                 id: "approve",
                 kind: "watch",
-                say: () => `Sam takes another look.`,
+                say: () => `Toby takes another look.`,
                 acts: [{
-                        label: "Watch Sam approve it",
-                        who: "sam",
-                        steps: () => [(w) => { w.prs[0].approved = true; w.prs[0].comments.push({ who: "Sam", text: "Perfect. Approved ✓" }); return "(Sam approves the pull request)"; }],
+                        label: "Watch Toby approve it",
+                        ai: "",
+                        steps: () => [(w) => { w.prs[0].approved = true; w.prs[0].comments.push({ who: "Toby", text: "Perfect. Approved ✓" }); return "(Toby approves the pull request)"; }],
                     }],
                 done: (w) => !!w.prs[0]?.approved,
             },
             {
                 id: "mergepr",
                 kind: "act",
-                say: () => `Sam approved. Press merge.`,
+                say: () => `Approved. Press merge: it <b>merges</b> your branch into main.`,
                 acts: [{ label: "Merge pull request", look: "github", steps: () => ["gh pr merge 1 --merge"], ai: "merge the approved pull request" }],
                 done: (w) => w.prs[0]?.state === "merged",
-                after: (w) => `On GitHub, main now has your blueberries. A new dot with two parents joins the ${br(w)} line back into main.`,
+                after: (w) => `main on GitHub has your summary. A merge commit with two parents joins ${br(w)} back into main.`,
                 term: ["merge", "Combine the versions from one branch into another."],
             },
             {
                 id: "sync",
                 kind: "act",
-                say: () => `GitHub changed, but your computer doesn't know yet. Switch to main and pull.`,
-                acts: [{ label: "Switch to main", steps: () => ["git switch main"], ai: "switch to main" }, pullAct],
+                say: () => `GitHub changed; your laptop doesn't know yet. Check out main and pull.`,
+                acts: [{ label: "Check out main", steps: () => ["git checkout main"], ai: "check out main" }, pullAct],
                 done: (w) => desk(w)?.branch === "main" && synced(w, "main"),
-                after: () => `Everyone is in sync. That's the full loop most people use every day:<br><b>branch</b> → <b>commit</b> → <b>push</b> → <b>pull request</b> → <b>review</b> → <b>merge</b> → <b>pull</b>.`,
+                after: () => `Everyone is in sync. That's the loop most people run every day:<br><b>branch</b> → <b>commit</b> → <b>push</b> → <b>pull request</b> → <b>review</b> → <b>merge</b> → <b>pull</b>.`,
             },
         ],
     },
     {
         title: "Same line, two changes",
         short: "conflict",
+        goal: "settle a clash between two changes",
         beats: [
             {
-                id: "sam-eggs",
+                id: "albert-deadline",
                 kind: "watch",
-                say: () => `Sam thinks the batter is too thin. She changes the eggs line and pushes straight to main.`,
+                say: () => `Albert hears the deadline moved. He changes the deadline line and pushes straight to main.`,
                 acts: [{
-                        label: "Watch Sam do it",
-                        who: "sam",
+                        label: "Watch Albert do it",
+                        who: "albert",
                         steps: () => [
                             "git pull",
-                            (w) => { const d = sam(w).desks[0]; d.work["recipe.md"] = d.work["recipe.md"].replace(eggLine(d.work["recipe.md"]), "- 3 eggs"); return "(Sam changes the eggs to 3)"; },
-                            `git commit -am "Use 3 eggs"`,
+                            (w) => { const d = albert(w).desks[0]; d.work[MAIN_FILE] = d.work[MAIN_FILE].replace(keyLine(d.work[MAIN_FILE]), "Deadline: Thursday"); return "(Albert changes the deadline to Thursday)"; },
+                            `git commit -am "Deadline is Thursday"`,
                             "git push",
                         ],
                     }],
-                done: (w) => !!gh(w) && eggLine(G.treeOf(w, gh(w).branches.main)["recipe.md"] ?? "") === "- 3 eggs",
-                after: () => `GitHub's main now says 3 eggs. You haven't pulled, so your computer still says the old amount.`,
+                done: (w) => !!gh(w) && keyLine(G.treeOf(w, gh(w).branches.main)[MAIN_FILE] ?? "") === "Deadline: Thursday",
+                after: () => `main on GitHub says Thursday. You haven't pulled, so your laptop still has the old line.`,
             },
             {
-                id: "my-eggs",
+                id: "my-deadline",
                 kind: "edit",
-                say: () => `Meanwhile you, not knowing, decide the eggs are wrong too. In <b>recipe.md</b>, change the eggs line to <b>1 egg</b>.`,
+                say: () => `You heard something else. In <b>report.md</b>, change the deadline to <b>Monday</b>.`,
                 edit: {
-                    files: ["recipe.md"],
-                    ask: () => "Change the eggs line",
-                    check: (w) => { const e = eggLine(work(w, "recipe.md")); return !!e && e !== eggLine(headTree(w)["recipe.md"] ?? "") && e !== "- 3 eggs"; },
-                    canon: (w) => setWork(w, "recipe.md", work(w, "recipe.md").replace(eggLine(work(w, "recipe.md")), "- 1 egg")),
+                    files: [MAIN_FILE],
+                    ask: () => "Change the deadline",
+                    check: (w) => { const e = keyLine(work(w, MAIN_FILE)); return !!e && e !== keyLine(headTree(w)[MAIN_FILE] ?? "") && e !== "Deadline: Thursday"; },
+                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE).replace(keyLine(work(w, MAIN_FILE)), "Deadline: Monday")),
                 },
-                done: (w) => { const e = eggLine(work(w, "recipe.md")); return !!e && e !== eggLine(headTree(w)["recipe.md"] ?? "") && e !== "- 3 eggs"; },
+                done: (w) => { const e = keyLine(work(w, MAIN_FILE)); return !!e && e !== keyLine(headTree(w)[MAIN_FILE] ?? "") && e !== "Deadline: Thursday"; },
             },
             {
                 id: "commit5",
                 kind: "act",
                 say: () => `Save it.`,
-                acts: [commitAct("Use 1 egg")],
+                acts: [commitAct("Deadline is Monday")],
                 done: (w) => clean(w) && !G.isAncestor(w, you(w).branches.main, gh(w).branches.main) && you(w).branches.main !== gh(w).branches.main,
             },
             {
                 id: "pushfail",
                 kind: "act",
-                say: () => `Now try to push.`,
+                say: () => `Push it.`,
                 acts: [pushAct],
                 done: (w) => w.vars.rejected === "1",
-                after: () => `GitHub said no. It has a version from Sam that you don't have, and git will never quietly overwrite someone else's work. You need Sam's version first.`,
+                after: () => `GitHub refused. It has a version from Albert that you don't, and git never quietly overwrites someone's work. Get his version first.`,
             },
             {
                 id: "pullconf",
                 kind: "act",
-                say: () => `Pull Sam's version.`,
+                say: () => `Pull Albert's version.`,
                 acts: [pullAct],
                 done: (w) => !!desk(w)?.merging,
-                after: () => `Git combined everything it could on its own. But you and Sam changed the <b>same line</b> differently, and git won't guess who's right. That's a <b>conflict</b>. It isn't an error, just a question for you.`,
-                term: ["merge conflict", "Two changes to the same lines that git can't combine by itself, so it asks a person to choose."],
+                after: () => `Git combined what it could. But you both changed the <b>same line</b>, and git won't guess who's right. It's a question for you, not an error.`,
+                term: ["merge conflict", "Two changes to the same lines that git can't combine, so a person chooses."],
             },
             {
                 id: "resolve",
                 kind: "resolve",
-                say: () => `Open <b>recipe.md</b>. Git marked both versions of the line inside the file. Pick which one stays.`,
-                done: (w) => !G.hasMarkers(work(w, "recipe.md")),
+                say: () => `Open <b>report.md</b>. Git marked both versions of the line. Pick which one stays.`,
+                done: (w) => !G.hasMarkers(work(w, MAIN_FILE)),
                 after: () => `The marks are gone and the line says what you chose.`,
-                more: [["What do the <<<<<<< lines mean?", "That's how git marks a conflict inside the file: your version is between <<<<<<< and =======, the other version between ======= and >>>>>>>. Editors turn them into buttons like the ones you just used."]],
+                more: [["What are the <<<<<<< lines?", "Git's conflict marks inside the file: your version sits between <<<<<<< and =======, the other between ======= and >>>>>>>. Editors turn them into buttons like the ones you used."]],
             },
             {
                 id: "finish",
                 kind: "act",
                 say: () => `Save the result and push.`,
-                acts: [commitAct("Settle the eggs"), pushAct],
+                acts: [commitAct("Settle the deadline"), pushAct],
                 done: (w) => !desk(w)?.merging && synced(w, "main"),
-                after: () => `Done. Both of your changes are in the history, and so is your decision. Sam will get it next time she pulls.`,
+                after: () => `Both changes are in the history, and so is your decision. Albert gets it on his next pull.`,
             },
         ],
     },
     {
         title: "Two desks at once",
         short: "worktree",
+        goal: "work on two things without mixing them",
         beats: [
             {
                 id: "choc",
                 kind: "act",
-                say: () => `You start a new idea, chocolate chips, on a new branch.`,
-                acts: [{ label: "New branch", steps: () => ["git switch -c chocolate"], ai: "start a branch called chocolate" }],
-                done: (w) => !!you(w)?.branches.chocolate,
-                after: () => `You're on <b>chocolate</b> now.`,
+                say: () => `New idea: a chart. Start a branch for it.`,
+                acts: [{ label: "New branch", steps: () => ["git checkout -b chart"], ai: "start a branch called chart" }],
+                done: (w) => !!you(w)?.branches.chart,
+                after: () => `You're on <b>chart</b>.`,
             },
             {
                 id: "choc-edit",
                 kind: "edit",
-                say: () => `Add a line for chocolate chips to <b>recipe.md</b>. Don't save a version: you're not sure about it yet.`,
+                say: () => `Add a line about the chart to <b>report.md</b>. Don't save it yet; you're not sure.`,
                 edit: {
-                    files: ["recipe.md"],
-                    ask: () => "Add chocolate chips",
-                    check: (w) => work(w, "recipe.md") !== headTree(w)["recipe.md"],
-                    canon: (w) => setWork(w, "recipe.md", insertAfter(work(w, "recipe.md"), /milk/i, "- chocolate chips (how many??)")),
+                    files: [MAIN_FILE],
+                    ask: () => "Add a chart idea",
+                    check: (w) => changed(w),
+                    canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /next step/i, "Maybe a chart here? (unsure)")),
                 },
-                done: (w) => desk(w)?.branch === "chocolate" && work(w, "recipe.md") !== headTree(w)["recipe.md"],
-                after: () => `Right then Sam calls: "There's a typo in the recipe on main. Can you fix it right now?"<br><br>Your chocolate work is half done and not saved. Switching branches now would mean saving a half idea or throwing it away.`,
+                done: (w) => desk(w)?.branch === "chart" && changed(w),
+                after: () => `Albert messages you: "There's a typo on main, can you fix it right now?"<br><br>Your chart work is half done. Switching now means saving a half idea or throwing it away.`,
             },
             {
                 id: "wt",
                 kind: "act",
-                say: () => `There's a better way: open a <b>second desk</b>. It's a second folder on your computer with its own branch, sharing the same history.`,
-                acts: [{ label: "Open a second desk", steps: () => ["git worktree add ../my-recipe-fix -b fix-typo main"], ai: "give me a separate folder to fix a typo on main without touching my current work" }],
+                say: () => `Open a <b>second desk</b> instead: another folder on your laptop, on its own branch, sharing the same history. Git calls it a <b>worktree</b>.`,
+                acts: [{ label: "Open a second desk", steps: () => ["git worktree add ../my-report-fix -b fix-typo main"], ai: "give me a separate folder to fix a typo on main without touching my current work" }],
                 done: (w) => (you(w)?.desks.length ?? 0) >= 2,
-                after: () => `A second folder, <b>my-recipe-fix</b>, appeared on your computer, on a new branch called fix-typo. The chocolate mess sits untouched on desk one.`,
+                after: () => `A second folder, <b>my-report-fix</b>, on a new branch fix-typo. The chart work sits untouched on desk one.`,
                 term: ["worktree", "An extra folder for the same project, each on its own branch. People and AI coding tools use them to work on several things at once."],
-                more: [["Why do AI tools care?", "An AI agent working in your folder would trip over your half-done changes. Giving each agent its own worktree lets several of them work in parallel, each on its own branch, and you review each one as a pull request."]],
+                more: [["Why do AI tools care?", "An AI agent in your folder would trip over your half-done changes. Giving each agent its own worktree lets several work at once, each on its own branch, and you review each as a pull request."]],
             },
             {
                 id: "typo",
                 kind: "edit",
                 desk: 1,
-                say: (w) => /buter\b/.test(G.treeOf(w, head(w, 1))["recipe.md"] ?? "")
-                    ? `On the second desk, open <b>recipe.md</b> and fix the typo: <b>buter</b> should be <b>butter</b>.`
-                    : `You already fixed the butter typo earlier! On the second desk, open <b>recipe.md</b> and fix something else small.`,
+                say: (w) => /helpd\b/.test(G.treeOf(w, head(w, 1))[MAIN_FILE] ?? "")
+                    ? `On the second desk, open <b>report.md</b> and fix the typo: <b>helpd</b> should be <b>helped</b>.`
+                    : `You already fixed the typo earlier. On the second desk, open <b>report.md</b> and fix something small.`,
                 edit: {
-                    files: ["recipe.md"],
+                    files: [MAIN_FILE],
                     ask: () => "Fix the typo",
-                    check: (w) => work(w, "recipe.md", 1) !== headTree(w, 1)["recipe.md"] && !/buter\b/.test(work(w, "recipe.md", 1)),
+                    check: (w) => changed(w, MAIN_FILE, 1) && !/helpd\b/.test(work(w, MAIN_FILE, 1)),
                     canon: (w) => {
-                        const t = work(w, "recipe.md", 1);
-                        setWork(w, "recipe.md", /buter\b/.test(t) ? t.replace(/buter\b/, "butter") : t + "Fry on medium heat.\n", 1);
+                        const t = work(w, MAIN_FILE, 1);
+                        setWork(w, MAIN_FILE, /helpd\b/.test(t) ? t.replace(/helpd\b/, "helped") : t + "Checked for typos.\n", 1);
                     },
                 },
-                done: (w) => work(w, "recipe.md", 1) !== headTree(w, 1)["recipe.md"] && !/buter\b/.test(work(w, "recipe.md", 1)),
+                done: (w) => changed(w, MAIN_FILE, 1) && !/helpd\b/.test(work(w, MAIN_FILE, 1)),
             },
             {
                 id: "fixpush",
                 kind: "act",
                 desk: 1,
-                say: () => `Save it on the second desk and push the fix-typo branch.`,
+                say: () => `Save it on the second desk and push fix-typo.`,
                 acts: [commitAct("Fix typo"), { label: "Publish branch", steps: () => ["git push -u origin fix-typo"], ai: "put the fix-typo branch on GitHub" }],
                 done: (w) => synced(w, "fix-typo") && you(w).branches["fix-typo"] !== you(w).branches.main,
-                after: () => `The fix is on GitHub, ready for a pull request like before. And your chocolate work never moved: desk one still has it, half done, exactly as you left it.`,
+                after: () => `The fix is on GitHub, ready for a pull request. Desk one still has the chart work, exactly as you left it.`,
             },
         ],
     },
     {
         title: "You did it",
         short: "recap",
+        goal: "",
         beats: [
             {
                 id: "end",
                 kind: "next",
-                say: () => `That's how git and GitHub work, start to finish.<br><br>Every tool you'll meet, the command line, the buttons in VS Code or GitHub Desktop, or an AI assistant, is doing these same few things for you. Now you know what they mean.`,
+                say: () => `That's git and GitHub, start to finish.<br><br>The command line, the buttons in VS Code or GitHub Desktop, an AI assistant: they all do these same few things. Now you know what they mean.`,
                 done: () => false,
             },
         ],
     },
 ];
+/* what you typed into a step's fields (commit messages, branch names), kept so
+ * a step rebuilt later (after a reload, Back or the step bar) uses your words,
+ * not the suggestions. Keyed "beatId:actIndex:field". */
+export const choices = {};
+export const choiceKey = (b, ai, key) => `${b.id}:${ai}:${key}`;
+export function valueFor(b, ai, inp, w) {
+    return choices[choiceKey(b, ai, inp.key)] ?? inp.def(w);
+}
 /* what the beat looks like when someone "just does it", for replays */
-export function autoBeat(b, w, runCmd) {
+export function autoBeat(b, w, runCmd, note) {
     if (b.kind === "edit")
         b.edit.canon(w);
     else if (b.kind === "resolve") {
-        const f = work(w, "recipe.md");
-        setWork(w, "recipe.md", f.replace(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n[\s\S]*?>>>>>>> [^\n]*\n/g, "$1"));
+        const f = work(w, MAIN_FILE);
+        setWork(w, MAIN_FILE, f.replace(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n[\s\S]*?>>>>>>> [^\n]*\n/g, "$1"));
     }
     else if (b.acts) {
-        for (const a of b.acts) {
-            if (b.id === "travel" && a.label === "Show history")
-                continue;
+        for (const [ai, a] of b.acts.entries()) {
             const v = {};
-            a.inputs?.forEach((i) => (v[i.key] = i.def(w)));
+            a.inputs?.forEach((i) => (v[i.key] = valueFor(b, ai, i, w)));
             for (const s of a.steps(w, v)) {
                 if (typeof s === "string")
                     runCmd(s, a.who ?? "you", b.desk ?? 0);
-                else
-                    s(w);
+                else {
+                    const n = s(w);
+                    if (n && note)
+                        note(n, a.who ?? "you");
+                }
             }
         }
     }

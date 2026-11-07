@@ -118,7 +118,7 @@ export function run(w, ctx, line) {
             const url = args.filter((a) => !a.startsWith("-"))[0];
             if (!url)
                 throw new G.GitError("fatal: You must specify a repository to clone.");
-            return { ok: true, out: G.cloneTo(w, ctx.repo, ctx.repo === "sam" ? "Sam's computer" : "Your computer", url, "~/my-recipe") };
+            return { ok: true, out: G.cloneTo(w, ctx.repo, ctx.repo === "albert" ? "Albert's computer" : "Your computer", url, "~/my-report") };
         }
         if (sub === "init")
             return { ok: true, out: G.init(w) };

@@ -6,6 +6,9 @@
   <title>howtogit: git and GitHub, explained by doing</title>
   <meta name="description" content="Learn how git and GitHub work by doing it: save versions, go back in time, share with a friend, open a pull request. With buttons, commands or an AI assistant." />
   <meta name="color-scheme" content="light dark" />
+  <!-- cached forever on purpose: a hard refresh is the only thing that re-downloads it,
+       which is how the page tells Ctrl+Shift+R (start fresh) from a normal reload -->
+  <script src="reload-probe.js"></script>
   <script>
     (function () {
       var KEY = 'htg-theme', root = document.documentElement, saved = null;
@@ -29,16 +32,18 @@
   <meta property="og:description" content="Save versions, go back in time, share with a friend, open a pull request. No experience needed." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://howtogit.dev/" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=story1" />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Hanken+Grotesk:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=story45" />
 </head>
 <body>
   <header class="top">
     <a class="brand" href="./" aria-label="howtogit home">howtogit<span>.dev</span></a>
     <nav class="chapters" id="chapters" aria-label="chapters"></nav>
     <div class="top__right">
+      <button type="button" class="deck-btn" id="deck-btn" aria-label="your git words"></button>
       <div class="mode" id="mode" role="radiogroup" aria-label="how you want to do things">
         <span class="mode__label">Do it with</span>
         <button type="button" role="radio" data-mode="buttons">Buttons</button>
@@ -51,9 +56,10 @@
     </div>
   </header>
 
+  <section class="intro" id="intro" hidden aria-label="welcome"></section>
   <main class="app">
     <section class="lesson" id="lesson" aria-live="polite"></section>
-    <section class="world" id="world" aria-label="your computer, GitHub and Sam's computer"></section>
+    <section class="world" id="world" aria-label="your computer, GitHub and Albert's computer"></section>
   </main>
 
   <dialog class="editor" id="editor" aria-labelledby="editor-title">
@@ -61,13 +67,13 @@
       <header class="editor__head">
         <div>
           <p class="editor__where" id="editor-where"></p>
-          <h2 class="editor__title" id="editor-title">recipe.md</h2>
+          <h2 class="editor__title" id="editor-title">pancakes.md</h2>
         </div>
         <button class="editor__x" value="cancel" aria-label="Close">✕</button>
       </header>
       <div class="editor__tabs" id="editor-tabs"></div>
       <div class="resolver" id="resolver" hidden></div>
-      <textarea id="editor-text" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+      <textarea id="editor-text" spellcheck="true" lang="en" autocapitalize="off" autocomplete="off" rows="3"></textarea>
       <p class="editor__note" id="editor-note"></p>
       <footer class="editor__foot">
         <button class="btn btn--ghost" value="cancel">Cancel</button>
@@ -76,7 +82,18 @@
     </form>
   </dialog>
 
-  <svg class="flows" id="flows" aria-hidden="true"></svg>
-  <script type="module" src="main.js?v=story1"></script>
+  <dialog class="deck" id="deck" aria-labelledby="deck-title">
+    <form method="dialog" class="deck__inner">
+      <header class="editor__head"><h2 id="deck-title" class="deck__title">Your git words</h2><button class="editor__x" value="close" aria-label="Close">✕</button></header>
+      <p class="deck__sub">Every word you earn by doing it. The rest are still ahead.</p>
+      <ul class="deck__list" id="deck-list"></ul>
+    </form>
+  </dialog>
+  <div class="xp" id="xp" role="dialog" aria-label="what this command means" hidden>
+    <button type="button" class="xp__x" aria-label="Close">✕</button>
+    <div class="xp__body"></div>
+  </div>
+  <div class="fx" id="fx" aria-hidden="true"></div>
+  <script type="module" src="main.js?v=story45"></script>
 </body>
 </html>
