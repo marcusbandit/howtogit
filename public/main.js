@@ -1074,8 +1074,21 @@ function drawStrip(id, cols, frame) {
     // mid-glide, labels stay where they were before the change and move with
     // their commit; they reach their new spots once the glide lands
     if (frame) {
+        // each label keeps riding its old commit; if that commit is gone (Undo),
+        // it shows at its new one instead, so a marker never vanishes mid-glide
+        const now = new Map(labels), old = lastLabels.get(id) ?? new Map();
+        const key = (lb) => (lb.here ? `here:${lb.desk}` : `br:${lb.text}`);
+        const placed = new Set();
         labels.clear();
-        (lastLabels.get(id) ?? new Map()).forEach((v, k) => labels.set(k, v));
+        const add = (cid, lb) => {
+            if (placed.has(key(lb)))
+                return;
+            placed.add(key(lb));
+            labels.set(cid, [...(labels.get(cid) ?? []), lb]);
+        };
+        old.forEach((arr, cid) => { if (have.has(cid))
+            arr.forEach((lb) => add(cid, lb)); });
+        now.forEach((arr, cid) => arr.forEach((lb) => add(cid, lb)));
     }
     else
         lastLabels.set(id, new Map(labels));
