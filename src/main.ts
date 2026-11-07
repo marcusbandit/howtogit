@@ -200,7 +200,7 @@ function runSteps(act: Act, vals: Record<string, string>): boolean {
     }
   }
   afterChange();
-  celebrate(before, ok);
+  celebrate(before, ok, who);
   return ok;
 }
 
@@ -1213,7 +1213,7 @@ const nodeEl = (place: string, cid: string) =>
   document.querySelector<SVGGElement>(`[data-strip="${place}"] [data-c="${cid}"]`);
 const centre = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
 
-function celebrate(before: FxSnap, ok: boolean) {
+function celebrate(before: FxSnap, ok: boolean, who: Who = "you") {
   if (!ok) {
     const box = $("#lesson").querySelector<HTMLElement>(".do");
     box?.classList.add("shake");
@@ -1221,7 +1221,7 @@ function celebrate(before: FxSnap, ok: boolean) {
   }
   if (prefersReduced) return;
   const wait = Math.max(0, settleUntil - performance.now());
-  if (wait > 0) { setTimeout(() => celebrate(before, ok), wait + 20); return; }
+  if (wait > 0) { setTimeout(() => celebrate(before, ok, who), wait + 20); return; }
   requestAnimationFrame(() => {
     let delay = 0;
     for (const [id, r] of Object.entries(w.repos)) {
@@ -1231,7 +1231,10 @@ function celebrate(before: FxSnap, ok: boolean) {
         const target = nodeEl(id, cid);
         if (!target) continue;
         // came from another place: a dot travels from there to here
-        const from = Object.keys(before.have).find((o) => o !== id && before.have[o].has(cid) && nodeEl(o, cid));
+        // what lands on a laptop (clone, pull) always comes from GitHub; what
+        // lands on GitHub comes from whoever pushed it
+        const order = id === "github" ? [who, ...Object.keys(before.have)] : ["github"];
+        const from = order.find((o) => o !== id && before.have[o]?.has(cid) && nodeEl(o, cid));
         // a place that just appeared slides in first; wait for it to settle
         if (target.closest(".place.is-new")) delay = Math.max(delay, 480);
         if (from) travel(nodeEl(from, cid)!, target, id === "github" ? "push" : "pull", delay);
