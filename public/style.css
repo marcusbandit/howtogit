@@ -756,6 +756,7 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .tk-arg { color: #f1e9d8; }
 .cmd-n { float: right; padding-left: 10px; font-size: 12px; color: #a89c84; }
 .btn.is-done:disabled { opacity: 1; background: color-mix(in srgb, var(--ok) 12%, var(--card)); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 55%, transparent); box-shadow: none; }
+.btn.is-used:disabled { opacity: 1; background: transparent; color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); box-shadow: none; }
 
 /* command chips: light paper chips with deep ink colours in light mode, dark
    chips with bright colours in dark mode; the terminal stays dark in both */
@@ -902,3 +903,33 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .hist__cols, .hist__list li { grid-template-columns: 64px minmax(0, 1fr) 40px 96px; }
 /* while a box eases to a new height it clips its content instead of overflowing */
 .is-easing { overflow: hidden !important; }
+
+/* commands mode: the task as a checklist, and a coach line after each command */
+.task { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.task li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 2px 10px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); }
+.task li.is-next { border-color: var(--accent); background: var(--accent-soft); }
+.task li.is-done { opacity: .7; }
+.task__box { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; border: 1.5px solid var(--line-strong); color: var(--ink-soft); }
+.task li.is-next .task__box { border-color: var(--accent); color: var(--accent-deep); }
+.task li.is-done .task__box { background: var(--ok); border-color: var(--ok); color: var(--card); }
+.task__words { font-size: 14px; font-weight: 600; }
+.task__peek { grid-column: 2; font-size: 12px; }
+.task__peek summary { color: var(--ink-soft); cursor: var(--cur-go); }
+.task__peek .cmd-row { margin-top: 4px; }
+.t-coach { font-family: var(--ui); font-size: 14px; padding: 4px 8px; border-radius: 6px; margin: 2px 0 4px; }
+.t-coach.is-good { color: #a8e29a; background: rgba(168, 226, 154, .1); }
+.t-coach.is-hint { color: #ffc28a; background: rgba(255, 194, 138, .1); }
+.t-coach code { font-family: var(--mono); font-size: 12px; background: rgba(255,255,255,.08); padding: 0 4px; border-radius: 4px; }
+.term__in input::placeholder { color: #8d8270; }
+/* the clash, shown in the lesson before you open the file */
+.clash { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+.clash__side { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; border: 2px solid var(--pen-blue); background: color-mix(in srgb, var(--pen-blue) 7%, var(--card)); }
+.clash__side--friend { border-color: var(--friend); background: color-mix(in srgb, var(--friend) 7%, var(--card)); }
+.clash__side i { font-style: normal; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.clash__side code { font-family: var(--mono); font-size: 14px; }
+.clash__vs { font: 600 20px var(--hand); color: var(--ink-soft); }
+/* picker: a chosen side is marked, nothing saved yet */
+.pick.is-picked { box-shadow: 0 0 0 3px var(--accent); }
+.resolver__reset { background: none; border: 0; color: var(--accent-deep); font-weight: 700; text-decoration: underline; padding: 0 2px; }
+.clash { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.clash__side code { white-space: normal; word-break: break-word; }

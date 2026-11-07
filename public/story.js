@@ -401,30 +401,34 @@ export const chapters = [
                 acts: [{
                         label: "Watch Toby review it",
                         ai: "",
-                        steps: () => [(w) => { w.prs[0].comments.push({ who: "Toby", text: "Nice. Can you mark it as a draft, so nobody quotes it yet?" }); return "(Toby comments on the pull request)"; }],
+                        steps: () => [(w) => {
+                                w.prs[0].comments.push({ who: "Toby", text: "Love the summary! Readers will have questions, though. Could you add a line at the bottom saying who they can ask?" });
+                                w.vars.reviewAt = gh(w).branches[br(w)]; // the PR as Toby saw it
+                                return "(Toby comments on the pull request)";
+                            }],
                     }],
                 done: (w) => (w.prs[0]?.comments.length ?? 0) >= 1,
-                after: () => `Toby's comment is on the pull request. Reviews happen there, before anything reaches main.`,
+                after: () => `Toby's comment is on the pull request, next to your change. That's what a review is: a teammate reads the change before it goes into main, and says what they'd improve.`,
             },
             {
-                id: "draft",
+                id: "answer",
                 kind: "edit",
-                say: () => `Fair. Add the word <b>draft</b> to the summary in <b>report.md</b>.`,
+                say: () => `Fair point. Open <b>report.md</b> and add a line at the bottom saying who to ask, in your own words. It's your report.`,
                 edit: {
                     files: [MAIN_FILE],
-                    ask: () => "Mark it as a draft",
-                    check: (w) => /draft/i.test(work(w, MAIN_FILE)) && changed(w),
-                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE).replace(/^Summary:/m, "Summary (draft):")),
+                    ask: () => "Add a line saying who to ask",
+                    check: (w) => changed(w),
+                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE) + "Questions? Ask Albert or me.\n"),
                 },
-                done: (w) => /draft/i.test(work(w, MAIN_FILE)) && changed(w),
+                done: (w) => changed(w),
             },
             {
                 id: "pushfix",
                 kind: "act",
-                say: (w) => `Save and push. No new pull request needed: it follows ${br(w)} and updates itself.`,
-                acts: [commitAct("Mark the summary as a draft"), pushAct],
-                done: (w) => synced(w, br(w)) && /draft/i.test(G.treeOf(w, gh(w).branches[br(w)])[MAIN_FILE] ?? ""),
-                after: () => `The pull request shows the change too.`,
+                say: (w) => `Commit it and push. You don't open a new pull request: it follows <b>${br(w)}</b>, so it picks up the new commit by itself.`,
+                acts: [commitAct("Say who to ask"), pushAct],
+                done: (w) => synced(w, br(w)) && !!w.vars.reviewAt && gh(w).branches[br(w)] !== w.vars.reviewAt,
+                after: () => `Look at the pull request: your new line is in it, right under Toby's question. Back and forth like this until everyone is happy is completely normal.`,
             },
             {
                 id: "approve",
@@ -433,7 +437,7 @@ export const chapters = [
                 acts: [{
                         label: "Watch Toby approve it",
                         ai: "",
-                        steps: () => [(w) => { w.prs[0].approved = true; w.prs[0].comments.push({ who: "Toby", text: "Perfect. Approved ✓" }); return "(Toby approves the pull request)"; }],
+                        steps: () => [(w) => { w.prs[0].approved = true; w.prs[0].comments.push({ who: "Toby", text: "Perfect, that's exactly what was missing. Approved ✓" }); return "(Toby approves the pull request)"; }],
                     }],
                 done: (w) => !!w.prs[0]?.approved,
             },
@@ -470,7 +474,12 @@ export const chapters = [
                         who: "albert",
                         steps: () => [
                             "git pull",
-                            (w) => { const d = albert(w).desks[0]; d.work[MAIN_FILE] = d.work[MAIN_FILE].replace(keyLine(d.work[MAIN_FILE]), "Deadline: Thursday"); return "(Albert changes the deadline to Thursday)"; },
+                            (w) => {
+                                const d = albert(w).desks[0], t = d.work[MAIN_FILE], k = keyLine(t);
+                                // if the deadline line is gone by now, he adds one at the end instead
+                                d.work[MAIN_FILE] = k ? t.replace(k, "Deadline: Thursday") : t.replace(/\n*$/, "\n") + "Deadline: Thursday\n";
+                                return "(Albert sets the deadline to Thursday)";
+                            },
                             `git commit -am "Deadline is Thursday"`,
                             "git push",
                         ],
@@ -481,12 +490,17 @@ export const chapters = [
             {
                 id: "my-deadline",
                 kind: "edit",
-                say: () => `You heard something else. In <b>report.md</b>, change the deadline to <b>Monday</b>.`,
+                say: (w) => keyLine(headTree(w)[MAIN_FILE] ?? "")
+                    ? `You heard something else. In <b>report.md</b>, change the deadline to <b>Monday</b>.`
+                    : `You heard something else. Your report has no deadline line any more, so add one as the last line: <b>Deadline: Monday</b>.`,
                 edit: {
                     files: [MAIN_FILE],
                     ask: () => "Change the deadline",
                     check: (w) => { const e = keyLine(work(w, MAIN_FILE)); return !!e && e !== keyLine(headTree(w)[MAIN_FILE] ?? "") && e !== "Deadline: Thursday"; },
-                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE).replace(keyLine(work(w, MAIN_FILE)), "Deadline: Monday")),
+                    canon: (w) => {
+                        const t = work(w, MAIN_FILE), k = keyLine(t);
+                        setWork(w, MAIN_FILE, k ? t.replace(k, "Deadline: Monday") : t.replace(/\n*$/, "\n") + "Deadline: Monday\n");
+                    },
                 },
                 done: (w) => { const e = keyLine(work(w, MAIN_FILE)); return !!e && e !== keyLine(headTree(w)[MAIN_FILE] ?? "") && e !== "Deadline: Thursday"; },
             },
@@ -517,9 +531,13 @@ export const chapters = [
             {
                 id: "resolve",
                 kind: "resolve",
-                say: () => `Open <b>report.md</b>. Git marked both versions of the line. Pick which one stays.`,
+                say: (w) => {
+                    const m = work(w, MAIN_FILE).match(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n([\s\S]*?)>>>>>>> /);
+                    const two = m ? `<span class="clash"><span class="clash__side"><i>yours</i><code>${m[1].trim().replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code></span><span class="clash__vs">or</span><span class="clash__side clash__side--friend"><i>Albert's</i><code>${m[2].trim().replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code></span></span>` : "";
+                    return `Here's the clash: the same line, changed two ways.${two}Git can't know which is right, so it kept both in <b>report.md</b>, with marks around them, and waits for you. Open the file and pick. Nothing is saved until you press <b>Save file</b>.`;
+                },
                 done: (w) => !G.hasMarkers(work(w, MAIN_FILE)),
-                after: () => `The marks are gone and the line says what you chose.`,
+                after: (w) => `Settled: the line now says <code>${(keyLine(work(w, MAIN_FILE)) || "your choice").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code>. Changed your mind? <b>Undo</b> brings the clash back.`,
                 more: [["What are the <<<<<<< lines?", "Git's conflict marks inside the file: your version sits between <<<<<<< and =======, the other between ======= and >>>>>>>. Editors turn them into buttons like the ones you used."]],
             },
             {
@@ -556,15 +574,15 @@ export const chapters = [
                     canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /next step/i, "Maybe a chart here? (unsure)")),
                 },
                 done: (w) => desk(w)?.branch === "chart" && changed(w),
-                after: () => `Albert messages you: "There's a typo on main, can you fix it right now?"<br><br>Your chart work is half done. Switching now means saving a half idea or throwing it away.`,
+                after: (w) => `Albert messages you: "${/helpd\b/.test(G.treeOf(w, you(w).branches.main)[MAIN_FILE] ?? "") ? "There's a typo on main (helpd), can you fix it right now?" : "Can you add today's date to the report on main, right now?"}"<br><br>Your chart work is half done. Checking out main now means committing a half idea or throwing it away.`,
             },
             {
                 id: "wt",
                 kind: "act",
-                say: () => `Open a <b>second desk</b> instead: another folder on your laptop, on its own branch, sharing the same history. Git calls it a <b>worktree</b>.`,
-                acts: [{ label: "Open a second desk", steps: () => ["git worktree add ../my-report-fix -b fix-typo main"], ai: "give me a separate folder to fix a typo on main without touching my current work" }],
+                say: () => `There's a better way: open a <b>second desk</b>. It's another folder on your laptop with its own HEAD and its own branch, sharing the same history. Git calls it a <b>worktree</b>.`,
+                acts: [{ label: "Open a second desk", steps: () => ["git worktree add ../my-report-fix -b quick-fix main"], ai: "give me a separate folder for a quick fix on main, without touching my current work" }],
                 done: (w) => (you(w)?.desks.length ?? 0) >= 2,
-                after: () => `A second folder, <b>my-report-fix</b>, on a new branch fix-typo. The chart work sits untouched on desk one.`,
+                after: () => `Your laptop now shows two rows: two folders, one shared history. Desk two, <b>my-report-fix</b>, has its own HEAD on a new branch, <b>quick-fix</b>, made from main. Desk one's HEAD is still on <b>chart</b>, next to your half-done work, untouched.`,
                 term: ["worktree", "An extra folder for the same project, each on its own branch. People and AI coding tools use them to work on several things at once."],
                 more: [["Why do AI tools care?", "An AI agent in your folder would trip over your half-done changes. Giving each agent its own worktree lets several work at once, each on its own branch, and you review each as a pull request."]],
             },
@@ -574,14 +592,14 @@ export const chapters = [
                 desk: 1,
                 say: (w) => /helpd\b/.test(G.treeOf(w, head(w, 1))[MAIN_FILE] ?? "")
                     ? `On the second desk, open <b>report.md</b> and fix the typo: <b>helpd</b> should be <b>helped</b>.`
-                    : `You already fixed the typo earlier. On the second desk, open <b>report.md</b> and fix something small.`,
+                    : `On the second desk, open <b>report.md</b> and add today's date, the way Albert asked.`,
                 edit: {
                     files: [MAIN_FILE],
-                    ask: () => "Fix the typo",
+                    ask: (w) => /helpd\b/.test(G.treeOf(w, head(w, 1))[MAIN_FILE] ?? "") ? "Fix the typo" : "Add today's date",
                     check: (w) => changed(w, MAIN_FILE, 1) && !/helpd\b/.test(work(w, MAIN_FILE, 1)),
                     canon: (w) => {
                         const t = work(w, MAIN_FILE, 1);
-                        setWork(w, MAIN_FILE, /helpd\b/.test(t) ? t.replace(/helpd\b/, "helped") : t + "Checked for typos.\n", 1);
+                        setWork(w, MAIN_FILE, /helpd\b/.test(t) ? t.replace(/helpd\b/, "helped") : t + "Updated: today.\n", 1);
                     },
                 },
                 done: (w) => changed(w, MAIN_FILE, 1) && !/helpd\b/.test(work(w, MAIN_FILE, 1)),
@@ -590,9 +608,9 @@ export const chapters = [
                 id: "fixpush",
                 kind: "act",
                 desk: 1,
-                say: () => `Save it on the second desk and push fix-typo.`,
-                acts: [commitAct("Fix typo"), { label: "Publish branch", steps: () => ["git push -u origin fix-typo"], ai: "put the fix-typo branch on GitHub" }],
-                done: (w) => synced(w, "fix-typo") && you(w).branches["fix-typo"] !== you(w).branches.main,
+                say: () => `Commit it on the second desk and push quick-fix.`,
+                acts: [commitAct("Quick fix on main"), { label: "Publish branch", steps: () => ["git push -u origin quick-fix"], ai: "put the quick-fix branch on GitHub" }],
+                done: (w) => synced(w, "quick-fix") && you(w).branches["quick-fix"] !== you(w).branches.main,
                 after: () => `The fix is on GitHub, ready for a pull request. Desk one still has the chart work, exactly as you left it.`,
             },
         ],

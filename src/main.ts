@@ -19,7 +19,7 @@ import { circlePath, linePath, smooth, drawOn, el, prefersReduced, type Point } 
 
 type Mode = "buttons" | "command" | "ai";
 type Place = "github" | "you" | "albert";
-interface LogLine { kind: "cmd" | "out" | "err" | "note" | "ai" | "me"; text: string; who?: Who; cmds?: string[]; act?: number }
+interface LogLine { kind: "cmd" | "out" | "err" | "note" | "ai" | "me" | "coach"; text: string; hide?: boolean; who?: Who; cmds?: string[]; act?: number; ok?: boolean; good?: boolean }
 interface Snap { ci: number; bi: number; w: string; log: string; beatDone: boolean }
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -187,6 +187,7 @@ function runSteps(act: Act, vals: Record<string, string>): boolean {
   const deskI = who === "you" ? (mode === "command" ? termDesk : beatDesk()) : 0;
   const before = snapshotFx();
   let ok = true;
+  const startKey = worldKey(w);
   for (const s of act.steps(w, vals)) {
     if (typeof s === "string") {
       log.push({ kind: "cmd", text: s, who, act: actN });
@@ -199,9 +200,35 @@ function runSteps(act: Act, vals: Record<string, string>): boolean {
       if (note) log.push({ kind: "note", text: note, who });
     }
   }
+  if (ok && worldKey(w) !== startKey) ranActs.add(act);
   afterChange();
   celebrate(before, ok, who);
   return ok;
+}
+
+/* an act you already ran in this step that would change nothing if pressed
+ * again shows as done, so a two-button step reads "1 done, now the next" */
+const ranActs = new Set<Act>();
+const worldKey = (x: World) => JSON.stringify([x.commits, x.repos, x.prs]);
+const spentMemo = new Map<string, boolean>();
+function spent(a: Act): boolean {
+  if (!ranActs.has(a) || a.pick) return false;
+  const ai = (beat().acts ?? []).indexOf(a);
+  const vals: Record<string, string> = {};
+  a.inputs?.forEach((inp) => (vals[inp.key] = valueFor(beat(), ai, inp, w)));
+  const k = worldKey(w);
+  const memo = `${ai}|${JSON.stringify(vals)}|${k}`;
+  if (spentMemo.has(memo)) return spentMemo.get(memo)!;
+  const t = G.clone(w);
+  const deskI = beatDesk();
+  for (const s of a.steps(t, vals)) {
+    if (typeof s !== "string") { s(t); continue; }
+    if (!exec(t, s, a.who ?? "you", deskI).ok) break;
+  }
+  const out = worldKey(t) === k;
+  if (spentMemo.size > 50) spentMemo.clear();
+  spentMemo.set(memo, out);
+  return out;
 }
 
 function runTyped(line: string) {
@@ -209,10 +236,15 @@ function runTyped(line: string) {
   keepForUndo();
   actN++;
   const before = snapshotFx();
-  log.push({ kind: "cmd", text: line.trim(), who: "you", act: actN });
+  const entry: LogLine = { kind: "cmd", text: line.trim(), who: "you", act: actN };
+  log.push(entry);
+  const steps = taskSteps();
   const r = exec(w, line, "you", termDesk);
-  if (r.out === "\f") { log = []; }
+  entry.ok = r.ok;
+  if (r.out === "\f") log.forEach((l) => (l.hide = true)); // clear wipes the screen, not your progress
   else if (r.out) log.push({ kind: r.ok ? "out" : "err", text: r.out, who: "you" });
+  const c = coach(line.trim(), r, steps);
+  if (c) log.push({ kind: "coach", text: c.text, good: c.good, who: "you" });
   if (r.desk !== undefined) termDesk = r.desk;
   focusPlace = placeFor(line, "you");
   afterChange();
@@ -257,6 +289,7 @@ let lastPlace: string | null = null;
 
 function arrive() {
   undoStack = [];
+  ranActs.clear();
   beatDone = false;
   lastPlace = null;
   delete w.vars.rejected; // a beat only counts a rejected push that happened during it
@@ -495,7 +528,7 @@ function doHtml(b: Beat): string {
   }
   if (mine.length) {
     if (mode === "buttons") html += buttonsHtml(mine, acts);
-    if (mode === "command") html += commandHtml(mine);
+    if (mode === "command") html += commandHtml();
     if (mode === "ai") html += aiHtml(mine);
   }
   const picks = (b.acts ?? []).some((a) => a.pick === "commit");
@@ -508,10 +541,13 @@ function doHtml(b: Beat): string {
 /* buttons mode looks like the tools people use: an editor's source control
  * panel for git actions, and a browser window for things done on GitHub */
 function buttonsHtml(mine: Act[], acts: Act[]): string {
-  const act = (a: Act) => `<div class="act">
+  const act = (a: Act) => {
+    const used = !beatDone && spent(a);
+    return `<div class="act">
       ${inputsHtml(a, acts.indexOf(a))}
-      <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go btn--ide"} ${beatDone ? "is-done" : ""}" data-run="${acts.indexOf(a)}" ${beatDone ? "disabled" : ""}>${beatDone ? '<span aria-hidden="true">✓</span> Done' : `${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}`}</button>
+      <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go btn--ide"} ${beatDone ? "is-done" : ""} ${used ? "is-used" : ""}" data-run="${acts.indexOf(a)}" ${beatDone || used ? "disabled" : ""}>${beatDone ? '<span aria-hidden="true">✓</span> Done' : used ? `<span aria-hidden="true">✓</span> ${esc(a.label)}` : `${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}`}</button>
     </div>`;
+  };
   const picker = mine.find((a) => a.pick === "commit");
   if (picker) return historyHtml(acts.indexOf(picker)) + statusHtml();
   const local = mine.filter((a) => a.look !== "github"), web = mine.filter((a) => a.look === "github");
@@ -547,25 +583,75 @@ function prompt(): string {
 }
 
 function termHtml(readOnly = false): string {
-  const lines = log.map((l) => {
+  const lines = log.filter((l) => !l.hide).map((l) => {
     if (l.kind === "cmd") return `<div class="t-cmd ${l.who === "albert" ? "t-friend" : ""}">${l.who === "albert" ? "<span class=\"who\">albert's laptop $</span>" : "<span class=\"who\">$</span>"} ${hl(l.text)}</div>`;
     if (l.kind === "note") return `<div class="t-note">${esc(l.text)}</div>`;
+    if (l.kind === "coach") return `<div class="t-coach ${l.good ? "is-good" : "is-hint"}">${l.text}</div>`;
     return `<div class="t-${l.kind}">${esc(l.text)}</div>`;
   }).join("");
   return `<div class="term-box">
     <div class="term__out">${lines || `<div class="t-note">Type a command and press Enter. <b>git status</b> always tells you where things stand.</div>`}</div>
     ${readOnly ? "" : `<form class="term__in" data-term><label><span class="term__prompt">${prompt()}</span>
-      <input type="text" name="cmd" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="command" /></label></form>`}
+      <input type="text" name="cmd" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="command" placeholder="type a git command, then Enter" /></label></form>`}
   </div>`;
 }
 
-function commandHtml(mine: Act[]): string {
-  const cmds = hintCmds(mine);
-  return `${termHtml()}
-    <details class="hint-cmds"><summary>Not sure what to type?</summary>
-      <p>Type ${cmds.length > 1 ? "these, one at a time" : "this"}:</p>
-      ${cmds.map((c) => `<div class="cmd-row"><code class="cmd-hint">${hl(c)}</code>${explainHtml(c)}</div>`).join("")}
-    </details>`;
+/* the commands this step needs, in plain words, and which ones you've done */
+const sameCmd = (a: string, b: string) => {
+  const ta = a.trim().split(/\s+/), tb = b.trim().split(/\s+/);
+  const deep = /^(remote|worktree|pr)$/.test(tb[1] ?? "");
+  const flags = (t: string[]) => t.filter((x) => /^-/.test(x)).sort().join(" ");
+  return ta[0] === tb[0] && ta[1] === tb[1] && (!deep || ta[2] === tb[2]) && flags(ta) === flags(tb);
+};
+function taskSteps(): { cmd: string; words: string; done: boolean }[] {
+  const mine = (beat().acts ?? []).filter((a) => !isWatch(a));
+  const typed = log.filter((l) => l.kind === "cmd" && l.who === "you" && l.ok);
+  let from = 0;
+  return hintCmds(mine).map((cmd) => {
+    const e = explain(cmd);
+    const words = e?.parts[1]?.means ?? "run it";
+    const at = typed.findIndex((l, i) => i >= from && sameCmd(l.text, cmd));
+    const done = beatDone || at >= 0;
+    if (at >= 0) from = at + 1;
+    return { cmd, words: words.charAt(0).toUpperCase() + words.slice(1), done };
+  });
+}
+/* a plain-words reply to what you just typed: the step it counted as, or what
+ * an error means and what to try instead */
+function coach(line: string, r: { ok: boolean; out: string }, before: { cmd: string; words: string; done: boolean }[]): { text: string; good: boolean } | null {
+  const next = before.find((s) => !s.done);
+  const after = taskSteps();
+  const nextAfter = after.find((s) => !s.done);
+  if (r.ok) {
+    if (beat().done(w)) return { text: "✓ That's the step done. Press Next when you're ready.", good: true };
+    if (next && sameCmd(line, next.cmd)) {
+      const n = before.indexOf(next) + 1;
+      return { text: `✓ That's step ${n}.${nextAfter ? ` Next: ${esc(nextAfter.words.toLowerCase())}.` : ""}`, good: true };
+    }
+    return null; // a look around (git status, git log): no comment needed
+  }
+  const o = r.out;
+  const why = /not a git repository/.test(o) ? "This folder isn't a repository yet. Run <code>git init</code> first."
+    : /pathspec|did not match any/.test(o) ? "There's no file or name like that here. Check the spelling; <code>git status</code> lists your files."
+    : /nothing to commit|no changes added/.test(o) ? "Nothing is staged yet. Stage your changes with <code>git add</code> first."
+    : /Add a message with -m|empty commit message/.test(o) ? "A commit needs a message: <code>git commit -m \"what changed\"</code>."
+    : /is not a git command|command not found/.test(o) ? "That command doesn't exist. A typo, maybe?"
+    : /\[rejected\]/.test(o) ? "GitHub has commits you don't have yet. Pull them first."
+    : /no upstream branch/.test(o) ? "This branch isn't paired with GitHub yet. Push it once with <code>-u origin &lt;branch&gt;</code>."
+    : /would be overwritten/.test(o) ? "You have unsaved changes in the way. Commit them, or throw them away with <code>git restore</code>."
+    : /already exists/.test(o) ? "That name is taken already."
+    : "Git didn't accept that.";
+  return { text: `✗ ${why}${next ? ` The step needs: ${esc(next.words.toLowerCase())}.` : ""}`, good: false };
+}
+function commandHtml(): string {
+  const steps = taskSteps();
+  const nextI = steps.findIndex((s) => !s.done);
+  return `<ol class="task">${steps.map((s, i) => `<li class="${s.done ? "is-done" : i === nextI ? "is-next" : ""}">
+      <span class="task__box" aria-hidden="true">${s.done ? "✓" : i + 1}</span>
+      <span class="task__words">${esc(s.words)}</span>
+      <details class="task__peek"><summary>show the command</summary><div class="cmd-row"><code class="cmd-hint">${hl(s.cmd)}</code>${explainHtml(s.cmd)}</div></details>
+    </li>`).join("")}</ol>
+    ${termHtml()}`;
 }
 
 /* AI mode: there is no real AI on this page (running one costs money and
@@ -640,6 +726,7 @@ function recapHtml(): string {
   </div>`;
 }
 
+const folding = new WeakMap<HTMLDetailsElement, { anim: Animation; opening: boolean }>();
 function wireLesson() {
   const root = $("#lesson");
   root.querySelectorAll<HTMLButtonElement>("[data-run]").forEach((btn) => btn.addEventListener("click", () => {
@@ -717,7 +804,7 @@ function aiRun() {
 const COLORS = ["var(--pen-red)", "var(--pen-green)", "var(--pen-amber)", "var(--pen-remote)"];
 const branchColor = new Map<string, string>([["main", "var(--pen-blue)"]]);
 function colorOf(b: string) {
-  if (b === "?") return "var(--pen-blue)";
+  if (b === "?") return "var(--ink-soft)";
   if (!branchColor.has(b)) branchColor.set(b, COLORS[(branchColor.size - 1) % COLORS.length]);
   return branchColor.get(b)!;
 }
@@ -787,7 +874,7 @@ function slideHere(before: Map<string, { x: number; y: number; at: string; text:
     tie?.animate([{ opacity: 0 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }], { duration: 650 + wait });
     // a straight, even glide along the line to the commit it now points at
     t.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
-      { duration: 650, delay: wait, fill: "backwards", easing: "cubic-bezier(.4,0,.2,1)" });
+      { duration: 480, delay: wait, fill: "backwards", easing: "cubic-bezier(.4,0,.2,1)" });
     // and on the way, the old words are backspaced and the new ones typed in
     if (was.text !== word) { label.textContent = was.text; setTimeout(() => typeOver(label, was.text, word, 900), wait); }
   });
@@ -843,18 +930,39 @@ function renderWorld() {
       sec = document.createElement("section");
       sec.className = `place place--${id}${instant ? "" : " is-new"}`;
       sec.dataset.place = id;
-      sec.innerHTML = `<header class="place__head"></header><div class="place__grid"><div class="place__left"></div><div class="strip" data-strip="${id}"></div></div><div class="place__prs"></div>`;
+      sec.innerHTML = `<header class="place__head"></header><div class="place__rows"></div><div class="place__prs"></div>`;
       sec.addEventListener("animationend", () => sec!.classList.remove("is-new"), { once: true });
       prev.after(sec);
     }
     prev = sec;
     setPart(sec.querySelector(".place__head"), headHtml(id));
-    setPart(sec.querySelector(".place__left"), leftHtml(id));
-    const strip = sec.querySelector<HTMLElement>(".strip")!;
-    if (w.repos[id]) { if (!strip.querySelector("svg")) { strip.innerHTML = `<svg class="strip__svg"></svg>`; parts.delete(strip); } }
-    else setPart(strip, `<p class="strip__empty">No version history yet.<br>Just files.</p>`);
+    // one row per desk (a worktree adds a desk): its folder, and its own graph
+    // with that desk's HEAD; the history itself is shared
+    const r = w.repos[id];
+    const n = id === "github" ? 1 : Math.max(1, r?.desks.length ?? 1);
+    const rowsBox = sec.querySelector<HTMLElement>(".place__rows")!;
+    while (rowsBox.children.length > n) {
+      const k = `${id}:${rowsBox.children.length - 1}`;
+      [lastLayout, lastHave, lastLabels, drawn].forEach((m) => m.delete(k));
+      rowsBox.lastElementChild!.remove();
+    }
+    while (rowsBox.children.length < n) {
+      const i = rowsBox.children.length;
+      const row = document.createElement("div");
+      row.className = `place__grid${instant || i === 0 ? "" : " is-new"}`;
+      row.innerHTML = `<div class="place__left"></div><div class="strip" data-strip="${i ? `${id}:${i}` : id}"></div>`;
+      row.addEventListener("animationend", () => row.classList.remove("is-new"), { once: true });
+      rowsBox.append(row);
+    }
+    [...rowsBox.children].forEach((row, i) => {
+      const key = i ? `${id}:${i}` : id;
+      setPart(row.querySelector(".place__left"), id === "github" ? ghLeftHtml() : r ? deskHtml(id as "you" | "albert", r, i) : deskHtml("you", null, 0));
+      const strip = row.querySelector<HTMLElement>(".strip")!;
+      if (r) { if (!strip.querySelector("svg")) { strip.innerHTML = `<svg class="strip__svg"></svg>`; parts.delete(strip); } }
+      else setPart(strip, `<p class="strip__empty">No version history yet.<br>Just files.</p>`);
+      glideStrip(key, cols, heres);
+    });
     setPart(sec.querySelector(".place__prs"), id === "github" ? prsHtml() : "");
-    glideStrip(id, cols, heres);
   }
   // file state chips that changed get a little pop, so you see what moved
   root.querySelectorAll<HTMLElement>("[data-state-key]").forEach((chip) => {
@@ -901,12 +1009,6 @@ function headHtml(id: Place): string {
   return `<span class="ico ${id === "github" ? "ico--cloud" : "ico--laptop"}"></span><h3>${id === "github" ? whyGithub() : title}</h3><span class="place__sub">${sub}</span>${badge}`;
 }
 
-function leftHtml(id: Place): string {
-  if (id === "github") return ghLeftHtml();
-  const r = w.repos[id];
-  if (!r) return deskHtml("you", null, 0);
-  return r.desks.map((_, i) => deskHtml(id, r, i)).join("");
-}
 
 /* the main file as it is in this folder right now; lines you changed since the
  * last saved version are marked, so you can see what a commit will hold */
@@ -1021,7 +1123,11 @@ function layoutOf(host: HTMLElement, cols: string[]) {
 /* frame: an in-between drawing while the layout glides from the old spacing
  * to the new one; it draws only commits that were already there, inks nothing */
 function drawStrip(id: string, cols: string[], frame?: { scale: number; col: number; only: Set<string>; k: number }) {
-  const r = w.repos[id];
+  const [rid, dk] = id.split(":");
+  const r = w.repos[rid];
+  // a strip with a desk number shows that desk's HEAD; a repo with several desks
+  // gives each its own strip, so the plain id is desk 1
+  const deskOnly = dk !== undefined ? Number(dk) : (r && r.desks.length > 1 ? 0 : undefined);
   const host = document.querySelector<HTMLElement>(`[data-strip="${id}"]`);
   const svg = host?.querySelector<SVGSVGElement>("svg");
   if (!r || !svg) return;
@@ -1029,8 +1135,8 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   const have = frame ? new Set([...all].filter((c) => frame.only.has(c))) : all;
   const L = lanes(r);
   const maxLane = Math.max(0, ...[...L.values()].map((v) => v.lane));
-  const laneY = (l: number) => 26 + (maxLane - l) * 44;
-  const baseY = laneY(0);
+  let topPad = 0; // room above the top lane for labels of branch commits
+  const laneY = (l: number) => 26 + topPad + (maxLane - l) * 44;
   const { scale, col } = frame ?? layoutOf(host!, cols);
   if (!frame) { lastLayout.set(id, { scale, col }); lastHave.set(id, all); }
   const x = (cid: string) => X0 + cols.indexOf(cid) * col;
@@ -1038,10 +1144,10 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   const labels = new Map<string, { text: string; color: string; here?: boolean; desk?: number }[]>();
   const push = (cid: string, v: { text: string; color: string; here?: boolean; desk?: number }) => { const a = labels.get(cid) ?? []; a.push(v); labels.set(cid, a); };
   if (!r.bare) r.desks.forEach((d, i) => {
+    if (deskOnly !== undefined && i !== deskOnly) return;
     const h = G.headId(r, d);
     const learned = headKnown();
-    if (h) push(h, { text: learned ? (r.desks.length > 1 ? `HEAD, desk ${i + 1}` : id === "albert" ? "Albert's HEAD" : "HEAD")
-      : (r.desks.length > 1 ? `desk ${i + 1} is here` : id === "albert" ? "Albert is here" : "you are here"), color: "var(--ink)", here: true, desk: i });
+    if (h) push(h, { text: learned ? (rid === "albert" ? "Albert's HEAD" : "HEAD") : (rid === "albert" ? "Albert is here" : "you are here"), color: "var(--ink)", here: true, desk: i });
   });
   Object.entries(r.branches).sort(([a], [b]) => (a === "main" ? -1 : b === "main" ? 1 : 0)).forEach(([b, cid]) => push(cid, { text: b, color: colorOf(b) }));
   // mid-glide, labels stay where they were before the change and move with
@@ -1062,7 +1168,12 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
     now.forEach((arr, cid) => arr.forEach((lb) => add(cid, lb)));
   }
   else lastLabels.set(id, new Map(labels));
-  const maxLabels = Math.max(1, ...[...labels.values()].map((a) => a.length));
+  // labels of commits on main hang below the line; labels of commits on the
+  // top branch lane sit right above them (lower lanes keep theirs below), so a branch name is next to its branch
+  const above = (cid: string) => { const l = L.get(cid)?.lane ?? 0; return l > 0 && l === maxLane; };
+  topPad = Math.max(0, ...[...labels].filter(([c]) => above(c)).map(([, a]) => a.length * 21 + 8));
+  const baseY = laneY(0);
+  const maxLabels = Math.max(1, ...[...labels].filter(([c]) => !above(c)).map(([, a]) => a.length));
   const H = baseY + 34 + maxLabels * 21;
   const W = X0 * 2 + 30 + Math.max(0, cols.length - 1) * col;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -1074,7 +1185,7 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   drawn.set(id, seen);
   const gEdges = el("g", { class: "edges" }), gNodes = el("g", { class: "nodes" }), gLabels = el("g", { class: "labels" });
   svg.append(gEdges, gNodes, gLabels);
-  const ink = (p: SVGPathElement, key: string, dur = 520) => {
+  const ink = (p: SVGPathElement, key: string, dur = 400) => {
     if (frame) return;
     if (instant || seen.has(key)) { seen.add(key); return; }
     seen.add(key);
@@ -1092,12 +1203,12 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
       const px = x(p), py = laneY(pl.lane);
       const d = py === cy ? linePath(px + 13, py, cx - 13, cy, seed(cid) + pi)
         : smooth([[px + 10, py] as Point, [px + (cx - px) * 0.55, py + (cy - py) * 0.15], [cx - 12, cy]]);
-      const col = colorOf(pi === 1 ? L.get(p)!.br : me.br === "?" ? "main" : me.br);
+      const col = colorOf(pi === 1 ? L.get(p)!.br : me.br);
       const path = el("path", { d, class: "edge", stroke: col, "data-to": cid }) as SVGPathElement;
       gEdges.append(path);
       ink(path, `e:${p}>${cid}`);
     });
-    const col = colorOf(me.br === "?" ? "main" : me.br);
+    const col = colorOf(me.br);
     const g = el("g", { class: "commit", "data-c": cid, style: `transform-origin:${cx}px ${cy}px` });
     const node = el("path", { d: circlePath(cx, cy, 12, seed(cid)), class: "node", stroke: col }) as SVGPathElement;
     const t = el("title");
@@ -1110,15 +1221,16 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
     }
     if (c.parents.length > 1) g.append(el("path", { d: circlePath(cx, cy, 5, seed(cid) + 3), class: "node__merge", stroke: col }));
     gNodes.append(g);
-    ink(node, `n:${cid}`, 420);
+    ink(node, `n:${cid}`, 340);
   }
   for (const [cid, arr] of labels) {
     if (!have.has(cid)) continue;
     const cx = x(cid);
     const top = laneY(L.get(cid)?.lane ?? 0);
-    gLabels.append(el("path", { d: linePath(cx, top + 14, cx, baseY + 26, seed(cid)), class: "label__tie", "data-tie": cid }));
+    const up = above(cid);
+    gLabels.append(el("path", { d: up ? linePath(cx, top - 14, cx, top - 17, seed(cid)) : linePath(cx, top + 14, cx, baseY + 26, seed(cid)), class: "label__tie", "data-tie": cid }));
     arr.forEach((lb, i) => {
-      const y = baseY + 42 + i * 21;
+      const y = up ? top - 24 - i * 21 : baseY + 42 + i * 21;
       // mid-glide a HEAD marker moves from its old column toward its new one
       const lx = cx; // mid-glide, labels ride along with their commit
       const tx = el("text", { x: lx, y, class: `label ${lb.here ? "label--here" : ""}`, fill: lb.color });
@@ -1131,7 +1243,9 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
         g.append(el("path", {
           class: "here__arrow",
           // straight sides like a pen stroke, the base sagging a hair
-          d: `M ${lx - 4.6} ${y - 12.6} L ${lx + 0.2 + s * 0.05} ${y - 20.6} L ${lx + 4.7} ${y - 12.3} Q ${lx} ${y - 11.5} ${lx - 4.6} ${y - 12.6} Z`,
+          // under the commit it points up at it; above a branch commit it points down
+          d: up ? `M ${lx - 4.6} ${y + 3.6} L ${lx + 0.2 + s * 0.05} ${y + 11.4} L ${lx + 4.7} ${y + 3.3} Q ${lx} ${y + 2.6} ${lx - 4.6} ${y + 3.6} Z`
+            : `M ${lx - 4.6} ${y - 12.6} L ${lx + 0.2 + s * 0.05} ${y - 20.6} L ${lx + 4.7} ${y - 12.3} Q ${lx} ${y - 11.5} ${lx - 4.6} ${y - 12.6} Z`,
         }), tx);
         gLabels.append(g);
       } else {
@@ -1164,16 +1278,16 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
     // labels start from where the glide left them; if a new commit appeared,
     // they hold still while it is drawn and connected, then step onto it
     const from = glided ? hereSpots() : heres;
-    const grew = !!had && [...placeCommits(w.repos[id])].some((c) => !had.has(c));
+    const grew = !!had && [...placeCommits(w.repos[id.split(":")[0]])].some((c) => !had.has(c));
     host?.classList.remove("is-gliding");
     drawStrip(id, cols);
-    if (!instant) slideHere(from, id, grew ? 520 : 0);
+    if (!instant) slideHere(from, id, grew ? 380 : 0);
     syncScroll();
   };
-  if (instant || prefersReduced || !host || !prev || !had || !w.repos[id]) return finish();
+  if (instant || prefersReduced || !host || !prev || !had || !w.repos[id.split(":")[0]]) return finish();
   const next = layoutOf(host, cols);
   if (Math.abs(next.scale - prev.scale) < 0.01 && Math.abs(next.col - prev.col) < 0.5) return finish();
-  const dur = 420, t0 = performance.now();
+  const dur = 320, t0 = performance.now();
   host.classList.add("is-gliding"); // no scrollbar flashing while it moves
   settleUntil = Math.max(settleUntil, t0 + dur);
   const ease = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -1250,7 +1364,7 @@ function fx(): HTMLElement { return $("#fx"); }
 /* a new commit: the packed files fly into the dot, the dot pops, the note floats up */
 function saved(target: SVGGElement, c: G.Commit, files: { path: string; rect: DOMRect }[], delay: number) {
   const to = centre(target.getBoundingClientRect());
-  const fly = files.length ? 520 : 0;
+  const fly = files.length ? 420 : 0;
   files.slice(0, 4).forEach((f, i) => {
     const chip = document.createElement("span");
     chip.className = "fx-file";
@@ -1305,7 +1419,7 @@ function fly(from: SVGGElement, to: SVGGElement, kind: "push" | "pull", lines: S
     { transform: "translate(-50%,-50%) scale(.6)" },
     { transform: `translate(calc(-50% + ${(b.x - a.x) * 0.5 + 18}px), calc(-50% + ${(b.y - a.y) * 0.5 - lift}px)) scale(1.15)`, offset: 0.5 },
     { transform: `translate(calc(-50% + ${b.x - a.x}px), calc(-50% + ${b.y - a.y}px)) scale(.9)` },
-  ], { duration: 560, delay, easing: "cubic-bezier(.45,0,.35,1)" }).finished.then(() => {
+  ], { duration: 460, delay, easing: "cubic-bezier(.45,0,.35,1)" }).finished.then(() => {
     dot.remove();
     lines.forEach((l) => { l.style.opacity = ""; void drawOn(l, { duration: 240 }); });
     to.style.opacity = "";
@@ -1380,24 +1494,43 @@ function fitEditor() {
   ta.style.height = `${ta.scrollHeight + line}px`;
 }
 
-function renderResolver(text: string, readOnly: boolean) {
+/* the conflict picker: choosing a side only previews it in the file below;
+ * nothing is kept until Save file, and Start over brings the conflict back */
+let resolverKept = "";
+function renderResolver(text: string, readOnly: boolean, picked = "") {
+  if (!picked) resolverKept = "";
   const box = $("#resolver");
   const m = text.match(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n([\s\S]*?)>>>>>>> [^\n]*\n?/);
   if (!m || readOnly) { box.hidden = true; box.innerHTML = ""; return; }
   box.hidden = false;
-  box.innerHTML = `<p class="resolver__k">Git found two versions of the same line. Which one stays?</p>
+  const opt = (key: string, cls: string, label: string, code: string) =>
+    `<button type="button" class="pick ${cls} ${picked === key ? "is-picked" : ""}" data-pick="${key}" aria-pressed="${picked === key}"><span>${label}</span><code>${code}</code></button>`;
+  box.innerHTML = `<p class="resolver__k">The same line, changed two ways. Which should the report say?</p>
     <div class="resolver__opts">
-      <button type="button" class="pick" data-pick="mine"><span>Your version</span><code>${esc(m[1].trim())}</code></button>
-      <button type="button" class="pick pick--friend" data-pick="theirs"><span>Albert's version</span><code>${esc(m[2].trim())}</code></button>
-      <button type="button" class="pick pick--both" data-pick="both"><span>Keep both</span><code>${esc(m[1].trim())}<br>${esc(m[2].trim())}</code></button>
+      ${opt("mine", "", "Your version", esc(m[1].trim()))}
+      ${opt("theirs", "pick--friend", "Albert's version", esc(m[2].trim()))}
+      ${opt("both", "pick--both", "Keep both lines", `${esc(m[1].trim())}<br>${esc(m[2].trim())}`)}
     </div>
-    <p class="resolver__raw">Below is the file as git left it. The <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> lines are git's marks; you can also fix it by hand.</p>`;
+    <p class="resolver__raw">${picked ? `Previewing your pick in the file below. Happy with it? Press <b>Save file</b>. <button type="button" class="resolver__reset" data-reset>Start over</button>`
+      : "The file below is how git left it: your version between <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> and <code>=======</code>, Albert's between <code>=======</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>. Pick above, or fix it by hand."}</p>`;
   box.querySelectorAll<HTMLButtonElement>("[data-pick]").forEach((b) => b.addEventListener("click", () => {
-    const ta = $<HTMLTextAreaElement>("#editor-text");
     const keep = b.dataset.pick === "mine" ? m[1] : b.dataset.pick === "theirs" ? m[2] : m[1] + m[2];
-    ta.value = ta.value.replace(m[0], () => keep);
-    saveEditor(true);
+    // swap only the clash (or the last pick) inside what's in the box now, so
+    // anything typed by hand elsewhere in the file stays
+    const ta = $<HTMLTextAreaElement>("#editor-text");
+    const cur = ta.value.includes(m[0]) ? m[0] : resolverKept;
+    ta.value = cur && ta.value.includes(cur) ? ta.value.replace(cur, () => keep) : text.replace(m[0], () => keep);
+    resolverKept = keep;
+    fitEditor();
+    renderResolver(text, readOnly, b.dataset.pick);
   }));
+  box.querySelector("[data-reset]")?.addEventListener("click", () => {
+    const ta = $<HTMLTextAreaElement>("#editor-text");
+    ta.value = resolverKept && ta.value.includes(resolverKept) ? ta.value.replace(resolverKept, () => m[0]) : text;
+    resolverKept = "";
+    fitEditor();
+    renderResolver(text, readOnly);
+  });
 }
 
 function saveEditor(close: boolean) {
@@ -1488,6 +1621,27 @@ function boot() {
   });
   $("#lesson").addEventListener("animationend", (e) => (e.target as HTMLElement).classList.remove("shake"));
   $("#deck-btn").addEventListener("click", openDeck);
+  // fold-outs (more info, under the hood) open and close smoothly, no jumps
+  document.addEventListener("click", (e) => {
+    const sum = (e.target as HTMLElement).closest("summary");
+    const det = sum?.parentElement as HTMLDetailsElement | null;
+    if (!sum || !det || det.tagName !== "DETAILS" || prefersReduced) return;
+    e.preventDefault();
+    const from = det.getBoundingClientRect().height;
+    const running = folding.get(det);
+    const closing = running ? !running.opening : det.open;
+    running?.anim.cancel();
+    if (!closing) det.open = true;
+    const to = closing ? sum.getBoundingClientRect().height : det.getBoundingClientRect().height;
+    det.style.overflow = "hidden";
+    const anim = det.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" });
+    folding.set(det, { anim, opening: !closing });
+    anim.finished.then(() => {
+      folding.delete(det);
+      if (closing) det.open = false;
+      det.style.overflow = "";
+    }, () => { /* cancelled by a newer click */ });
+  });
   // explain: hover opens it (and it stays while the pointer is on the panel),
   // a click or tap pins it open, Escape or a click elsewhere closes it
   const xp = $("#xp");
