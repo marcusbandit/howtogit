@@ -152,17 +152,25 @@ const flatIndex = (c: number, b: number) => flat.findIndex((x) => x.c === c && x
 /* Undo takes back the last thing you did in this step (a lesson rewind, not a
  * git command): before each action the step's state is kept, Undo restores it */
 let undoStack: { w: string; log: string; beatDone: boolean }[] = [];
+const canUndo = () => undoStack.length > 0 || (beatDone && beat().kind !== "next");
 const keepForUndo = () => {
   undoStack.push({ w: JSON.stringify(w), log: JSON.stringify(log), beatDone });
   if (undoStack.length > 30) undoStack.shift();
 };
 function undo() {
   const snap = undoStack.pop();
-  if (!snap) return;
+  if (!snap && !canUndo()) return;
   clearSelection();
-  w = JSON.parse(snap.w);
-  log = JSON.parse(snap.log);
-  beatDone = snap.beatDone;
+  if (snap) {
+    w = JSON.parse(snap.w);
+    log = JSON.parse(snap.log);
+    beatDone = snap.beatDone;
+  } else {
+    // nothing remembered (after a reload): the step as it was when you arrived
+    w = replayTo(ci, bi);
+    log = [];
+    beatDone = beat().kind === "next";
+  }
   termDesk = beatDesk();
   renderWorld();
   renderLesson();
@@ -429,7 +437,7 @@ function renderLesson() {
     ${beatDone && lastOfChapter && ch.goal ? `<div class="chapter-done ${fresh ? "is-new" : ""}"><span class="star" aria-hidden="true">★</span><div><b>Chapter ${ci + 1} done</b><p>You can now ${esc(ch.goal)}.</p></div></div>` : ""}
     <div class="lesson__nav">
       <button type="button" class="btn btn--ghost btn--back" data-back ${atStart ? "disabled" : ""}><span aria-hidden="true">←</span> Back</button>
-      <button type="button" class="btn btn--ghost btn--undo" data-undo ${undoStack.length ? "" : "disabled"} title="Take back what you just did in this step, to try it again. This rewinds the lesson; it isn't a git command."><span aria-hidden="true">↶</span> Undo</button>
+      <button type="button" class="btn btn--ghost btn--undo" data-undo ${canUndo() ? "" : "disabled"} title="Take back what you just did in this step, to try it again. This rewinds the lesson; it isn't a git command."><span aria-hidden="true">↶</span> Undo</button>
       ${isLast ? `<button type="button" class="btn btn--next" data-restart>Start over</button>` : `
       <span class="step-of">${bi + 1} / ${total}</span>
       <button type="button" class="btn btn--next" data-next ${beatDone ? "" : "disabled"}>${bi + 1 < total ? "Next" : "Next chapter"} <span aria-hidden="true">→</span></button>`}
@@ -953,7 +961,7 @@ function layoutOf(host: HTMLElement, cols: string[]) {
 
 /* frame: an in-between drawing while the layout glides from the old spacing
  * to the new one; it draws only commits that were already there, inks nothing */
-function drawStrip(id: string, cols: string[], frame?: { scale: number; col: number; only: Set<string> }) {
+function drawStrip(id: string, cols: string[], frame?: { scale: number; col: number; only: Set<string>; k: number }) {
   const r = w.repos[id];
   const host = document.querySelector<HTMLElement>(`[data-strip="${id}"]`);
   const svg = host?.querySelector<SVGSVGElement>("svg");
@@ -979,6 +987,9 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   Object.entries(r.branches).sort(([a], [b]) => (a === "main" ? -1 : b === "main" ? 1 : 0)).forEach(([b, cid]) => push(cid, { text: b, color: colorOf(b) }));
   // mid-glide, labels stay where they were before the change and move with
   // their commit; they reach their new spots once the glide lands
+  // HEAD markers are the exception: they head straight for their new commit
+  const hereNow = new Map<number, string>();
+  labels.forEach((arr, cid) => arr.forEach((lb) => { if (lb.here) hereNow.set(lb.desk ?? 0, cid); }));
   if (frame) { labels.clear(); (lastLabels.get(id) ?? new Map()).forEach((v, k) => labels.set(k, v)); }
   else lastLabels.set(id, new Map(labels));
   const maxLabels = Math.max(1, ...[...labels.values()].map((a) => a.length));
@@ -1038,7 +1049,10 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
     gLabels.append(el("path", { d: linePath(cx, top + 14, cx, baseY + 26, seed(cid)), class: "label__tie", "data-tie": cid }));
     arr.forEach((lb, i) => {
       const y = baseY + 42 + i * 21;
-      const tx = el("text", { x: cx, y, class: `label ${lb.here ? "label--here" : ""}`, fill: lb.color });
+      // mid-glide a HEAD marker moves from its old column toward its new one
+      const to = lb.here && frame ? hereNow.get(lb.desk ?? 0) : undefined;
+      const lx = to && to !== cid ? X0 + (cols.indexOf(cid) + (cols.indexOf(to) - cols.indexOf(cid)) * frame!.k) * col : cx;
+      const tx = el("text", { x: lx, y, class: `label ${lb.here ? "label--here" : ""}`, fill: lb.color });
       tx.textContent = lb.text;
       if (lb.here) {
         // HEAD (or "you are here") travels as one piece: a little hand-drawn
@@ -1048,7 +1062,7 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
         g.append(el("path", {
           class: "here__arrow",
           // straight sides like a pen stroke, the base sagging a hair
-          d: `M ${cx - 4.6} ${y - 12.6} L ${cx + 0.2 + s * 0.05} ${y - 20.6} L ${cx + 4.7} ${y - 12.3} Q ${cx} ${y - 11.5} ${cx - 4.6} ${y - 12.6} Z`,
+          d: `M ${lx - 4.6} ${y - 12.6} L ${lx + 0.2 + s * 0.05} ${y - 20.6} L ${lx + 4.7} ${y - 12.3} Q ${lx} ${y - 11.5} ${lx - 4.6} ${y - 12.6} Z`,
         }), tx);
         gLabels.append(g);
       } else gLabels.append(tx);
@@ -1073,7 +1087,15 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
   const host = document.querySelector<HTMLElement>(`[data-strip="${id}"]`);
   const prev = lastLayout.get(id), had = lastHave.get(id);
   window.cancelAnimationFrame(tweens.get(id) ?? 0);
-  const finish = () => { host?.classList.remove("is-gliding"); drawStrip(id, cols); if (!instant) slideHere(heres, id); syncScroll(); };
+  const finish = (glided = false) => {
+    // if the strip just glided, HEAD's slide starts where the glide left it,
+    // not where it was before the change
+    const from = glided ? hereSpots() : heres;
+    host?.classList.remove("is-gliding");
+    drawStrip(id, cols);
+    if (!instant) slideHere(from, id);
+    syncScroll();
+  };
   if (instant || prefersReduced || !host || !prev || !had || !w.repos[id]) return finish();
   const next = layoutOf(host, cols);
   if (Math.abs(next.scale - prev.scale) < 0.01 && Math.abs(next.col - prev.col) < 0.5) return finish();
@@ -1083,8 +1105,8 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
   const ease = (t: number) => 1 - Math.pow(1 - t, 3);
   const step = (now: number) => {
     const k = ease(Math.min(1, (now - t0) / dur));
-    if (k >= 1) return finish();
-    drawStrip(id, cols, { scale: prev.scale + (next.scale - prev.scale) * k, col: prev.col + (next.col - prev.col) * k, only: had });
+    if (k >= 1) return finish(true);
+    drawStrip(id, cols, { scale: prev.scale + (next.scale - prev.scale) * k, col: prev.col + (next.col - prev.col) * k, only: had, k });
     tweens.set(id, window.requestAnimationFrame(step));
   };
   tweens.set(id, window.requestAnimationFrame(step));
