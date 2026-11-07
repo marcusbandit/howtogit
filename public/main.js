@@ -1487,11 +1487,14 @@ function glideStrip(id, cols, heres) {
  * Wider screens: only the strip you're touching leads; the rest follow it and
  * never echo their own scroll back. */
 let lead = null;
-function syncScroll() {
+// pin: jump to the newest versions, after the graph itself changed. A resize
+// (a phone's address bar sliding away mid-scroll is one) keeps where you are.
+function syncScroll(pin = true) {
     const strips = [...document.querySelectorAll(".strip")];
     const ov = ovScroller();
     strips.forEach((s) => {
-        s.scrollLeft = s.scrollWidth;
+        if (pin)
+            s.scrollLeft = s.scrollWidth;
         const take = () => { lead = s; };
         s.onpointerdown = take;
         s.onwheel = take;
@@ -1504,7 +1507,10 @@ function syncScroll() {
         };
     });
     placeOv();
-    ov.scrollLeft = ov.scrollWidth;
+    if (pin)
+        ov.scrollLeft = ov.scrollWidth;
+    else if (narrow())
+        strips.forEach((s) => { s.scrollLeft = ov.scrollLeft; });
 }
 function ovScroller() {
     let ov = document.querySelector("#world > .ov-scroll");
@@ -1549,9 +1555,6 @@ function placeOv() {
     ov.style.width = `${strips[0].clientWidth}px`;
     const w = Math.max(...strips.map((s) => s.scrollWidth));
     ov.firstElementChild.style.width = `${w}px`;
-    // the strips may have been pinned to the newest end; the scroller starts there too
-    if (Math.abs(ov.scrollLeft - strips[0].scrollLeft) > 1)
-        ov.scrollLeft = strips[0].scrollLeft;
 }
 function snapshotFx() {
     const have = {};
@@ -2157,7 +2160,7 @@ function boot() {
         if (beatDone)
             $("#lesson").querySelector("[data-next]")?.click();
     });
-    window.addEventListener("resize", () => syncScroll());
+    window.addEventListener("resize", () => syncScroll(false));
 }
 boot();
 //# sourceMappingURL=main.js.map
