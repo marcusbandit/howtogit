@@ -32,38 +32,15 @@ target: someone with zero git knowledge understands it on the first try.
 Issues: #1 tracker, #2 to #4 bugs, #5 to #8 chapters and modes. The "Next up"
 section below predates this direction and is superseded by it.
 
-## Architecture (today)
+## Architecture (since the story rebuild, #1)
 
-- TypeScript, no framework, no bundler. `src/*.ts` compiles to `public/*.js`
-  (ES modules) via `tsc`. Compiled JS is committed; Cloudflare serves
-  `public/` as-is.
-- `src/sketch.ts` — the ink engine: roughened SVG geometry, draw-on with a
-  tracing nib, smooth turbulence "boil".
-- `src/app.ts` — the controller: a step machine, the graph model, the command
-  line (live token colouring + ghost suggestion + Tab complete), the file
-  tree, the remote panel, and the clickable timeline (instant replay/seek).
-- `src/repo.ts` — **the real git backend.** The local repo is an actual git
-  repository run by **isomorphic-git** on a tiny in-memory filesystem, entirely
-  in the browser (no server). `git init/add/commit` genuinely execute and write
-  real `.git` objects/refs/HEAD; the sidebar's file states come from real
-  `git.statusMatrix`, and the `.git/` tree is the real one (curated, with
-  friendly descriptions). Moving the timeline replays the commands from scratch
-  (~4ms, instant) with a fixed author/timestamp so object hashes are stable.
-  Scope today: the **init → add → commit** flow is real; remote/push/branch/merge
-  are still simulated and overlaid on top (the "pushed ✓✓" / branch states).
-  isomorphic-git is vendored as a single browser ESM at
-  `public/vendor/isomorphic-git.mjs` (rebuild via `npm run vendor`).
-- `scripts/shoot.mjs` — headless screenshot harness: drive the app to any step
-  (`--step N`), optionally interact (`--do "<js>"`), and capture a PNG, so any
-  state can be inspected/verified programmatically.
-- **One tree renderer for everything.** The local working tree and the remote
-  panel are two `TreeView` instances (a container + its own open-paths set +
-  side) drawn by the same `renderTree(tree, model)` from a `RepoModel`. All the
-  behaviour (recursive folders, hover notes, the staggered write-on reveal, the
-  note-card editor) lives in the shared `.tree__list` CSS + the shared
-  interaction helpers (`setNodeOpen`/`revealSubtree`/`wireTree`), so a new tree
-  is just a new model. The remote's `.git` reuses the local snapshot (identical
-  after push). Add trees by writing a model, not a renderer.
+See README "Source layout". The old command-step lesson (`app.ts`, the
+isomorphic-git backend and the `.git/` explorer) was replaced; it lives in git
+history before the story rebuild PR. `scripts/check-story.mjs` replays every
+beat and fails if one can't be completed; `scripts/shoot.mjs --q "ch=3&b=2"`
+screenshots any beat.
+
+## History: the first lesson (before the rebuild)
 
 ## Done
 
