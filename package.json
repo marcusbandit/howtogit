@@ -10,7 +10,8 @@
     "dev": "tsc && wrangler dev",
     "start": "tsc && wrangler dev",
     "deploy": "tsc && wrangler deploy",
-    "check": "tsc && node scripts/check-story.mjs && node scripts/check-selection.mjs"
+    "check": "tsc && node scripts/check-story.mjs && node scripts/check-selection.mjs",
+    "check:design": "node scripts/check-design.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
