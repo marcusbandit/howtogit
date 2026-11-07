@@ -153,7 +153,10 @@ function goto(c: number, b: number, opts: { replay?: boolean } = {}) {
   if (opts.replay || window.innerWidth < 900) window.scrollTo({ top: 0, behavior: prefersReduced ? "auto" : "smooth" });
 }
 
+const clearSelection = () => { try { getSelection()?.removeAllRanges(); } catch { /* nothing selected */ } };
+
 function next() {
+  clearSelection();
   history.push({ ci, bi, w: JSON.stringify(w), log: JSON.stringify(log), beatDone });
   if (history.length > 80) history.shift();
   if (bi + 1 < chapters[ci].beats.length) goto(ci, bi + 1);
@@ -164,6 +167,7 @@ function next() {
  * what you typed). After a reload or a chapter jump there is no record, so
  * the step before is rebuilt the typical way and shown finished. */
 function back() {
+  clearSelection();
   const snap = history.pop();
   if (snap) {
     w = JSON.parse(snap.w);
@@ -1037,8 +1041,10 @@ function boot() {
   // the pressing hand stays while the mouse button is held, wherever it is,
   // and each click drops a little ink ring
   document.addEventListener("pointerdown", (e) => {
-    if (e.pointerType !== "mouse" || (e.target as HTMLElement).closest?.("input, textarea")) return;
+    if (e.pointerType !== "mouse" || e.button !== 0 || (e.target as HTMLElement).closest?.("input, textarea")) return;
     const target = (e.target as HTMLElement).closest?.("button:not(:disabled), a, summary, label, [role=radio], [data-file], .why");
+    // clicking a control twice fast is not a request to select a word
+    if (e.detail > 1 && (e.target as HTMLElement).closest?.("button, [role=radio], .chap, .say-pick")) e.preventDefault();
     if (target) document.documentElement.classList.add("is-pressing");
     if (prefersReduced) return;
     const r = document.createElement("span");
@@ -1052,6 +1058,8 @@ function boot() {
   const release = () => document.documentElement.classList.remove("is-pressing");
   document.addEventListener("pointerup", release);
   document.addEventListener("pointercancel", release);
+  document.addEventListener("contextmenu", release);
+  window.addEventListener("blur", release);
   // the "why GitHub?" note opens on tap too (phones have no hover), and closes on the next tap anywhere
   document.addEventListener("click", (e) => {
     const why = (e.target as HTMLElement).closest(".why");
