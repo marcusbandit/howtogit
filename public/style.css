@@ -746,4 +746,3 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .beat.now::before { background: var(--line-strong); }
 .beat:hover::before { transform: scaleY(1.8); background: color-mix(in srgb, var(--accent) 55%, var(--line-strong)); }
 .beat.done:hover::before { background: var(--accent-deep); }
-.beat[aria-current="step"]::before { box-shadow: 0 0 0 1.5px var(--ink); }

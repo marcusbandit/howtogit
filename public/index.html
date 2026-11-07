@@ -6,6 +6,9 @@
   <title>howtogit: git and GitHub, explained by doing</title>
   <meta name="description" content="Learn how git and GitHub work by doing it: save versions, go back in time, share with a friend, open a pull request. With buttons, commands or an AI assistant." />
   <meta name="color-scheme" content="light dark" />
+  <!-- cached forever on purpose: a hard refresh is the only thing that re-downloads it,
+       which is how the page tells Ctrl+Shift+R (start fresh) from a normal reload -->
+  <script src="reload-probe.js"></script>
   <script>
     (function () {
       var KEY = 'htg-theme', root = document.documentElement, saved = null;
@@ -33,7 +36,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=story15" />
+  <link rel="stylesheet" href="style.css?v=story16" />
 </head>
 <body>
   <header class="top">
@@ -87,6 +90,6 @@
     </form>
   </dialog>
   <div class="fx" id="fx" aria-hidden="true"></div>
-  <script type="module" src="main.js?v=story15"></script>
+  <script type="module" src="main.js?v=story16"></script>
 </body>
 </html>

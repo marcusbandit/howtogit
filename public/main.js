@@ -1087,7 +1087,24 @@ function saveEditor(close) {
     afterChange();
 }
 /* ------------------------------------------------------------------- boot */
+/* Ctrl+Shift+R starts fresh. A hard refresh skips the browser cache, so the
+ * forever-cached reload-probe.js comes over the network (transferSize > 0);
+ * on a normal reload it comes from cache (0). Only then is progress wiped. */
+function hardRefresh() {
+    const nav = performance.getEntriesByType("navigation")[0];
+    if (nav?.type !== "reload")
+        return false;
+    const probe = performance.getEntriesByType("resource").find((e) => e.name.includes("reload-probe.js"));
+    return !!probe && probe.transferSize > 0;
+}
 function boot() {
+    if (hardRefresh()) {
+        try {
+            localStorage.removeItem(KEY);
+            localStorage.removeItem("htg-intro-seen");
+        }
+        catch { /* private mode */ }
+    }
     const q = new URLSearchParams(location.search);
     const qm = q.get("mode");
     if (qm)
