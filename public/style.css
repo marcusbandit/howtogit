@@ -1014,10 +1014,15 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
   .world { position: relative; gap: 10px; }
   .world__tabs:not(:empty) { display: flex; gap: 6px; }
   .ov-scroll:not([hidden]) { display: block; }
-  .wtab { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 4px 8px;
+  .wtab { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 4px 8px;
     border-radius: 999px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink-soft); font-size: 14px; font-weight: 600; white-space: nowrap; }
-  .wtab .ico { flex: none; transform: scale(.8); }
+  .wtab .ico { flex: none; width: 20px; height: 17px; }
+  /* each tab wears its place's colour and icon, like the graph cards above */
+  .wtab--github { border-color: color-mix(in srgb, var(--pen-remote) 45%, transparent); }
+  .wtab--albert { border-color: color-mix(in srgb, var(--friend) 45%, transparent); }
   .wtab[aria-selected="true"] { color: var(--ink); border-color: var(--ink); box-shadow: 2px 2px 0 var(--line); }
+  .wtab--github[aria-selected="true"] { border-color: var(--pen-remote); background: color-mix(in srgb, var(--pen-remote) 10%, var(--card)); box-shadow: 2px 2px 0 color-mix(in srgb, var(--pen-remote) 35%, transparent); }
+  .wtab--albert[aria-selected="true"] { border-color: var(--friend); background: color-mix(in srgb, var(--friend) 10%, var(--card)); box-shadow: 2px 2px 0 color-mix(in srgb, var(--friend) 35%, transparent); }
   .wtab__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   /* every history line sits together on top as one overview, so a push or a
    * pull flies between lines you can all see; the files sit below in tabs,
@@ -1056,7 +1061,6 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 @keyframes tab-pop { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: none; } }
 @media (max-width: 520px) {
   body:not([data-intro]) .brand { display: none; }
-  .wtab .ico { display: none; }
 }
 .sheet .editor__x { min-width: 40px; min-height: 40px; }
 .wtab--albert .ico { background: var(--friend); }
@@ -1066,3 +1070,13 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
   .lesson__nav { position: static; margin-top: 16px; padding: 12px 0 0; background: none; backdrop-filter: none; }
   .lesson__nav::before { display: none; }
 }
+
+/* phones: the way back up to what the step explained */
+.back-up { display: none; }
+@media (max-width: 860px) {
+  .back-up:not([hidden]) { display: inline-flex; align-items: center; gap: 6px; position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 26;
+    transform: translateX(-50%); min-height: 40px; padding: 6px 16px; border: 0; border-radius: 999px; background: var(--ink); color: var(--card);
+    font-size: 14px; font-weight: 700; white-space: nowrap; box-shadow: 0 6px 18px -8px rgba(0,0,0,.5); animation: back-up-in .3s cubic-bezier(.2,1.4,.4,1); }
+}
+@media (max-width: 860px) and (max-height: 500px) { .back-up:not([hidden]) { bottom: 16px; } }
+@keyframes back-up-in { from { transform: translate(-50%, 12px); opacity: 0; } }

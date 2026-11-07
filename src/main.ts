@@ -293,6 +293,7 @@ function afterChange() {
       await Promise.all($("#lesson").getAnimations().map((m) => m.finished.catch(() => undefined)));
       await bringIntoView(overview(), strip);
       renderWorld();
+      armBackUp();
     })();
   } else {
     renderWorld();
@@ -539,6 +540,7 @@ function renderLesson() {
       <button type="button" class="btn btn--next" data-next ${beatDone ? "" : "disabled"}>${bi + 1 < total ? "Next" : "Next chapter"} <span aria-hidden="true">→</span></button>`}
     </div>`;
   wireLesson();
+  checkBackUp();
   easeHeight(box, oldH);
   if (xpFor && !document.body.contains(xpFor)) closeExplain();
   const term = box.querySelector(".term__out");
@@ -1453,6 +1455,24 @@ function snapshotFx(): FxSnap {
   return { have, staged, y: window.scrollY };
 }
 
+/* phones: after the page glides down to the graphs, what the step just
+ * explained is above the screen. A pill over the step bar points back up to
+ * it, and goes away once you're back there or on another step */
+let backUpFor = "";
+function armBackUp() {
+  const after = document.querySelector<HTMLElement>("#lesson .after");
+  if (!after || after.getBoundingClientRect().top >= topEdge()) return;
+  backUpFor = `${ci}:${bi}`;
+  $("#back-up").hidden = false;
+}
+const topEdge = () => Math.max(0, $(".top").getBoundingClientRect().bottom);
+function checkBackUp() {
+  const pill = $("#back-up");
+  if (pill.hidden) return;
+  const after = document.querySelector<HTMLElement>("#lesson .after");
+  if (backUpFor !== `${ci}:${bi}` || !after || after.getBoundingClientRect().top >= topEdge()) pill.hidden = true;
+}
+
 /* phones: every place's history line sits together in one overview. Before
  * anything changes in it, the page glides just far enough that the overview
  * sits above the step bar (or, if it's too tall, the line that changes) */
@@ -1830,6 +1850,12 @@ function boot() {
     sheet(id).querySelector(".is-now")?.scrollIntoView({ block: "nearest" });
   };
   $("#chap-pill").addEventListener("click", () => openSheet("#chap-sheet"));
+  $("#back-up").addEventListener("click", () => {
+    $("#back-up").hidden = true;
+    document.querySelector("#lesson .after")?.scrollIntoView({ block: "center", behavior: prefersReduced ? "auto" : "smooth" });
+  });
+  let backUpTick = 0;
+  window.addEventListener("scroll", () => { if (!backUpTick) backUpTick = requestAnimationFrame(() => { backUpTick = 0; checkBackUp(); }); }, { passive: true });
   $("#chap-list").addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-ch]");
     if (!b) return;
