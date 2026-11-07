@@ -1029,3 +1029,9 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 }
 .sheet .editor__x { min-width: 40px; min-height: 40px; }
 .wtab--albert .ico { background: var(--friend); }
+/* a phone on its side has no height to spare: the step bar goes back in the card */
+@media (max-width: 860px) and (max-height: 500px) {
+  body:not([data-intro]) { padding-bottom: 0; }
+  .lesson__nav { position: static; margin-top: 16px; padding: 12px 0 0; background: none; backdrop-filter: none; }
+  .lesson__nav::before { display: none; }
+}
