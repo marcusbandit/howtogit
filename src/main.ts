@@ -19,7 +19,7 @@ import { circlePath, linePath, smooth, drawOn, el, prefersReduced, type Point } 
 
 type Mode = "buttons" | "command" | "ai";
 type Place = "github" | "you" | "albert";
-interface LogLine { kind: "cmd" | "out" | "err" | "note" | "ai" | "me"; text: string; who?: Who; cmds?: string[]; act?: number }
+interface LogLine { kind: "cmd" | "out" | "err" | "note" | "ai" | "me" | "coach"; text: string; who?: Who; cmds?: string[]; act?: number; ok?: boolean; good?: boolean }
 interface Snap { ci: number; bi: number; w: string; log: string; beatDone: boolean }
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -209,10 +209,15 @@ function runTyped(line: string) {
   keepForUndo();
   actN++;
   const before = snapshotFx();
-  log.push({ kind: "cmd", text: line.trim(), who: "you", act: actN });
+  const entry: LogLine = { kind: "cmd", text: line.trim(), who: "you", act: actN };
+  log.push(entry);
+  const steps = taskSteps();
   const r = exec(w, line, "you", termDesk);
+  entry.ok = r.ok;
   if (r.out === "\f") { log = []; }
   else if (r.out) log.push({ kind: r.ok ? "out" : "err", text: r.out, who: "you" });
+  const c = coach(line.trim(), r, steps);
+  if (c) log.push({ kind: "coach", text: c.text, good: c.good, who: "you" });
   if (r.desk !== undefined) termDesk = r.desk;
   focusPlace = placeFor(line, "you");
   afterChange();
@@ -550,22 +555,72 @@ function termHtml(readOnly = false): string {
   const lines = log.map((l) => {
     if (l.kind === "cmd") return `<div class="t-cmd ${l.who === "albert" ? "t-friend" : ""}">${l.who === "albert" ? "<span class=\"who\">albert's laptop $</span>" : "<span class=\"who\">$</span>"} ${hl(l.text)}</div>`;
     if (l.kind === "note") return `<div class="t-note">${esc(l.text)}</div>`;
+    if (l.kind === "coach") return `<div class="t-coach ${l.good ? "is-good" : "is-hint"}">${l.text}</div>`;
     return `<div class="t-${l.kind}">${esc(l.text)}</div>`;
   }).join("");
   return `<div class="term-box">
     <div class="term__out">${lines || `<div class="t-note">Type a command and press Enter. <b>git status</b> always tells you where things stand.</div>`}</div>
     ${readOnly ? "" : `<form class="term__in" data-term><label><span class="term__prompt">${prompt()}</span>
-      <input type="text" name="cmd" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="command" /></label></form>`}
+      <input type="text" name="cmd" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="command" placeholder="type a git command, then Enter" /></label></form>`}
   </div>`;
 }
 
+/* the commands this step needs, in plain words, and which ones you've done */
+const sameCmd = (a: string, b: string) => {
+  const ta = a.trim().split(/\s+/), tb = b.trim().split(/\s+/);
+  const deep = /^(remote|worktree|pr)$/.test(tb[1] ?? "");
+  return ta[0] === tb[0] && ta[1] === tb[1] && (!deep || ta[2] === tb[2]);
+};
+function taskSteps(): { cmd: string; words: string; done: boolean }[] {
+  const mine = (beat().acts ?? []).filter((a) => !isWatch(a));
+  const typed = log.filter((l) => l.kind === "cmd" && l.who === "you" && l.ok);
+  let from = 0;
+  return hintCmds(mine).map((cmd) => {
+    const e = explain(cmd);
+    const words = e?.parts[1]?.means ?? "run it";
+    const at = typed.findIndex((l, i) => i >= from && sameCmd(l.text, cmd));
+    const done = beatDone || at >= 0;
+    if (at >= 0) from = at + 1;
+    return { cmd, words: words.charAt(0).toUpperCase() + words.slice(1), done };
+  });
+}
+/* a plain-words reply to what you just typed: the step it counted as, or what
+ * an error means and what to try instead */
+function coach(line: string, r: { ok: boolean; out: string }, before: { cmd: string; words: string; done: boolean }[]): { text: string; good: boolean } | null {
+  const next = before.find((s) => !s.done);
+  const after = taskSteps();
+  const nextAfter = after.find((s) => !s.done);
+  if (r.ok) {
+    if (beat().done(w)) return { text: "✓ That's the step done. Press Next when you're ready.", good: true };
+    if (next && sameCmd(line, next.cmd)) {
+      const n = before.indexOf(next) + 1;
+      return { text: `✓ That's step ${n}.${nextAfter ? ` Next: ${esc(nextAfter.words.toLowerCase())}.` : ""}`, good: true };
+    }
+    return null; // a look around (git status, git log): no comment needed
+  }
+  const o = r.out;
+  const why = /not a git repository/.test(o) ? "This folder isn't a repository yet. Run <code>git init</code> first."
+    : /pathspec|did not match any/.test(o) ? "There's no file or name like that here. Check the spelling; <code>git status</code> lists your files."
+    : /nothing to commit|no changes added/.test(o) ? "Nothing is staged yet. Stage your changes with <code>git add</code> first."
+    : /Add a message with -m|empty commit message/.test(o) ? "A commit needs a message: <code>git commit -m \"what changed\"</code>."
+    : /is not a git command|command not found/.test(o) ? "That command doesn't exist. A typo, maybe?"
+    : /\[rejected\]/.test(o) ? "GitHub has commits you don't have yet. Pull them first."
+    : /no upstream branch/.test(o) ? "This branch isn't paired with GitHub yet. Push it once with <code>-u origin &lt;branch&gt;</code>."
+    : /would be overwritten/.test(o) ? "You have unsaved changes in the way. Commit them, or throw them away with <code>git restore</code>."
+    : /already exists/.test(o) ? "That name is taken already."
+    : "Git didn't accept that.";
+  return { text: `✗ ${why}${next ? ` The step needs: ${esc(next.words.toLowerCase())}.` : ""}`, good: false };
+}
 function commandHtml(mine: Act[]): string {
-  const cmds = hintCmds(mine);
-  return `${termHtml()}
-    <details class="hint-cmds"><summary>Not sure what to type?</summary>
-      <p>Type ${cmds.length > 1 ? "these, one at a time" : "this"}:</p>
-      ${cmds.map((c) => `<div class="cmd-row"><code class="cmd-hint">${hl(c)}</code>${explainHtml(c)}</div>`).join("")}
-    </details>`;
+  void mine;
+  const steps = taskSteps();
+  const nextI = steps.findIndex((s) => !s.done);
+  return `<ol class="task">${steps.map((s, i) => `<li class="${s.done ? "is-done" : i === nextI ? "is-next" : ""}">
+      <span class="task__box" aria-hidden="true">${s.done ? "✓" : i + 1}</span>
+      <span class="task__words">${esc(s.words)}</span>
+      <details class="task__peek"><summary>show the command</summary><div class="cmd-row"><code class="cmd-hint">${hl(s.cmd)}</code>${explainHtml(s.cmd)}</div></details>
+    </li>`).join("")}</ol>
+    ${termHtml()}`;
 }
 
 /* AI mode: there is no real AI on this page (running one costs money and
@@ -787,7 +842,7 @@ function slideHere(before: Map<string, { x: number; y: number; at: string; text:
     tie?.animate([{ opacity: 0 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }], { duration: 650 + wait });
     // a straight, even glide along the line to the commit it now points at
     t.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
-      { duration: 650, delay: wait, fill: "backwards", easing: "cubic-bezier(.4,0,.2,1)" });
+      { duration: 480, delay: wait, fill: "backwards", easing: "cubic-bezier(.4,0,.2,1)" });
     // and on the way, the old words are backspaced and the new ones typed in
     if (was.text !== word) { label.textContent = was.text; setTimeout(() => typeOver(label, was.text, word, 900), wait); }
   });
@@ -1074,7 +1129,7 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   drawn.set(id, seen);
   const gEdges = el("g", { class: "edges" }), gNodes = el("g", { class: "nodes" }), gLabels = el("g", { class: "labels" });
   svg.append(gEdges, gNodes, gLabels);
-  const ink = (p: SVGPathElement, key: string, dur = 520) => {
+  const ink = (p: SVGPathElement, key: string, dur = 400) => {
     if (frame) return;
     if (instant || seen.has(key)) { seen.add(key); return; }
     seen.add(key);
@@ -1110,7 +1165,7 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
     }
     if (c.parents.length > 1) g.append(el("path", { d: circlePath(cx, cy, 5, seed(cid) + 3), class: "node__merge", stroke: col }));
     gNodes.append(g);
-    ink(node, `n:${cid}`, 420);
+    ink(node, `n:${cid}`, 340);
   }
   for (const [cid, arr] of labels) {
     if (!have.has(cid)) continue;
@@ -1167,13 +1222,13 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
     const grew = !!had && [...placeCommits(w.repos[id])].some((c) => !had.has(c));
     host?.classList.remove("is-gliding");
     drawStrip(id, cols);
-    if (!instant) slideHere(from, id, grew ? 520 : 0);
+    if (!instant) slideHere(from, id, grew ? 380 : 0);
     syncScroll();
   };
   if (instant || prefersReduced || !host || !prev || !had || !w.repos[id]) return finish();
   const next = layoutOf(host, cols);
   if (Math.abs(next.scale - prev.scale) < 0.01 && Math.abs(next.col - prev.col) < 0.5) return finish();
-  const dur = 420, t0 = performance.now();
+  const dur = 320, t0 = performance.now();
   host.classList.add("is-gliding"); // no scrollbar flashing while it moves
   settleUntil = Math.max(settleUntil, t0 + dur);
   const ease = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -1250,7 +1305,7 @@ function fx(): HTMLElement { return $("#fx"); }
 /* a new commit: the packed files fly into the dot, the dot pops, the note floats up */
 function saved(target: SVGGElement, c: G.Commit, files: { path: string; rect: DOMRect }[], delay: number) {
   const to = centre(target.getBoundingClientRect());
-  const fly = files.length ? 520 : 0;
+  const fly = files.length ? 420 : 0;
   files.slice(0, 4).forEach((f, i) => {
     const chip = document.createElement("span");
     chip.className = "fx-file";
@@ -1305,7 +1360,7 @@ function fly(from: SVGGElement, to: SVGGElement, kind: "push" | "pull", lines: S
     { transform: "translate(-50%,-50%) scale(.6)" },
     { transform: `translate(calc(-50% + ${(b.x - a.x) * 0.5 + 18}px), calc(-50% + ${(b.y - a.y) * 0.5 - lift}px)) scale(1.15)`, offset: 0.5 },
     { transform: `translate(calc(-50% + ${b.x - a.x}px), calc(-50% + ${b.y - a.y}px)) scale(.9)` },
-  ], { duration: 560, delay, easing: "cubic-bezier(.45,0,.35,1)" }).finished.then(() => {
+  ], { duration: 460, delay, easing: "cubic-bezier(.45,0,.35,1)" }).finished.then(() => {
     dot.remove();
     lines.forEach((l) => { l.style.opacity = ""; void drawOn(l, { duration: 240 }); });
     to.style.opacity = "";
@@ -1488,6 +1543,22 @@ function boot() {
   });
   $("#lesson").addEventListener("animationend", (e) => (e.target as HTMLElement).classList.remove("shake"));
   $("#deck-btn").addEventListener("click", openDeck);
+  // fold-outs (more info, under the hood) open and close smoothly, no jumps
+  document.addEventListener("click", (e) => {
+    const sum = (e.target as HTMLElement).closest("summary");
+    const det = sum?.parentElement as HTMLDetailsElement | null;
+    if (!sum || !det || det.tagName !== "DETAILS" || prefersReduced) return;
+    e.preventDefault();
+    const from = det.getBoundingClientRect().height;
+    const closing = det.open;
+    if (!closing) det.open = true;
+    const to = closing ? sum.getBoundingClientRect().height : det.getBoundingClientRect().height;
+    det.style.overflow = "hidden";
+    det.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" }).finished.then(() => {
+      if (closing) det.open = false;
+      det.style.overflow = "";
+    });
+  });
   // explain: hover opens it (and it stays while the pointer is on the panel),
   // a click or tap pins it open, Escape or a click elsewhere closes it
   const xp = $("#xp");
