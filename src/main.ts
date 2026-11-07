@@ -187,6 +187,7 @@ function runSteps(act: Act, vals: Record<string, string>): boolean {
   const deskI = who === "you" ? (mode === "command" ? termDesk : beatDesk()) : 0;
   const before = snapshotFx();
   let ok = true;
+  const startKey = worldKey(w);
   for (const s of act.steps(w, vals)) {
     if (typeof s === "string") {
       log.push({ kind: "cmd", text: s, who, act: actN });
@@ -199,9 +200,26 @@ function runSteps(act: Act, vals: Record<string, string>): boolean {
       if (note) log.push({ kind: "note", text: note, who });
     }
   }
+  if (ok && worldKey(w) !== startKey) ranActs.add(act);
   afterChange();
   celebrate(before, ok, who);
   return ok;
+}
+
+/* an act you already ran in this step that would change nothing if pressed
+ * again shows as done, so a two-button step reads "1 done, now the next" */
+const ranActs = new Set<Act>();
+const worldKey = (x: World) => JSON.stringify([x.commits, x.repos, x.prs]);
+function spent(a: Act): boolean {
+  if (!ranActs.has(a) || a.pick) return false;
+  const t = G.clone(w);
+  const k = worldKey(t);
+  const deskI = beatDesk();
+  for (const s of a.steps(t, {})) {
+    if (typeof s !== "string") continue;
+    if (!exec(t, s, a.who ?? "you", deskI).ok) break;
+  }
+  return worldKey(t) === k;
 }
 
 function runTyped(line: string) {
@@ -262,6 +280,7 @@ let lastPlace: string | null = null;
 
 function arrive() {
   undoStack = [];
+  ranActs.clear();
   beatDone = false;
   lastPlace = null;
   delete w.vars.rejected; // a beat only counts a rejected push that happened during it
@@ -513,10 +532,13 @@ function doHtml(b: Beat): string {
 /* buttons mode looks like the tools people use: an editor's source control
  * panel for git actions, and a browser window for things done on GitHub */
 function buttonsHtml(mine: Act[], acts: Act[]): string {
-  const act = (a: Act) => `<div class="act">
+  const act = (a: Act) => {
+    const used = !beatDone && spent(a);
+    return `<div class="act">
       ${inputsHtml(a, acts.indexOf(a))}
-      <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go btn--ide"} ${beatDone ? "is-done" : ""}" data-run="${acts.indexOf(a)}" ${beatDone ? "disabled" : ""}>${beatDone ? '<span aria-hidden="true">✓</span> Done' : `${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}`}</button>
+      <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go btn--ide"} ${beatDone ? "is-done" : ""} ${used ? "is-used" : ""}" data-run="${acts.indexOf(a)}" ${beatDone || used ? "disabled" : ""}>${beatDone ? '<span aria-hidden="true">✓</span> Done' : used ? `<span aria-hidden="true">✓</span> ${esc(a.label)}` : `${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}`}</button>
     </div>`;
+  };
   const picker = mine.find((a) => a.pick === "commit");
   if (picker) return historyHtml(acts.indexOf(picker)) + statusHtml();
   const local = mine.filter((a) => a.look !== "github"), web = mine.filter((a) => a.look === "github");

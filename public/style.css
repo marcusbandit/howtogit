@@ -756,6 +756,7 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .tk-arg { color: #f1e9d8; }
 .cmd-n { float: right; padding-left: 10px; font-size: 12px; color: #a89c84; }
 .btn.is-done:disabled { opacity: 1; background: color-mix(in srgb, var(--ok) 12%, var(--card)); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 55%, transparent); box-shadow: none; }
+.btn.is-used:disabled { opacity: 1; background: transparent; color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); box-shadow: none; }
 
 /* command chips: light paper chips with deep ink colours in light mode, dark
    chips with bright colours in dark mode; the terminal stays dark in both */
