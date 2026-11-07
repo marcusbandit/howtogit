@@ -208,7 +208,7 @@ function runSteps(act, vals) {
         }
     }
     afterChange();
-    celebrate(before, ok);
+    celebrate(before, ok, who);
     return ok;
 }
 function runTyped(line) {
@@ -1287,7 +1287,7 @@ function snapshotFx() {
 }
 const nodeEl = (place, cid) => document.querySelector(`[data-strip="${place}"] [data-c="${cid}"]`);
 const centre = (r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
-function celebrate(before, ok) {
+function celebrate(before, ok, who = "you") {
     if (!ok) {
         const box = $("#lesson").querySelector(".do");
         box?.classList.add("shake");
@@ -1297,7 +1297,7 @@ function celebrate(before, ok) {
         return;
     const wait = Math.max(0, settleUntil - performance.now());
     if (wait > 0) {
-        setTimeout(() => celebrate(before, ok), wait + 20);
+        setTimeout(() => celebrate(before, ok, who), wait + 20);
         return;
     }
     requestAnimationFrame(() => {
@@ -1310,7 +1310,10 @@ function celebrate(before, ok) {
                 if (!target)
                     continue;
                 // came from another place: a dot travels from there to here
-                const from = Object.keys(before.have).find((o) => o !== id && before.have[o].has(cid) && nodeEl(o, cid));
+                // what lands on a laptop (clone, pull) always comes from GitHub; what
+                // lands on GitHub comes from whoever pushed it
+                const order = id === "github" ? [who, ...Object.keys(before.have)] : ["github"];
+                const from = order.find((o) => o !== id && before.have[o]?.has(cid) && nodeEl(o, cid));
                 // a place that just appeared slides in first; wait for it to settle
                 if (target.closest(".place.is-new"))
                     delay = Math.max(delay, 480);
