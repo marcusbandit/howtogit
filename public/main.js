@@ -835,9 +835,7 @@ function renderWorld() {
         else
             setPart(strip, `<p class="strip__empty">No version history yet.<br>Just files.</p>`);
         setPart(sec.querySelector(".place__prs"), id === "github" ? prsHtml() : "");
-        drawStrip(id, cols);
-        if (!instant)
-            slideHere(heres, id);
+        glideStrip(id, cols, heres);
     }
     // file state chips that changed get a little pop, so you see what moved
     root.querySelectorAll("[data-state-key]").forEach((chip) => {
@@ -995,23 +993,35 @@ function lanes(r) {
         walk(d.detached, 1, "?"); });
     return m;
 }
-function drawStrip(id, cols) {
+/* how big a strip is drawn and how far apart its commits sit: a short history
+ * is drawn big and spread out to fill the space beside the folder; as it grows
+ * it shrinks back to normal and only then scrolls */
+function layoutOf(host, cols) {
+    const n = Math.max(1, cols.length - 1);
+    const avail = Math.max(0, host.clientWidth - 16); // a little slack so rounding never adds a scrollbar
+    const scale = Math.max(1, Math.min(1.6, avail / (X0 * 2 + 30 + n * COL)));
+    const col = cols.length > 1 ? Math.max(COL, Math.min(COL * 2.4, (avail / scale - X0 * 2 - 30) / n)) : COL;
+    return { scale, col };
+}
+/* frame: an in-between drawing while the layout glides from the old spacing
+ * to the new one; it draws only commits that were already there, inks nothing */
+function drawStrip(id, cols, frame) {
     const r = w.repos[id];
     const host = document.querySelector(`[data-strip="${id}"]`);
     const svg = host?.querySelector("svg");
     if (!r || !svg)
         return;
-    const have = placeCommits(r);
+    const all = placeCommits(r);
+    const have = frame ? new Set([...all].filter((c) => frame.only.has(c))) : all;
     const L = lanes(r);
     const maxLane = Math.max(0, ...[...L.values()].map((v) => v.lane));
     const laneY = (l) => 26 + (maxLane - l) * 44;
     const baseY = laneY(0);
-    // a short history is drawn big and spread out to fill the space beside the
-    // folder; as it grows it shrinks back to normal and only then scrolls
-    const n = Math.max(1, cols.length - 1);
-    const avail = Math.max(0, host.clientWidth - 16); // a little slack so rounding never adds a scrollbar
-    const scale = Math.max(1, Math.min(1.6, avail / (X0 * 2 + 30 + n * COL)));
-    const col = cols.length > 1 ? Math.max(COL, Math.min(COL * 2.4, (avail / scale - X0 * 2 - 30) / n)) : COL;
+    const { scale, col } = frame ?? layoutOf(host, cols);
+    if (!frame) {
+        lastLayout.set(id, { scale, col });
+        lastHave.set(id, all);
+    }
     const x = (cid) => X0 + cols.indexOf(cid) * col;
     // labels under each column: you-are-here markers, then branch names
     const labels = new Map();
@@ -1025,6 +1035,14 @@ function drawStrip(id, cols) {
                         : (r.desks.length > 1 ? `desk ${i + 1} is here` : id === "albert" ? "Albert is here" : "you are here"), color: "var(--ink)", here: true, desk: i });
         });
     Object.entries(r.branches).sort(([a], [b]) => (a === "main" ? -1 : b === "main" ? 1 : 0)).forEach(([b, cid]) => push(cid, { text: b, color: colorOf(b) }));
+    // mid-glide, labels stay where they were before the change and move with
+    // their commit; they reach their new spots once the glide lands
+    if (frame) {
+        labels.clear();
+        (lastLabels.get(id) ?? new Map()).forEach((v, k) => labels.set(k, v));
+    }
+    else
+        lastLabels.set(id, new Map(labels));
     const maxLabels = Math.max(1, ...[...labels.values()].map((a) => a.length));
     const H = baseY + 34 + maxLabels * 21;
     const W = X0 * 2 + 30 + Math.max(0, cols.length - 1) * col;
@@ -1038,6 +1056,8 @@ function drawStrip(id, cols) {
     const gEdges = el("g", { class: "edges" }), gNodes = el("g", { class: "nodes" }), gLabels = el("g", { class: "labels" });
     svg.append(gEdges, gNodes, gLabels);
     const ink = (p, key, dur = 520) => {
+        if (frame)
+            return;
         if (instant || seen.has(key)) {
             seen.add(key);
             return;
@@ -1081,6 +1101,8 @@ function drawStrip(id, cols) {
         ink(node, `n:${cid}`, 420);
     }
     for (const [cid, arr] of labels) {
+        if (!have.has(cid))
+            continue;
         const cx = x(cid);
         const top = laneY(L.get(cid)?.lane ?? 0);
         gLabels.append(el("path", { d: linePath(cx, top + 14, cx, baseY + 26, seed(cid)), class: "label__tie", "data-tie": cid }));
@@ -1102,6 +1124,8 @@ function drawStrip(id, cols) {
             }
             else
                 gLabels.append(tx);
+            if (frame)
+                return;
             const k = `l:${cid}:${lb.text}`;
             // the plain label turning into the git word gets a little bounce
             const swapped = lb.here && /HEAD/.test(lb.text) && !seen.has(k) && [...seen].some((x) => x.startsWith(`l:${cid}:`) && /is here$/.test(x));
@@ -1110,6 +1134,37 @@ function drawStrip(id, cols) {
             seen.add(k);
         });
     }
+}
+/* when a change re-spaces a strip (a new commit makes room), everything that
+ * was already there glides to its new spot; new commits are inked once it lands */
+const lastLayout = new Map();
+const lastHave = new Map();
+const lastLabels = new Map();
+const tweens = new Map();
+let settleUntil = 0;
+function glideStrip(id, cols, heres) {
+    const host = document.querySelector(`[data-strip="${id}"]`);
+    const prev = lastLayout.get(id), had = lastHave.get(id);
+    window.cancelAnimationFrame(tweens.get(id) ?? 0);
+    const finish = () => { host?.classList.remove("is-gliding"); drawStrip(id, cols); if (!instant)
+        slideHere(heres, id); syncScroll(); };
+    if (instant || prefersReduced || !host || !prev || !had || !w.repos[id])
+        return finish();
+    const next = layoutOf(host, cols);
+    if (Math.abs(next.scale - prev.scale) < 0.01 && Math.abs(next.col - prev.col) < 0.5)
+        return finish();
+    const dur = 420, t0 = performance.now();
+    host.classList.add("is-gliding"); // no scrollbar flashing while it moves
+    settleUntil = Math.max(settleUntil, t0 + dur);
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+    const step = (now) => {
+        const k = ease(Math.min(1, (now - t0) / dur));
+        if (k >= 1)
+            return finish();
+        drawStrip(id, cols, { scale: prev.scale + (next.scale - prev.scale) * k, col: prev.col + (next.col - prev.col) * k, only: had });
+        tweens.set(id, window.requestAnimationFrame(step));
+    };
+    tweens.set(id, window.requestAnimationFrame(step));
 }
 /* keep every strip scrolled together, and pinned to the newest versions */
 function syncScroll() {
@@ -1139,6 +1194,11 @@ function celebrate(before, ok) {
     }
     if (prefersReduced)
         return;
+    const wait = Math.max(0, settleUntil - performance.now());
+    if (wait > 0) {
+        setTimeout(() => celebrate(before, ok), wait + 20);
+        return;
+    }
     requestAnimationFrame(() => {
         let delay = 0;
         for (const [id, r] of Object.entries(w.repos)) {

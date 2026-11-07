@@ -893,3 +893,4 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 /* the HEAD marker: a hand-drawn ink arrowhead over the word */
 .here__arrow { fill: var(--ink); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
 .here { transform-box: fill-box; transform-origin: center; }
+.strip.is-gliding { overflow-x: hidden; }
