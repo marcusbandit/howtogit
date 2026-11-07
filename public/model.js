@@ -147,8 +147,14 @@ export function merge3(base, ours, theirs, labels) {
         else if (eq(oc, bc))
             out.push(...ac);
         else {
+            // lines both sides changed the same way stay outside the markers, as in git
+            let pre = 0, post = 0;
+            while (pre < ac.length && pre < bc.length && ac[pre] === bc[pre])
+                pre++;
+            while (post < ac.length - pre && post < bc.length - pre && ac[ac.length - 1 - post] === bc[bc.length - 1 - post])
+                post++;
             conflict = true;
-            out.push(`<<<<<<< ${labels[0]}`, ...ac, "=======", ...bc, `>>>>>>> ${labels[1]}`);
+            out.push(...ac.slice(0, pre), `<<<<<<< ${labels[0]}`, ...ac.slice(pre, ac.length - post), "=======", ...bc.slice(pre, bc.length - post), `>>>>>>> ${labels[1]}`, ...ac.slice(ac.length - post));
         }
     };
     for (;;) {
@@ -550,7 +556,8 @@ export function pull(w, r, d, author) {
     if (!up)
         throw new GitError(`There is no tracking information for the current branch.\nTry: git pull ${r.remote?.name ?? "origin"} ${d.branch}`);
     const f = fetch(w, r);
-    const m = merge(w, r, d, up, author, up);
+    // git labels a pulled conflict with the other side's commit id
+    const m = merge(w, r, d, up, author, r.tracking[up]);
     return [f, m].filter(Boolean).join("\n");
 }
 export function cloneTo(w, id, label, url, path) {
