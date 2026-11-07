@@ -108,8 +108,15 @@ export function explain(cmd: string): Explained | null {
       A("git switch -c new-idea", "make a new branch and move onto it");
       break;
     case "checkout":
-      P("checkout", "the older command for moving between branches (git switch is newer)");
-      rest.forEach((x) => P(x, "where to go"));
+      P("checkout", "move to another branch or commit; your files change to match it");
+      for (let i = 0; i < rest.length; i++) {
+        if (rest[i] === "-b") { P("-b", "create the branch first, then move onto it."); P(rest[i + 1] ?? "", "the new branch's name", "value"); i++; }
+        else if (/^[0-9a-f]{5,}$/.test(rest[i])) P(rest[i], "a commit ID: look at that old version (git calls this a detached HEAD: you're not on any branch)", "value");
+        else P(rest[i], "the branch to move to");
+      }
+      if (rest.includes("-b")) { A("git switch -c new-idea", "the newer command for the same thing"); A("git branch new-idea", "make the branch but stay where you are"); }
+      else if (rest.some((x) => /^[0-9a-f]{5,}$/.test(x))) { A("git switch --detach <id>", "the newer command for the same thing"); A("git checkout main", "go back to the newest commit on main"); }
+      else { A("git switch main", "the newer command for the same thing"); A("git checkout -b new-idea", "make a new branch and move onto it"); }
       break;
     case "branch":
       P("branch", "list, make or delete branches");
