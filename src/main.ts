@@ -128,6 +128,7 @@ function goto(c: number, b: number, opts: { replay?: boolean } = {}) {
   maxReached = Math.max(maxReached, c);
   beatDone = false;
   lastPlace = null;
+  delete w.vars.rejected; // a beat only counts a rejected push that happened during it
   termDesk = beatDesk();
   log = [];
   if (beat().kind === "next") beatDone = true;
@@ -741,7 +742,7 @@ function renderResolver(text: string, readOnly: boolean) {
   box.querySelectorAll<HTMLButtonElement>("[data-pick]").forEach((b) => b.addEventListener("click", () => {
     const ta = $<HTMLTextAreaElement>("#editor-text");
     const keep = b.dataset.pick === "mine" ? m[1] : b.dataset.pick === "theirs" ? m[2] : m[1] + m[2];
-    ta.value = ta.value.replace(m[0], keep);
+    ta.value = ta.value.replace(m[0], () => keep);
     saveEditor(true);
   }));
 }

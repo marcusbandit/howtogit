@@ -91,7 +91,8 @@ function log(w, r, d, oneline) {
 function diff(w, r, d, staged) {
     const head = G.treeOf(w, G.headId(r, d));
     const [A, B] = staged ? [head, d.index] : [d.index, d.work];
-    const files = [...new Set([...Object.keys(A), ...Object.keys(B)])].filter((p) => A[p] !== B[p]);
+    // like git diff: untracked files (not in the index) never show up
+    const files = [...new Set([...Object.keys(A), ...Object.keys(B)])].filter((p) => A[p] !== B[p] && (staged || d.index[p] !== undefined));
     return files.map((p) => `--- a/${p}\n+++ b/${p}\n` +
         G.lineDiff(A[p], B[p]).filter((l) => l.t !== " ").map((l) => l.t + l.s).join("\n")).join("\n");
 }
@@ -155,7 +156,8 @@ export function run(w, ctx, line) {
                 const staged = flag(a, "--staged", "-S");
                 if (!a.length)
                     throw new G.GitError("fatal: you must specify path(s) to restore");
-                const files = a.includes(".") ? Object.keys({ ...d.work, ...d.index }) : a;
+                // "." means every file git knows about; untracked files are left alone
+                const files = a.includes(".") ? Object.keys({ ...d.work, ...d.index }).filter((p) => d.index[p] !== undefined || G.treeOf(w, G.headId(r, d))[p] !== undefined) : a;
                 files.forEach((p) => G.restore(w, r, d, p, staged));
                 return { ok: true, out: "" };
             }
@@ -168,7 +170,7 @@ export function run(w, ctx, line) {
                     return { ok: true, out: G.switchTo(w, r, d, a[0] ?? "", { detach: true }) };
                 if (!a[0])
                     throw new G.GitError("fatal: missing branch name; try: git switch main");
-                if (!r.branches[a[0]] && !r.tracking[`origin/${a[0]}`] && G.resolve(w, r, a[0]))
+                if (!r.branches[a[0]] && !r.tracking[`origin/${a[0]}`] && G.resolve(w, r, a[0], d))
                     throw new G.GitError(`fatal: a branch is expected, got commit '${a[0]}'\nhint: to look at an old commit use: git switch --detach ${a[0]}`);
                 return { ok: true, out: G.switchTo(w, r, d, a[0]) };
             }
@@ -186,7 +188,7 @@ export function run(w, ctx, line) {
                     throw new G.GitError("fatal: missing branch name");
                 if (r.branches[a[0]] || r.tracking[`origin/${a[0]}`])
                     return { ok: true, out: G.switchTo(w, r, d, a[0]) };
-                if (G.resolve(w, r, a[0]))
+                if (G.resolve(w, r, a[0], d))
                     return { ok: true, out: G.switchTo(w, r, d, a[0], { detach: true }) };
                 if (d.work[a[0]] !== undefined) {
                     G.restore(w, r, d, a[0]);
@@ -232,7 +234,7 @@ export function run(w, ctx, line) {
                 const nb = take(a, "-b");
                 if (!a[0])
                     throw new G.GitError("usage: git worktree add <folder> -b <new-branch>");
-                return { ok: true, out: G.worktreeAdd(w, r, a[0], nb, a[1]) };
+                return { ok: true, out: G.worktreeAdd(w, r, d, a[0], nb, a[1]) };
             }
             case "help":
             case "--help":

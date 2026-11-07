@@ -30,7 +30,7 @@ export interface Desk {
   detached: string | null;
   work: Files; // the files as they are right now
   index: Files; // the staging area: what the next commit will contain
-  merging: null | { theirs: string; msg: string; unmerged: string[] };
+  merging: null | { theirs: string; msg: string; unmerged: string[]; before: { work: Files; index: Files } };
 }
 
 export interface Repo {
@@ -92,14 +92,10 @@ export const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
 /* ---------------------------------------------------------------- basics */
 
 function hash(s: string): string {
-  // FNV-1a, twice with different seeds, as 7 hex chars. Stable per content.
-  let a = 0x811c9dc5, b = 0x01000193 ^ 0x5bd1e995;
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    a = Math.imul(a ^ c, 0x01000193);
-    b = Math.imul(b ^ c, 0x5bd1e995);
-  }
-  return ((a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16)).slice(0, 7);
+  // FNV-1a as 7 hex chars: stable per content, short like the ids git shows
+  let a = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) a = Math.imul(a ^ s.charCodeAt(i), 0x01000193);
+  return (a >>> 0).toString(16).padStart(8, "0").slice(0, 7);
 }
 
 export const short = (id: string | undefined | null) => (id ? id.slice(0, 7) : "");
@@ -265,7 +261,8 @@ function mergeTrees(w: World, baseId: string | undefined, ours: string, theirs: 
 
 function newCommit(w: World, msg: string, parents: string[], tree: Files, author: string): string {
   w.counter++;
-  const id = hash(JSON.stringify([msg, parents, tree, author, w.counter]));
+  let id = hash(JSON.stringify([msg, parents, tree, author, w.counter]));
+  for (let salt = 1; w.commits[id]; salt++) id = hash(JSON.stringify([msg, parents, tree, author, w.counter, salt]));
   w.commits[id] = { id, msg, parents, tree: { ...tree }, author, n: w.counter };
   return id;
 }
@@ -368,15 +365,16 @@ function deskUsing(r: Repo, branch: string, except: Desk) {
 export function switchTo(w: World, r: Repo, d: Desk, name: string, opts: { create?: boolean; detach?: boolean; start?: string } = {}): string {
   if (d.merging) throw new GitError("error: you need to finish the merge first (fix the conflict, then commit).");
   if (opts.detach) {
-    const id = resolve(w, r, name);
+    const id = resolve(w, r, name, d);
     if (!id) throw new GitError(`fatal: invalid reference: ${name}`);
     moveDesk(w, r, d, id);
     d.detached = id;
+    d.branch = null;
     return `HEAD is now at ${short(id)} ${w.commits[id].msg}\nYou are looking at an old version. Switch back to a branch to keep working.`;
   }
   if (opts.create) {
     if (r.branches[name]) throw new GitError(`fatal: a branch named '${name}' already exists`);
-    const at = opts.start ? resolve(w, r, opts.start) : headId(r, d);
+    const at = opts.start ? resolve(w, r, opts.start, d) : headId(r, d);
     if (!at) throw new GitError("fatal: you need at least one commit before you can make a branch");
     if (!/^[\w./-]+$/.test(name)) throw new GitError(`fatal: '${name}' is not a valid branch name`);
     moveDesk(w, r, d, at);
@@ -400,10 +398,10 @@ export function switchTo(w: World, r: Repo, d: Desk, name: string, opts: { creat
   return `Switched to branch '${name}'`;
 }
 
-export function resolve(w: World, r: Repo, ref: string): string | undefined {
+export function resolve(w: World, r: Repo, ref: string, d?: Desk): string | undefined {
+  if (ref === "HEAD" || ref === "@") return d ? headId(r, d) : undefined;
   if (r.branches[ref]) return r.branches[ref];
   if (r.tracking[ref]) return r.tracking[ref];
-  if (ref === "HEAD") return undefined;
   if (/^[0-9a-f]{4,}$/i.test(ref)) {
     const have = known_(w, r);
     const known = Object.keys(w.commits).filter((id) => id.startsWith(ref.toLowerCase()) && have.has(id));
@@ -504,14 +502,13 @@ export function fetch(w: World, r: Repo): string {
 export function merge(w: World, r: Repo, d: Desk, ref: string, author: string, label?: string): string {
   if (ref === "--abort") {
     if (!d.merging) throw new GitError("fatal: There is no merge to abort (MERGE_HEAD missing).");
-    const tree = treeOf(w, headId(r, d));
-    d.work = { ...tree };
-    d.index = { ...tree };
+    d.work = { ...d.merging.before.work };
+    d.index = { ...d.merging.before.index };
     d.merging = null;
     return "";
   }
   if (d.merging) throw new GitError("error: Merging is not possible because you have unmerged files.\nhint: Fix them up in the work tree, then commit, or use 'git merge --abort'.");
-  const theirs = resolve(w, r, ref);
+  const theirs = resolve(w, r, ref, d);
   if (!theirs) throw new GitError(`merge: ${ref} - not something we can merge`);
   const mine = headId(r, d);
   if (!mine || isAncestor(w, theirs, mine)) return "Already up to date.";
@@ -534,21 +531,24 @@ export function merge(w: World, r: Repo, d: Desk, ref: string, author: string, l
   const msg = `Merge ${ref.includes("/") ? "remote-tracking branch" : "branch"} '${ref}'`;
   if (!conflicts.length) {
     const id = newCommit(w, msg, [mine, theirs], tree, author);
-    r.branches[d.branch!] = id;
+    if (d.detached) d.detached = id; else r.branches[d.branch!] = id;
     const oldWork = d.work, oldIndex = d.index;
     d.work = { ...tree };
     d.index = { ...tree };
     keep(d.work, oldWork);
     keep(d.index, oldIndex);
-    return `Merge made by the 'ort' strategy.\n[${d.branch} ${short(id)}] ${msg}`;
+    return `Merge made by the 'ort' strategy.\n[${d.branch ?? "detached HEAD"} ${short(id)}] ${msg}`;
   }
   const ours = treeOf(w, mine);
+  const before = { work: { ...d.work }, index: { ...d.index } };
   d.work = { ...tree };
   d.index = { ...tree };
+  keep(d.work, before.work);
+  keep(d.index, before.index);
   // the conflicted file sits in the work tree with markers; the index keeps ours
   // until you `git add` the fixed file
   for (const p of conflicts) d.index[p] = ours[p] ?? "";
-  d.merging = { theirs, msg, unmerged: [...conflicts] };
+  d.merging = { theirs, msg, unmerged: [...conflicts], before };
   return conflicts.map((p) => `Auto-merging ${p}\nCONFLICT (content): Merge conflict in ${p}`).join("\n") +
     "\nAutomatic merge failed; fix conflicts and then commit the result.";
 }
@@ -580,9 +580,10 @@ export function cloneTo(w: World, id: string, label: string, url: string, path: 
   return `Cloning into 'my-recipe'...\nReceiving objects: 100% (${ancestors(w, gh.branches.main).size} commits), done.`;
 }
 
-export function worktreeAdd(w: World, r: Repo, path: string, newBranch: string | undefined, start: string | undefined): string {
-  if (r.desks.some((d) => d.path.endsWith(path.replace(/^\.\.\//, "")))) throw new GitError(`fatal: '${path}' already exists`);
-  const base = start ? resolve(w, r, start) : headId(r, r.desks[0]);
+export function worktreeAdd(w: World, r: Repo, from: Desk, path: string, newBranch: string | undefined, start: string | undefined): string {
+  const full = "~/" + path.replace(/^\.\.\//, "").replace(/^~\//, "").replace(/\/$/, "");
+  if (r.desks.some((d) => d.path === full)) throw new GitError(`fatal: '${path}' already exists`);
+  const base = start ? resolve(w, r, start, from) : headId(r, from);
   if (!base) throw new GitError(`fatal: invalid reference: ${start}`);
   let br = newBranch;
   if (br) {
@@ -593,9 +594,9 @@ export function worktreeAdd(w: World, r: Repo, path: string, newBranch: string |
     if (br && r.desks.some((x) => x.branch === br && !x.detached)) throw new GitError(`fatal: '${br}' is already checked out`);
   }
   const tree = treeOf(w, base);
-  const full = "~/" + path.replace(/^\.\.\//, "").replace(/^~\//, "");
   r.desks.push({ path: full, branch: br ?? null, detached: br ? null : base, work: { ...tree }, index: { ...tree }, merging: null });
-  return `Preparing worktree (new branch '${br}')\nHEAD is now at ${short(base)} ${w.commits[base].msg}`;
+  const how = newBranch ? `new branch '${br}'` : br ? `checking out '${br}'` : `detached HEAD ${short(base)}`;
+  return `Preparing worktree (${how})\nHEAD is now at ${short(base)} ${w.commits[base].msg}`;
 }
 
 /* ------------------------------------------------------------ GitHub PRs */
