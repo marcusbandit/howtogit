@@ -12,7 +12,7 @@
 import * as G from "./model.js";
 import { chapters, MAIN_FILE } from "./story.js";
 import { exec, replayTo } from "./engine.js";
-import { showIntro, introSeen } from "./intro.js";
+import { showIntro, introSeen, whyGithub } from "./intro.js";
 import { circlePath, linePath, smooth, drawOn, el, prefersReduced } from "./sketch.js";
 const $ = (s) => document.querySelector(s);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -605,7 +605,7 @@ function headHtml(id) {
                 badge = `<span class="badge badge--ok">same as GitHub</span>`;
         }
     }
-    return `<span class="ico ${id === "github" ? "ico--cloud" : "ico--laptop"}"></span><h3>${title}</h3><span class="place__sub">${sub}</span>${badge}`;
+    return `<span class="ico ${id === "github" ? "ico--cloud" : "ico--laptop"}"></span><h3>${id === "github" ? whyGithub() : title}</h3><span class="place__sub">${sub}</span>${badge}`;
 }
 function leftHtml(id) {
     if (id === "github")
@@ -1078,6 +1078,13 @@ function boot() {
     });
     $("#lesson").addEventListener("animationend", (e) => e.target.classList.remove("shake"));
     $("#deck-btn").addEventListener("click", openDeck);
+    // the "why GitHub?" note opens on tap too (phones have no hover), and closes on the next tap anywhere
+    document.addEventListener("click", (e) => {
+        const why = e.target.closest(".why");
+        document.querySelectorAll(".why.is-open").forEach((x) => { if (x !== why)
+            x.classList.remove("is-open"); });
+        why?.classList.toggle("is-open");
+    });
     const dlg = $("#editor");
     dlg.addEventListener("close", () => {
         if (dlg.returnValue === "save")

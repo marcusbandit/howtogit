@@ -10,6 +10,10 @@
 import { drawOn, el, linePath, circlePath, prefersReduced } from "./sketch.js";
 
 export type Mode = "buttons" | "command" | "ai";
+
+/* a quiet note for people who know there are other hosts: it only appears on
+ * hover or focus, never in the way of someone who doesn't wonder */
+export const whyGithub = (label = "GitHub") => `<span class="why" tabindex="0">${label}<span class="why__tip" role="tooltip"><b>Why GitHub?</b> It's the most used place to keep git projects online, so it's the one you'll meet most. GitLab, Bitbucket and Codeberg work the same way: same git, a different website. We show GitHub to keep things simple.</span></span>`;
 const SEEN = "htg-intro-seen";
 
 export const introSeen = (): boolean => {
@@ -44,15 +48,43 @@ export function showIntro(mode: Mode, onStart: (mode: Mode) => void) {
           ${opt("command", "Commands", "Type real git commands", mode)}
           ${opt("ai", "An AI", "Ask in plain words", mode)}
         </div>
-        <p class="intro__hint">You can switch any time.</p>
+        <div class="preview" data-show="${mode}" aria-hidden="true">
+          <div class="preview__pane preview__pane--buttons">
+            <div class="pv-app">
+              <p class="pv-app__bar"><span></span><span></span><span></span> Source control</p>
+              <p class="pv-app__file"><i>M</i> report.md</p>
+              <p class="pv-app__msg">First version</p>
+              <span class="pv-app__btn">✓ Commit</span>
+              <span class="pv-cursor"></span>
+            </div>
+          </div>
+          <div class="preview__pane preview__pane--command">
+            <div class="pv-term"><p><b>~/my-recipe $</b> <span class="pv-type">git commit -m "First version"</span><span class="pv-caret"></span></p>
+              <p class="pv-out">[main 3fa9c21] First version</p></div>
+          </div>
+          <div class="preview__pane preview__pane--ai">
+            <div class="pv-chat">
+              <p class="pv-me">save my work with a short note</p>
+              <p class="pv-bot"><small>Assistant</small>I'll run <code>git commit -m "First version"</code> <span class="pv-yes">Yes, run it</span></p>
+            </div>
+          </div>
+        </div>
+        <p class="intro__hint">Same git underneath. You can switch any time.</p>
       </div>
       <button type="button" class="btn btn--go btn--big intro__start">Start <span aria-hidden="true">→</span></button>
-      <button type="button" class="intro__replay">↻ play the animation again</button>
     </div>`;
   let picked = mode;
   root.querySelectorAll<HTMLButtonElement>("[data-pick-mode]").forEach((b) => b.addEventListener("click", () => {
     picked = b.dataset.pickMode as Mode;
     root.querySelectorAll("[data-pick-mode]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+    const pv = root.querySelector<HTMLElement>(".preview")!;
+    pv.dataset.from = pv.dataset.show;
+    pv.dataset.show = picked;
+    // restart the little demo in the pane that just came in
+    const pane = pv.querySelector<HTMLElement>(`.preview__pane--${picked}`)!;
+    pane.classList.remove("is-playing");
+    void pane.offsetWidth;
+    pane.classList.add("is-playing");
   }));
   root.querySelector(".intro__start")!.addEventListener("click", () => {
     try { localStorage.setItem(SEEN, "1"); } catch { /* private mode */ }
@@ -64,8 +96,8 @@ export function showIntro(mode: Mode, onStart: (mode: Mode) => void) {
       onStart(picked);
     }, prefersReduced ? 0 : 280);
   });
-  root.querySelector(".intro__replay")!.addEventListener("click", () => play(root));
   play(root);
+  root.querySelector(`.preview__pane--${mode}`)!.classList.add("is-playing");
   (root.querySelector(".intro__start") as HTMLButtonElement).focus({ preventScroll: true });
 }
 
@@ -155,7 +187,7 @@ async function play(root: HTMLElement) {
   say(3);
   const cloud = document.createElement("span");
   cloud.className = "intro__cloud";
-  cloud.textContent = "GitHub";
+  cloud.innerHTML = whyGithub();
   cloud.setAttribute("style", P(505, 34));
   files.append(cloud);
   cloud.animate([{ opacity: 0, transform: "translate(-50%,-30%)" }, { opacity: 1, transform: "translate(-50%,-50%)" }], { duration: 380, fill: "both", easing: "ease-out" });
@@ -173,4 +205,18 @@ async function play(root: HTMLElement) {
   await wait(1100);
   if (me !== run) return;
   root.querySelector(".intro__start")!.classList.add("is-ready");
+  // hold the finished picture for a while, then play it again for anyone who
+  // missed it. While someone is reading the GitHub note, the clock stops.
+  const cl = root.querySelector<HTMLElement>(".intro__cloud");
+  for (let held = 0; held < 7000; held += 200) {
+    await wait(200);
+    if (me !== run || root.hidden) return;
+    if (cl && (cl.matches(":hover") || cl.querySelector(".why.is-open") || cl.contains(document.activeElement))) held = Math.min(held, 4000);
+  }
+  if (me !== run || root.hidden || prefersReduced) return;
+  root.querySelector<HTMLElement>(".intro__stage")!.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 350, fill: "forwards" }).finished.then(() => {
+    if (me !== run || root.hidden) return;
+    root.querySelector<HTMLElement>(".intro__stage")!.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 250, fill: "forwards" });
+    play(root);
+  });
 }

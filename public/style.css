@@ -577,8 +577,84 @@ body[data-intro] .app, body[data-intro] .chapters, body[data-intro] .mode, body[
 .btn--big { font-size: 20px; padding: 13px 34px; margin-top: 8px; }
 .intro__start.is-ready { animation: nudge 1.6s ease-in-out .2s 2; }
 @keyframes nudge { 0%, 100% { transform: none; } 50% { transform: translateY(-3px) scale(1.04); } }
-.intro__replay { background: none; border: 0; color: var(--ink-soft); font-size: 13.5px; text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 620px) {
   .intro__opts { grid-template-columns: 1fr; }
   .intro__opt { text-align: center; }
+}
+
+/* "why GitHub?": hovering (or tapping) the word GitHub explains the choice; nothing shows until then */
+.why { position: relative; display: inline-block; cursor: help; outline: none; }
+.why:focus-visible { text-decoration: underline dotted; text-underline-offset: 4px; }
+.why__tip { position: absolute; left: 0; top: calc(100% + 8px); transform: translateY(4px); width: 280px; z-index: 40;
+  font: 400 13.5px/1.45 var(--ui); color: var(--ink); text-align: left; letter-spacing: 0; white-space: normal;
+  background: var(--card); border: 1.5px solid var(--line-strong); border-radius: 10px; padding: 9px 12px; box-shadow: 0 10px 24px -14px rgba(0,0,0,.45);
+  opacity: 0; pointer-events: none; transition: opacity .15s ease .1s, transform .15s ease .1s; }
+.why__tip b { font-weight: 700; }
+.why:hover .why__tip, .why:focus-visible .why__tip, .why.is-open .why__tip { opacity: 1; transform: none; }
+.intro__cloud .why__tip { left: auto; right: -16px; top: calc(100% + 12px); }
+.intro__files .intro__cloud { pointer-events: auto; }
+.intro__cloud .why__tip { white-space: normal; font-family: var(--ui); }
+
+/* the mode preview: the same "save a version" done three ways */
+.preview { position: relative; width: min(420px, 100%); height: 132px; margin-top: 4px; }
+.preview__pane { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; transform: translateX(24px) scale(.97);
+  transition: opacity .32s ease, transform .42s cubic-bezier(.2,1.1,.4,1); pointer-events: none; }
+.preview[data-show="buttons"] .preview__pane--buttons,
+.preview[data-show="command"] .preview__pane--command,
+.preview[data-show="ai"] .preview__pane--ai { opacity: 1; transform: none; }
+.pv-app, .pv-term, .pv-chat { width: 100%; text-align: left; border-radius: 10px; font-size: 13px; }
+/* buttons: a little source-control panel; the cursor clicks Commit */
+.pv-app { position: relative; background: var(--card); border: 1.5px solid var(--line-strong); padding: 8px 12px 12px; box-shadow: 3px 4px 0 var(--line); }
+.pv-app__bar { font-size: 11px; color: var(--ink-soft); display: flex; gap: 4px; align-items: center; margin-bottom: 6px; }
+.pv-app__bar span { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
+.pv-app__file { font-family: var(--mono); font-size: 12px; }
+.pv-app__file i { font-style: normal; color: var(--warn); font-weight: 700; margin-right: 6px; }
+.pv-app__msg { margin: 6px 0; border: 1.5px solid var(--line-strong); border-radius: 6px; padding: 3px 8px; font-size: 12.5px; background: var(--paper); }
+.pv-app__btn { display: inline-block; background: var(--btn-bg); color: var(--btn-ink); font-weight: 700; padding: 4px 14px; border-radius: 6px; font-size: 12.5px; }
+.pv-cursor { position: absolute; width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 16px solid var(--ink);
+  transform: rotate(-25deg); left: 70%; top: 70%; opacity: 0; }
+.is-playing .pv-cursor { animation: pv-cursor 2.4s ease-in-out .2s infinite; }
+.is-playing .pv-app__btn { animation: pv-press 2.4s ease-in-out .2s infinite; }
+@keyframes pv-cursor { 0% { opacity: 0; left: 75%; top: 85%; } 15% { opacity: 1; } 45%, 60% { left: 14%; top: 80%; opacity: 1; } 90%, 100% { left: 14%; top: 80%; opacity: 0; } }
+@keyframes pv-press { 0%, 44% { transform: none; } 50% { transform: scale(.92); } 58%, 100% { transform: none; } }
+/* commands: the line types itself, then git answers */
+.pv-term { background: var(--term-bg); color: var(--term-ink); font-family: var(--mono); font-size: 12px; padding: 12px 14px; min-height: 76px; }
+.pv-term b { color: #9bc58c; font-weight: 400; }
+.pv-type { display: inline-block; overflow: hidden; white-space: nowrap; vertical-align: bottom; max-width: 0; }
+.pv-caret { display: inline-block; width: 7px; height: 13px; background: var(--term-ink); vertical-align: -2px; margin-left: 1px; animation: blink 1s steps(1) infinite; }
+.pv-out { color: #cfc2a6; margin-top: 6px; opacity: 0; }
+.is-playing .pv-type { animation: pv-type 3.2s steps(29) .2s infinite; }
+.is-playing .pv-out { animation: pv-out 3.2s ease .2s infinite; }
+@keyframes pv-type { 0% { max-width: 0; } 45%, 100% { max-width: 30ch; } }
+@keyframes pv-out { 0%, 52% { opacity: 0; } 58%, 92% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes blink { 50% { opacity: 0; } }
+/* AI: you ask in words, it answers with the command */
+.pv-chat { display: grid; gap: 6px; }
+.pv-me { justify-self: end; background: var(--ink); color: var(--card); padding: 6px 12px; border-radius: 12px 12px 3px 12px; }
+.pv-bot { justify-self: start; background: var(--card); border: 1.5px solid var(--line-strong); padding: 6px 12px; border-radius: 12px 12px 12px 3px; max-width: 92%; }
+.pv-bot small { display: block; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.pv-bot code { font-size: 11.5px; background: var(--card-2); padding: 0 4px; border-radius: 3px; }
+.pv-yes { display: inline-block; margin-top: 4px; background: var(--btn-bg); color: var(--btn-ink); font-weight: 700; font-size: 11.5px; padding: 2px 10px; border-radius: 6px; }
+.is-playing .pv-me { animation: pv-me 3.4s ease .1s infinite; }
+.is-playing .pv-bot { animation: pv-bot 3.4s ease .1s infinite; }
+@keyframes pv-me { 0% { opacity: 0; transform: translateY(6px); } 10%, 90% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes pv-bot { 0%, 30% { opacity: 0; transform: translateY(6px); } 42%, 90% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pv-type { max-width: 30ch; } .pv-out, .pv-me, .pv-bot { opacity: 1; } }
+/* keep the whole intro, Start included, inside one desktop screen */
+.intro { padding-top: 12px; padding-bottom: 20px; }
+.intro__inner { gap: 6px; }
+.intro__title { font-size: clamp(42px, 6vw, 66px); }
+.intro__stage { width: min(540px, 100%); margin-top: 4px; }
+.intro__pick { margin-top: 2px; gap: 6px; }
+.preview { height: 112px; }
+.btn--big { margin-top: 4px; }
+
+/* short windows (laptops at 768 to 820 px tall): a smaller intro so Start stays on screen */
+@media (max-height: 820px) and (min-width: 621px) {
+  .intro__title { font-size: 48px; }
+  .intro__sub { font-size: 15.5px; }
+  .intro__stage { width: min(430px, 100%); margin-top: 0; }
+  .intro__caption { font-size: 22px; }
+  .preview { height: 104px; }
+  .intro__opt { padding: 8px 12px; }
 }

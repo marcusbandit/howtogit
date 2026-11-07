@@ -13,7 +13,7 @@ import * as G from "./model.js";
 import type { World } from "./model.js";
 import { chapters, MAIN_FILE, type Act, type Beat, type Who } from "./story.js";
 import { exec, replayTo } from "./engine.js";
-import { showIntro, introSeen } from "./intro.js";
+import { showIntro, introSeen, whyGithub } from "./intro.js";
 import { circlePath, linePath, smooth, drawOn, el, prefersReduced, type Point } from "./sketch.js";
 
 type Mode = "buttons" | "command" | "ai";
@@ -574,7 +574,7 @@ function headHtml(id: Place): string {
       else badge = `<span class="badge badge--ok">same as GitHub</span>`;
     }
   }
-  return `<span class="ico ${id === "github" ? "ico--cloud" : "ico--laptop"}"></span><h3>${title}</h3><span class="place__sub">${sub}</span>${badge}`;
+  return `<span class="ico ${id === "github" ? "ico--cloud" : "ico--laptop"}"></span><h3>${id === "github" ? whyGithub() : title}</h3><span class="place__sub">${sub}</span>${badge}`;
 }
 
 function leftHtml(id: Place): string {
@@ -1019,6 +1019,12 @@ function boot() {
   });
   $("#lesson").addEventListener("animationend", (e) => (e.target as HTMLElement).classList.remove("shake"));
   $("#deck-btn").addEventListener("click", openDeck);
+  // the "why GitHub?" note opens on tap too (phones have no hover), and closes on the next tap anywhere
+  document.addEventListener("click", (e) => {
+    const why = (e.target as HTMLElement).closest(".why");
+    document.querySelectorAll(".why.is-open").forEach((x) => { if (x !== why) x.classList.remove("is-open"); });
+    why?.classList.toggle("is-open");
+  });
   const dlg = $("#editor") as unknown as HTMLDialogElement;
   dlg.addEventListener("close", () => {
     if (dlg.returnValue === "save") saveEditor(false);
