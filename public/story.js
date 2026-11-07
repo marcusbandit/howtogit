@@ -24,6 +24,7 @@ const q = (s) => (s ?? "").replace(/"/g, "'").trim() || "update";
 const count = (w, id) => G.ancestors(w, id).size;
 const clean = (w, i = 0) => !!you(w) && !G.isDirty(w, you(w), desk(w, i));
 const synced = (w, b) => !!gh(w) && !!you(w)?.branches[b] && gh(w).branches[b] === you(w).branches[b];
+const firstCommit = (w) => [...G.ancestors(w, you(w).branches.main)].map((id) => w.commits[id]).sort((a, b) => a.n - b.n)[0];
 const changed = (w, f = MAIN_FILE, i = 0) => work(w, f, i) !== headTree(w, i)[f];
 /* put a line into a file right after the first line matching `after` */
 function insertAfter(text, after, line) {
@@ -163,6 +164,14 @@ export const chapters = [
                 after: () => `Back exactly as it was in your last version. Changes you haven't committed can be thrown away; versions you committed stay safe.`,
             },
             {
+                id: "save-shop",
+                kind: "act",
+                say: () => `Before looking back, commit the notes too, so nothing is left uncommitted.`,
+                acts: [commitAct("Add a note about the budget", "notes.txt")],
+                done: (w) => clean(w) && count(w, you(w).branches.main) >= 3,
+                after: () => `Three commits now, and nothing left uncommitted.`,
+            },
+            {
                 id: "history",
                 kind: "act",
                 say: () => `Every commit you made is kept in the <b>history</b>. Have a look at it.`,
@@ -174,14 +183,23 @@ export const chapters = [
             {
                 id: "travel",
                 kind: "act",
-                say: () => `The <b>you are here</b> marker has a git name: <b>HEAD</b>, the commit your files match right now. You can move HEAD to any older commit. Open the very first one.`,
+                say: (w) => {
+                    const d = desk(w);
+                    const first = firstCommit(w);
+                    const wrong = d?.detached && d.detached !== first.id ? w.commits[d.detached] : null;
+                    return `The <b>you are here</b> marker has a git name: <b>HEAD</b>, the commit your files match right now. You can move HEAD to any commit.<br><br>`
+                        + `To point at one commit, git uses its <b>ID</b>: the short code in front of each commit, like <code>${G.short(first.id)}</code>. It's made from the commit's contents, so no two are alike.<br><br>`
+                        + (wrong ? `That opened <code>${G.short(wrong.id)}</code>, "${wrong.msg.replace(/</g, "&lt;")}". Not the oldest one yet: it's at the bottom of the history.`
+                            : `Open your very first commit.`);
+                },
                 acts: [{
-                        label: "Open the first version",
-                        steps: (w) => [`git switch --detach ${G.short([...G.ancestors(w, you(w).branches.main)].map((id) => w.commits[id]).sort((a, b) => a.n - b.n)[0].id)}`],
+                        label: "Open",
+                        pick: "commit",
+                        steps: (w, v) => [`git switch --detach ${v.id || G.short(firstCommit(w).id)}`],
                         ai: "show me the very first version of the report",
                     }],
-                done: (w) => !!desk(w)?.detached && w.commits[desk(w).detached].parents.length === 0,
-                after: () => `Your files now match the first version, and HEAD moved back to the first commit. The newer commits are still on the line.`,
+                done: (w) => !!desk(w)?.detached && desk(w).detached === firstCommit(w).id,
+                after: (w) => `Your files now match <code>${G.short(firstCommit(w).id)}</code>, your first commit, and HEAD moved there. The newer commits are still on the line: nothing is lost.`,
                 term: ["HEAD", "Git's name for <b>you are here</b>: the commit your files match right now."],
             },
             {
@@ -191,14 +209,6 @@ export const chapters = [
                 acts: [{ label: "Back to main", steps: () => ["git switch main"], ai: "go back to the latest version" }],
                 done: (w) => desk(w)?.branch === "main" && !desk(w).detached,
                 after: () => `Back at the newest commit, and HEAD with it. <b>main</b> is the name of this line of commits. More lines are coming.`,
-            },
-            {
-                id: "save-shop",
-                kind: "act",
-                say: () => `Commit the notes too, so nothing is left uncommitted.`,
-                acts: [commitAct("Add a note about the budget", "notes.txt")],
-                done: (w) => clean(w) && count(w, you(w).branches.main) >= 3,
-                after: () => `Three versions, nothing left uncommitted.`,
             },
         ],
     },

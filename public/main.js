@@ -501,7 +501,8 @@ function doHtml(b) {
         if (mode === "ai")
             html += aiHtml(mine);
     }
-    if (b.id === "travel" || log.some((l) => l.kind === "cmd" && /^git\s+log\b/.test(l.text)))
+    const picks = (b.acts ?? []).some((a) => a.pick === "commit");
+    if ((picks && mode !== "buttons") || (!picks && log.some((l) => l.kind === "cmd" && /^git\s+log\b/.test(l.text))))
         html += historyHtml();
     if (mode !== "command")
         html += hoodHtml();
@@ -516,6 +517,9 @@ function buttonsHtml(mine, acts) {
       ${inputsHtml(a, acts.indexOf(a))}
       <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go btn--ide"} ${beatDone ? "is-done" : ""}" data-run="${acts.indexOf(a)}" ${beatDone ? "disabled" : ""}>${beatDone ? '<span aria-hidden="true">✓</span> Done' : `${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}`}</button>
     </div>`;
+    const picker = mine.find((a) => a.pick === "commit");
+    if (picker)
+        return historyHtml(acts.indexOf(picker));
     const local = mine.filter((a) => a.look !== "github"), web = mine.filter((a) => a.look === "github");
     const d = w.repos.you?.desks[beatDesk()];
     const where = d ? (d.detached ? `old version ${G.short(d.detached)}` : d.branch ?? "") : "";
@@ -584,18 +588,22 @@ function aiHtml(mine) {
   </div>`;
 }
 /* the history, the way a tool shows it: every commit on main, newest first */
-function historyHtml() {
+/* pickAct: the act a row's Open button runs (buttons mode lets you choose a commit) */
+function historyHtml(pickAct = -1) {
     const r = w.repos.you;
     if (!r?.branches.main)
         return "";
     const d = r.desks[beatDesk()];
     const head = G.headId(r, d);
     const list = [...G.ancestors(w, r.branches.main)].map((id) => w.commits[id]).sort((a, b) => b.n - a.n);
-    return `<div class="hist">
+    const marker = earned().has("HEAD") ? "HEAD" : "you are here";
+    return `<div class="hist ${pickAct >= 0 ? "hist--pick" : ""}">
     <p class="hist__k">History of main, newest first</p>
+    <div class="hist__cols" aria-hidden="true"><span>ID</span><span>Commit message</span><span>By</span><span></span></div>
     <ol class="hist__list">${list.map((c) => `<li class="${c.id === head ? "is-head" : ""}">
       <code class="hist__id">${G.short(c.id)}</code><span class="hist__msg">${esc(c.msg)}</span>
-      <span class="hist__who">${esc(c.author)}</span>${c.id === head ? `<span class="hist__head">${earned().has("HEAD") ? "HEAD" : "you are here"}</span>` : "<span></span>"}
+      <span class="hist__who">${esc(c.author)}</span>${c.id === head ? `<span class="hist__head">${marker}</span>`
+        : pickAct >= 0 && !beatDone ? `<button type="button" class="hist__open" data-run="${pickAct}" data-pick="${G.short(c.id)}">Open</button>` : "<span></span>"}
     </li>`).join("")}</ol>
   </div>`;
 }
@@ -629,7 +637,7 @@ function wireLesson() {
     const root = $("#lesson");
     root.querySelectorAll("[data-run]").forEach((btn) => btn.addEventListener("click", () => {
         const a = beat().acts[Number(btn.dataset.run)];
-        const vals = {};
+        const vals = btn.dataset.pick ? { id: btn.dataset.pick } : {};
         a.inputs?.forEach((inp) => {
             const field = root.querySelector(`input[data-act="${btn.dataset.run}"][data-key="${inp.key}"]`);
             vals[inp.key] = field?.value.trim() || inp.def(w);

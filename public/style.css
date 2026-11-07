@@ -880,3 +880,13 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .lesson__nav .btn, .lesson__nav .step-of { white-space: nowrap; }
 .lesson__nav .btn--back, .lesson__nav .btn--undo { padding: 7px 10px; }
 @media (max-width: 1240px) { .lesson__nav .step-of { display: none; } .lesson__nav .btn--next { margin-left: auto; } }
+/* the history as a chooser: column names, and an Open button on each row */
+.hist__cols { display: grid; grid-template-columns: 64px minmax(0, 1fr) 48px 72px; gap: 10px; padding: 0 6px 4px; font-size: 12px; color: var(--ink-soft); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.hist__list li { grid-template-columns: 64px minmax(0, 1fr) 48px 72px; }
+.hist__head, .hist__open { justify-self: end; }
+.hist__open { font: 700 12px var(--ui); color: var(--btn-ink); background: var(--btn-bg); border: 1.5px solid var(--btn-edge); border-radius: 6px; padding: 2px 10px; }
+.hist__open:hover { transform: translateY(-1px); }
+.hist--pick .hist__list li:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.hist__cols, .hist__list li { grid-template-columns: 64px minmax(0, 1fr) 40px max-content; }
+.hist__head, .hist__open { white-space: nowrap; }
+.hist__cols span:last-child { min-width: 52px; }
