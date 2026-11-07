@@ -612,8 +612,13 @@ function peekHtml(d: G.Desk | null, r: G.Repo | null): string {
   const diff = base === undefined ? text.replace(/\n$/, "").split("\n").map((s) => ({ t: "+" as const, s })) : G.lineDiff(base, text);
   const lines = diff.filter((l) => l.t !== "-").filter((l) => l.s.trim() !== "").slice(0, 12);
   return `<div class="peek" aria-label="${MAIN_FILE} right now"><p class="peek__name">${MAIN_FILE}</p>${lines.map((l) =>
-    `<div class="peek__l ${l.t === "+" && base !== undefined ? "is-new" : ""} ${/^(<<<<<<<|=======|>>>>>>>)/.test(l.s) ? "is-mark" : ""}">${esc(l.s)}</div>`).join("")}</div>`;
+    `<div class="peek__l ${l.t === "+" && base !== undefined ? "is-new" : ""} ${/^(<<<<<<<|=======|>>>>>>>)/.test(l.s) ? "is-mark" : ""}">${typos(esc(l.s))}</div>`).join("")}</div>`;
 }
+
+/* the lesson's planted typo (and a few classics) get the familiar red squiggle,
+ * the way a word processor marks them, so it's obvious something needs fixing */
+const TYPOS = /\b(helpd|teh|recieve|seperate|wich|untill|definately)\b/gi;
+const typos = (html: string) => html.replace(TYPOS, '<span class="typo" title="spelling">$1</span>');
 
 function deskHtml(place: "you" | "albert", r: G.Repo | null, i: number): string {
   const d = r?.desks[i] ?? null;
@@ -948,11 +953,20 @@ function openEditor(place: Place, deskI: number, file: string) {
       ? `Your task: <b>${esc(beat().edit!.ask(w))}</b>. Type anywhere in the file.` : "";
   renderResolver(text, readOnly);
   if (!dlg.open) dlg.showModal();
+  fitEditor();
   if (!readOnly && !G.hasMarkers(text)) {
     ta.focus();
     const end = text.indexOf("\n\n", text.indexOf("- "));
     ta.setSelectionRange(end > 0 ? end : text.length, end > 0 ? end : text.length);
   }
+}
+
+/* the editor is as tall as its text plus one empty line, and grows as you type */
+function fitEditor() {
+  const ta = $<HTMLTextAreaElement>("#editor-text");
+  const line = parseFloat(getComputedStyle(ta).lineHeight) || 22;
+  ta.style.height = "auto";
+  ta.style.height = `${ta.scrollHeight + line}px`;
 }
 
 function renderResolver(text: string, readOnly: boolean) {
@@ -1038,6 +1052,7 @@ function boot() {
   });
   $("#lesson").addEventListener("animationend", (e) => (e.target as HTMLElement).classList.remove("shake"));
   $("#deck-btn").addEventListener("click", openDeck);
+  $("#editor-text").addEventListener("input", fitEditor);
   // the pressing hand stays while the mouse button is held, wherever it is,
   // and each click drops a little ink ring
   document.addEventListener("pointerdown", (e) => {
