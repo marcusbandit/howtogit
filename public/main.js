@@ -1523,7 +1523,8 @@ function glideStrip(id, cols, heres) {
     host.classList.add("is-gliding"); // no scrollbar flashing while it moves
     settleUntil = Math.max(settleUntil, t0 + dur);
     const ease = (t) => 1 - Math.pow(1 - t, 3);
-    const step = (now) => {
+    const step = () => {
+        const now = performance.now(); // one clock, as in drawOn
         const k = ease(Math.min(1, (now - t0) / dur));
         if (k >= 1)
             return finish(true);

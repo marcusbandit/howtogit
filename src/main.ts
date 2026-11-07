@@ -1422,7 +1422,8 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
   host.classList.add("is-gliding"); // no scrollbar flashing while it moves
   settleUntil = Math.max(settleUntil, t0 + dur);
   const ease = (t: number) => 1 - Math.pow(1 - t, 3);
-  const step = (now: number) => {
+  const step = () => {
+    const now = performance.now(); // one clock, as in drawOn
     const k = ease(Math.min(1, (now - t0) / dur));
     if (k >= 1) return finish(true);
     drawStrip(id, cols, { scale: prev.scale + (next.scale - prev.scale) * k, col: prev.col + (next.col - prev.col) * k, only: had, k });

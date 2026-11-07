@@ -178,8 +178,12 @@ export function drawOn(pathEl, opts = {}) {
             nib = el("circle", { r: 3.4, fill: color, class: "nib" });
             nibGroup.appendChild(nib);
         }
+        // one clock only: a frame's own timestamp can sit on a different base or
+        // precision than performance.now() (Firefox with stricter privacy), and
+        // mixing the two can make a line jump straight to finished
         const start = performance.now() + delay;
-        const tick = (now) => {
+        const tick = () => {
+            const now = performance.now();
             if (drawIds.get(pathEl) !== id) {
                 nib?.remove();
                 resolve();

@@ -205,8 +205,12 @@ export function drawOn(pathEl: SVGPathElement, opts: DrawOnOptions = {}): Promis
       nibGroup.appendChild(nib);
     }
 
+    // one clock only: a frame's own timestamp can sit on a different base or
+    // precision than performance.now() (Firefox with stricter privacy), and
+    // mixing the two can make a line jump straight to finished
     const start = performance.now() + delay;
-    const tick = (now: number) => {
+    const tick = () => {
+      const now = performance.now();
       if (drawIds.get(pathEl) !== id) { nib?.remove(); resolve(); return; }
       const t = Math.max(0, Math.min(1, (now - start) / duration));
       const e = even ? (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2) : 1 - Math.pow(1 - t, 3); // in-out, or out, cubic
