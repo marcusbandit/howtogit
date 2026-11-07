@@ -94,8 +94,8 @@ export const chapters = [
                     canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /worked best/i, "It was also the cheapest.")),
                 },
                 done: (w) => changed(w),
-                after: () => `report.md now says <b>changed</b>. Saving the file only changed the file; your version from before is untouched. The preview under the folder shows the <b>diff</b>, what's different since that version: green lines are new, red crossed-out lines are gone.`,
-                term: ["diff", "What's different between your files now and the last version. Green was added, red was removed."],
+                after: () => `report.md now says <b>changed</b>. Saving the file only changed the file; your version from before is untouched. The preview under the folder shows the <b>diff</b> (short for <i>difference</i>): what's different since that version. Green lines are new, red crossed-out lines are gone.`,
+                term: ["diff", "Short for <i>difference</i>: what's different between your files now and the last version. Green was added, red was removed."],
             },
             {
                 id: "edit2",
