@@ -36,7 +36,7 @@ function insertAfter(text, after, line) {
 const setWork = (w, f, text, i = 0) => { desk(w, i).work[f] = text; };
 export const keyLine = (s) => s.split("\n").find((l) => /deadline/i.test(l)) ?? "";
 const commitAct = (def, files = "-A") => ({
-    label: "Stage and commit",
+    label: files === "-A" ? "Stage all and commit" : `Stage ${files} and commit`,
     inputs: [{ key: "msg", label: "Commit message", def: () => def }],
     steps: (_w, v) => [`git add ${files}`, `git commit -m "${q(v.msg)}"`],
     ai: "commit my changes with a short note",
@@ -166,10 +166,10 @@ export const chapters = [
             {
                 id: "save-shop",
                 kind: "act",
-                say: () => `Before looking back, commit the notes too, so nothing is left uncommitted.`,
+                say: () => `One loose end first. <b>notes.txt</b> still says <b>changed</b>: you left it out of your last commit.<br><br>Stage it and commit it. This button does both moves at once, the way most tools offer it: first it stages notes.txt, then it commits.`,
                 acts: [commitAct("Add a note about the budget", "notes.txt")],
                 done: (w) => clean(w) && count(w, you(w).branches.main) >= 3,
-                after: () => `Three commits now, and nothing left uncommitted.`,
+                after: () => `notes.txt says <b>no changes</b> again, and there are three commits on the line. Under the hood you can see both moves: <code>git add</code>, then <code>git commit</code>.`,
             },
             {
                 id: "history",
