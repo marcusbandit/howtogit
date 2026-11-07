@@ -1291,12 +1291,15 @@ function drawStrip(id, cols, frame) {
     if (!r || !svg)
         return;
     const hostH = frame ? 0 : host.getBoundingClientRect().height;
+    // what was drawn before this change, for the glide down when a lane is added
+    const prevHave = frame ? undefined : lastHave.get(id), prevLabels = frame ? undefined : lastLabels.get(id);
     const all = placeCommits(r);
     const have = frame ? new Set([...all].filter((c) => frame.only.has(c))) : all;
     const L = lanes(r);
     const maxLane = Math.max(0, ...[...L.values()].map((v) => v.lane));
     let topPad = 0; // room above the top lane for labels of branch commits
-    const laneY = (l) => 26 + topPad + (maxLane - l) * 44;
+    const off = frame?.dy ?? 0; // mid-glide, everything drawn this much higher
+    const laneY = (l) => 26 + topPad + (maxLane - l) * 44 + off;
     const { scale, col } = frame ?? layoutOf(host, cols);
     if (!frame) {
         lastLayout.set(id, { scale, col });
@@ -1343,7 +1346,7 @@ function drawStrip(id, cols, frame) {
     topPad = Math.max(0, ...[...labels].filter(([c]) => above(c)).map(([, a]) => a.length * 21 + 8));
     const baseY = laneY(0);
     const maxLabels = Math.max(1, ...[...labels].filter(([c]) => !above(c)).map(([, a]) => a.length));
-    const H = baseY + 34 + maxLabels * 21;
+    const H = baseY - off + 34 + maxLabels * 21;
     const W = X0 * 2 + 30 + Math.max(0, cols.length - 1) * col;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     host.style.setProperty("--strip-scale", String(scale));
@@ -1351,12 +1354,30 @@ function drawStrip(id, cols, frame) {
     svg.setAttribute("height", String(Math.floor(H * scale)));
     // a new lane makes the graph taller and moves main down: main glides down
     // while the room above opens, instead of everything jumping at once
+    // It redraws frame by frame, like the sideways glide, with no CSS transform
+    // (Firefox on Android stops repainting lines inked under one), and only
+    // then draws the new lines and dots.
     if (!frame) {
         const base = baseY * scale, was = lastBase.get(id);
         lastBase.set(id, base);
-        if (was !== undefined && Math.abs(base - was) > 1 && !instant && !prefersReduced) {
-            svg.animate([{ transform: `translateY(${was - base}px)` }, { transform: "none" }], { duration: 380, easing: "cubic-bezier(.2,.8,.2,1)" });
+        if (was !== undefined && Math.abs(base - was) > 1 && !instant && !prefersReduced && prevHave) {
             easeHeight(host, hostH);
+            if (prevLabels)
+                lastLabels.set(id, prevLabels);
+            const from = (was - base) / scale, t0 = performance.now(), dur = 320;
+            settleUntil = Math.max(settleUntil, t0 + dur + 20);
+            const step = () => {
+                const t = Math.min(1, (performance.now() - t0) / dur);
+                if (t >= 1) {
+                    drawStrip(id, cols);
+                    syncScroll(false);
+                    return;
+                }
+                drawStrip(id, cols, { scale, col, only: prevHave, k: 1, dy: from * Math.pow(1 - t, 3) });
+                tweens.set(id, window.requestAnimationFrame(step));
+            };
+            step();
+            return;
         }
     }
     svg.innerHTML = "";
