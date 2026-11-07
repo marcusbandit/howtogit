@@ -598,6 +598,14 @@ export const chapters = [
         ],
     },
 ];
+/* what you typed into a step's fields (commit messages, branch names), kept so
+ * a step rebuilt later (after a reload, Back or the step bar) uses your words,
+ * not the suggestions. Keyed "beatId:actIndex:field". */
+export const choices = {};
+export const choiceKey = (b, ai, key) => `${b.id}:${ai}:${key}`;
+export function valueFor(b, ai, inp, w) {
+    return choices[choiceKey(b, ai, inp.key)] ?? inp.def(w);
+}
 /* what the beat looks like when someone "just does it", for replays */
 export function autoBeat(b, w, runCmd, note) {
     if (b.kind === "edit")
@@ -607,11 +615,9 @@ export function autoBeat(b, w, runCmd, note) {
         setWork(w, MAIN_FILE, f.replace(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n[\s\S]*?>>>>>>> [^\n]*\n/g, "$1"));
     }
     else if (b.acts) {
-        for (const a of b.acts) {
-            if (b.id === "travel" && a.label === "Show history")
-                continue;
+        for (const [ai, a] of b.acts.entries()) {
             const v = {};
-            a.inputs?.forEach((i) => (v[i.key] = i.def(w)));
+            a.inputs?.forEach((i) => (v[i.key] = valueFor(b, ai, i, w)));
             for (const s of a.steps(w, v)) {
                 if (typeof s === "string")
                     runCmd(s, a.who ?? "you", b.desk ?? 0);

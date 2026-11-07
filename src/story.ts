@@ -654,6 +654,15 @@ export const chapters: Chapter[] = [
   },
 ];
 
+/* what you typed into a step's fields (commit messages, branch names), kept so
+ * a step rebuilt later (after a reload, Back or the step bar) uses your words,
+ * not the suggestions. Keyed "beatId:actIndex:field". */
+export const choices: Record<string, string> = {};
+export const choiceKey = (b: Beat, ai: number, key: string) => `${b.id}:${ai}:${key}`;
+export function valueFor(b: Beat, ai: number, inp: { key: string; def: (w: World) => string }, w: World): string {
+  return choices[choiceKey(b, ai, inp.key)] ?? inp.def(w);
+}
+
 /* what the beat looks like when someone "just does it", for replays */
 export function autoBeat(b: Beat, w: World, runCmd: (cmd: string, who: Who, deskI: number) => void, note?: (text: string, who: Who) => void): void {
   if (b.kind === "edit") b.edit!.canon(w);
@@ -661,10 +670,9 @@ export function autoBeat(b: Beat, w: World, runCmd: (cmd: string, who: Who, desk
     const f = work(w, MAIN_FILE);
     setWork(w, MAIN_FILE, f.replace(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n[\s\S]*?>>>>>>> [^\n]*\n/g, "$1"));
   } else if (b.acts) {
-    for (const a of b.acts) {
-      if (b.id === "travel" && a.label === "Show history") continue;
+    for (const [ai, a] of b.acts.entries()) {
       const v: Record<string, string> = {};
-      a.inputs?.forEach((i) => (v[i.key] = i.def(w)));
+      a.inputs?.forEach((i) => (v[i.key] = valueFor(b, ai, i, w)));
       for (const s of a.steps(w, v)) {
         if (typeof s === "string") runCmd(s, a.who ?? "you", b.desk ?? 0);
         else { const n = s(w); if (n && note) note(n, a.who ?? "you"); }

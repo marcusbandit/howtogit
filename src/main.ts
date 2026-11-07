@@ -11,7 +11,7 @@
  */
 import * as G from "./model.js";
 import type { World } from "./model.js";
-import { chapters, MAIN_FILE, type Act, type Beat, type Who } from "./story.js";
+import { chapters, MAIN_FILE, choices, choiceKey, valueFor, type Act, type Beat, type Who } from "./story.js";
 import { exec, replayTo, finishBeat } from "./engine.js";
 import { showIntro, introSeen, whyGithub } from "./intro.js";
 import { explain } from "./explain.js";
@@ -125,7 +125,7 @@ let instant = true; // draw without animation (first paint, jumps)
 let history: Snap[] = []; // where you've been, so Back can return there exactly
 
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify({ w, ci, bi, mode, log, beatDone })); } catch { /* private mode */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ w, ci, bi, mode, log, beatDone, choices })); } catch { /* private mode */ }
 }
 function load(): boolean {
   try {
@@ -134,6 +134,7 @@ function load(): boolean {
     const s = JSON.parse(raw);
     if (!chapters[s.ci]?.beats[s.bi]) return false;
     ({ w, ci, bi, log, beatDone } = s);
+    Object.assign(choices, s.choices ?? {});
     mode = s.mode ?? "buttons";
     return true;
   } catch { return false; }
@@ -423,7 +424,7 @@ function renderLesson() {
 function inputsHtml(a: Act, ai: number) {
   return (a.inputs ?? []).map((inp) => `
     <label class="field"><span>${esc(inp.label)}</span>
-      <input type="text" data-act="${ai}" data-key="${inp.key}" value="${esc(inp.def(w))}" maxlength="60" /></label>`).join("");
+      <input type="text" data-act="${ai}" data-key="${inp.key}" value="${esc(valueFor(beat(), ai, inp, w))}" maxlength="60" ${beatDone ? "disabled" : ""} /></label>`).join("");
 }
 
 /* the "do" area: what you press or type, depending on the mode */
@@ -481,7 +482,7 @@ function buttonsHtml(mine: Act[], acts: Act[]): string {
 function hintCmds(mine: Act[]): string[] {
   return mine.flatMap((a) => {
     const v: Record<string, string> = {};
-    a.inputs?.forEach((i) => (v[i.key] = i.def(w)));
+    a.inputs?.forEach((i) => (v[i.key] = valueFor(beat(), beat().acts!.indexOf(a), i, w)));
     return a.steps(w, v).filter((s): s is string => typeof s === "string");
   });
 }
@@ -542,9 +543,9 @@ function historyHtml(): string {
   const list = [...G.ancestors(w, r.branches.main)].map((id) => w.commits[id]).sort((a, b) => b.n - a.n);
   return `<div class="hist">
     <p class="hist__k">History of main, newest first</p>
-    <ol class="hist__list">${list.map((c, i) => `<li class="${c.id === head ? "is-head" : ""}">
+    <ol class="hist__list">${list.map((c) => `<li class="${c.id === head ? "is-head" : ""}">
       <code class="hist__id">${G.short(c.id)}</code><span class="hist__msg">${esc(c.msg)}</span>
-      <span class="hist__who">${esc(c.author)}</span>${c.id === head ? `<span class="hist__head">${earned().has("HEAD") ? "HEAD" : "you are here"}</span>` : i === list.length - 1 ? `<span class="hist__first">first</span>` : ""}
+      <span class="hist__who">${esc(c.author)}</span>${c.id === head ? `<span class="hist__head">${earned().has("HEAD") ? "HEAD" : "you are here"}</span>` : "<span></span>"}
     </li>`).join("")}</ol>
   </div>`;
 }
@@ -580,7 +581,8 @@ function wireLesson() {
     const vals: Record<string, string> = {};
     a.inputs?.forEach((inp) => {
       const field = root.querySelector<HTMLInputElement>(`input[data-act="${btn.dataset.run}"][data-key="${inp.key}"]`);
-      vals[inp.key] = field?.value || inp.def(w);
+      vals[inp.key] = field?.value.trim() || inp.def(w);
+      choices[choiceKey(beat(), Number(btn.dataset.run), inp.key)] = vals[inp.key];
     });
     runSteps(a, vals);
   }));
@@ -589,7 +591,10 @@ function wireLesson() {
   root.querySelectorAll<HTMLButtonElement>("[data-beat]").forEach((b) => b.addEventListener("click", () => jumpBeat(Number(b.dataset.beat))));
   root.querySelector<HTMLButtonElement>("[data-see]")?.addEventListener("click", (e) =>
     document.querySelector(`.place--${(e.currentTarget as HTMLElement).dataset.see}`)?.scrollIntoView({ block: "start", behavior: prefersReduced ? "auto" : "smooth" }));
-  root.querySelector("[data-restart]")?.addEventListener("click", () => goto(0, 0, { replay: true }));
+  root.querySelector("[data-restart]")?.addEventListener("click", () => {
+    for (const k of Object.keys(choices)) delete choices[k];
+    goto(0, 0, { replay: true });
+  });
   root.querySelectorAll<HTMLButtonElement>("[data-open]").forEach((b) => b.addEventListener("click", () => openEditor("you", Number(b.dataset.desk ?? 0), b.dataset.open!)));
   const term = root.querySelector<HTMLFormElement>("[data-term]");
   if (term) {
@@ -1170,6 +1175,8 @@ function boot() {
   }
   const q = new URLSearchParams(location.search);
   const qm = q.get("mode") as Mode | null;
+  // your typed choices apply to every rebuilt step, whichever way you arrive
+  try { Object.assign(choices, JSON.parse(localStorage.getItem(KEY) ?? "{}").choices ?? {}); } catch { /* none saved */ }
   if (qm) mode = qm;
   if (q.has("ch")) {
     const c = Math.max(0, Math.min(chapters.length - 1, Number(q.get("ch")) - 1));
