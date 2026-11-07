@@ -61,3 +61,18 @@ two.
 Change `design/tokens.json` and this file in the same commit. The check reads the JSON, so
 a new step there passes everywhere at once. Add a step only when two real things on screen
 need it, and say which two in the commit message.
+
+## Buttons
+
+Buttons come in three heights. They are set with `min-height`, so a label that wraps
+can still grow the button instead of spilling out.
+
+| Height | For |
+| --- | --- |
+| 32 | Pills inside a bar: chapter tabs, the mode switch |
+| 40 | Secondary actions: Back, Undo, notes, the theme toggle, `.btn--small` |
+| 48 | Every main `.btn`: Next, the action buttons |
+
+The big Start button on the intro is the one exception, and the inline buttons that live
+inside text (file names, explain) take the height of their line. The tiny buttons drawn
+inside the app previews are pictures of buttons, not buttons, and follow the preview.
