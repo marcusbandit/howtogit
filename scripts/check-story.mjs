@@ -12,6 +12,6 @@ chapters.forEach((ch, c) => ch.beats.forEach((b, i) => {
 }));
 const w = replayTo(chapters.length - 1, 0);
 console.log("final you desk0:", w.repos.you.desks[0].branch, "desks:", w.repos.you.desks.length);
-console.log(w.repos.you.desks[0].work["pancakes.md"]);
+console.log(w.repos.you.desks[0].work["report.md"]);
 console.log(fails ? `${fails} problem(s)` : "all beats complete");
 process.exitCode = fails ? 1 : 0;

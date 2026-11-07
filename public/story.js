@@ -1,6 +1,6 @@
 /* story.ts: the lesson, as data.
  *
- * The story is kept small on purpose: a pancake recipe you save, undo and
+ * The story is kept small on purpose: a short report you save, undo and
  * put on GitHub; a friend (Albert) joins, another (Toby) reviews a pull
  * request, you clash on one line, and you fix a typo from a second worktree.
  * Every idea is shown in plain words first; the git word comes after.
@@ -11,7 +11,7 @@
  */
 import * as G from "./model.js";
 /* ------------------------------------------------------------- helpers */
-export const MAIN_FILE = "pancakes.md";
+export const MAIN_FILE = "report.md";
 const you = (w) => w.repos.you;
 const desk = (w, i = 0) => w.repos.you?.desks[i];
 const head = (w, i = 0) => (you(w) ? G.headId(you(w), desk(w, i)) : undefined);
@@ -19,7 +19,7 @@ const headTree = (w, i = 0) => G.treeOf(w, head(w, i));
 const work = (w, f, i = 0) => desk(w, i)?.work[f] ?? "";
 const gh = (w) => w.repos.github;
 const albert = (w) => w.repos.albert;
-const br = (w) => w.vars.branch || "blueberries";
+const br = (w) => w.vars.branch || "summary";
 const q = (s) => (s ?? "").replace(/"/g, "'").trim() || "update";
 const count = (w, id) => G.ancestors(w, id).size;
 const clean = (w, i = 0) => !!you(w) && !G.isDirty(w, you(w), desk(w, i));
@@ -33,7 +33,7 @@ function insertAfter(text, after, line) {
     return lines.join("\n");
 }
 const setWork = (w, f, text, i = 0) => { desk(w, i).work[f] = text; };
-export const eggLine = (s) => s.split("\n").find((l) => /egg/i.test(l)) ?? "";
+export const keyLine = (s) => s.split("\n").find((l) => /deadline/i.test(l)) ?? "";
 const commitAct = (def, files = ".") => ({
     label: "Stage and commit",
     inputs: [{ key: "msg", label: "Note for this version", def: () => def }],
@@ -45,25 +45,6 @@ const pullAct = { label: "Pull", steps: () => ["git pull"], ai: "get the latest 
 /* ------------------------------------------------------------- chapters */
 export const chapters = [
     {
-        title: "Why git exists",
-        short: "why",
-        goal: "",
-        beats: [
-            {
-                id: "mess",
-                kind: "next",
-                say: () => `You're writing a pancake recipe, and every time you change it you keep a copy, just in case.<br><br>A few weeks in, the folder looks like this. Which file is the newest? What changed between them? If someone else edited one, which do you cook from?`,
-                done: () => true,
-            },
-            {
-                id: "promise",
-                kind: "next",
-                say: () => `<b>Git</b> fixes this. You keep one file, and whenever you like, you tell git: remember this version. Git keeps every version, who made it and why, and can bring any of them back.<br><br><b>GitHub</b> keeps a copy online, so other people can work on the same files from their own computers.<br><br>You'll do every part yourself. About ten minutes, no experience needed.`,
-                done: () => true,
-            },
-        ],
-    },
-    {
         title: "Save versions",
         short: "commit",
         goal: "save versions of your work",
@@ -71,25 +52,25 @@ export const chapters = [
             {
                 id: "init",
                 kind: "act",
-                say: () => `This is your project folder: a recipe and a shopping list. Right now they're plain files.<br><br>Switch on version history for the folder.`,
+                say: () => `This is your project folder: a report and some notes. Right now they're plain files.<br><br>Switch on version history for the folder.`,
                 acts: [{ label: "Turn on version history", steps: () => ["git init"], ai: "set up git for this folder" }],
                 done: (w) => !!you(w),
                 after: () => `Git made a hidden <code>.git</code> folder inside my-recipe. Every version you save will live there. Your files didn't change.`,
                 term: ["repository", "A folder with version history switched on. People say <b>repo</b>."],
-                more: [["Do I do this for every project?", "Once per project. Often not even that: you copy an existing project from GitHub instead, which you'll do in chapter 5."]],
+                more: [["Do I do this for every project?", "Once per project. Often not even that: you copy an existing project from GitHub instead, which you'll do in chapter 4."]],
             },
             {
                 id: "edit1",
                 kind: "edit",
-                say: () => `Open <b>pancakes.md</b> and add an ingredient. A spoon of sugar, maybe.`,
+                say: () => `Open <b>report.md</b> and add a sentence. Anything you like.`,
                 edit: {
                     files: [MAIN_FILE],
-                    ask: () => "Add an ingredient",
+                    ask: () => "Add a sentence",
                     check: (w) => work(w, MAIN_FILE) !== G.freshWorld().folder[MAIN_FILE],
-                    canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /milk/i, "- a spoon of sugar")),
+                    canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /worked best/i, "It was also the cheapest.")),
                 },
                 done: (w) => work(w, MAIN_FILE) !== G.freshWorld().folder[MAIN_FILE],
-                after: () => `pancakes.md now says <b>changed</b>. Git noticed, but hasn't stored anything yet.`,
+                after: () => `report.md now says <b>changed</b>. Git noticed, but hasn't stored anything yet.`,
                 term: ["working tree", "Your files as they are right now, saved or not."],
             },
             {
@@ -119,42 +100,42 @@ export const chapters = [
             {
                 id: "edit2",
                 kind: "edit",
-                say: () => `Change two files: add a spoon of oil to <b>pancakes.md</b>, and butter to <b>shopping.txt</b>.`,
+                say: () => `Change two files: add a line to <b>report.md</b>, and a line to <b>notes.txt</b>.`,
                 edit: {
-                    files: [MAIN_FILE, "shopping.txt"],
+                    files: [MAIN_FILE, "notes.txt"],
                     ask: () => "Change both files",
-                    check: (w) => [MAIN_FILE, "shopping.txt"].every((f) => changed(w, f)),
+                    check: (w) => [MAIN_FILE, "notes.txt"].every((f) => changed(w, f)),
                     canon: (w) => {
-                        setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /flour/i, "- a spoon of oil"));
-                        setWork(w, "shopping.txt", work(w, "shopping.txt") + "butter\n");
+                        setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /worked best/i, "Users liked it most."));
+                        setWork(w, "notes.txt", work(w, "notes.txt") + "- ask about the budget\n");
                     },
                 },
-                done: (w) => [MAIN_FILE, "shopping.txt"].every((f) => changed(w, f)),
+                done: (w) => [MAIN_FILE, "notes.txt"].every((f) => changed(w, f)),
             },
             {
                 id: "stage-one",
                 kind: "act",
-                say: () => `The recipe is done, the shopping list isn't. Pack <b>only pancakes.md</b>.`,
-                acts: [{ label: "Stage pancakes.md", steps: () => [`git add ${MAIN_FILE}`], ai: "get only pancakes.md ready to save, not the shopping list" }],
+                say: () => `The report change is done, the notes aren't. Pack <b>only report.md</b>.`,
+                acts: [{ label: "Stage report.md", steps: () => [`git add ${MAIN_FILE}`], ai: "get only report.md ready to save, not the notes" }],
                 done: (w) => {
                     const d = desk(w), h = headTree(w);
                     return d.index[MAIN_FILE] === d.work[MAIN_FILE] && d.index[MAIN_FILE] !== h[MAIN_FILE] &&
-                        d.index["shopping.txt"] === h["shopping.txt"] && d.work["shopping.txt"] !== h["shopping.txt"];
+                        d.index["notes.txt"] === h["notes.txt"] && d.work["notes.txt"] !== h["notes.txt"];
                 },
-                after: () => `pancakes.md is packed. shopping.txt stays out. That's what staging is for: you choose exactly what goes into each version.`,
+                after: () => `report.md is packed. notes.txt stays out. That's what staging is for: you choose exactly what goes into each version.`,
             },
             {
                 id: "commit2",
                 kind: "act",
-                say: () => `Save the version with just the recipe in it.`,
+                say: () => `Save the version with just the report in it.`,
                 acts: [{
                         label: "Commit",
-                        inputs: [{ key: "msg", label: "Note for this version", def: () => "Add oil" }],
+                        inputs: [{ key: "msg", label: "Note for this version", def: () => "Add what users liked" }],
                         steps: (_w, v) => [`git commit -m "${q(v.msg)}"`],
-                        ai: "save the staged recipe change with a note",
+                        ai: "save the staged report change with a note",
                     }],
                 done: (w) => count(w, you(w)?.branches.main) >= 2,
-                after: () => `Two versions. shopping.txt is still <b>changed</b>: it wasn't packed.`,
+                after: () => `Two versions. notes.txt is still <b>changed</b>: it wasn't packed.`,
             },
         ],
     },
@@ -168,18 +149,18 @@ export const chapters = [
                 kind: "act",
                 say: () => `A cat walks across your keyboard.`,
                 acts: [{
-                        label: "Let the cat walk over pancakes.md",
-                        steps: () => [(w) => { setWork(w, MAIN_FILE, "# Panc🐾kes\n\nfffffffffff\n- 2 e🐾gs\n;;;;;;;;;;;;\n"); return "🐾 the cat walked over pancakes.md"; }],
+                        label: "Let the cat walk over report.md",
+                        steps: () => [(w) => { setWork(w, MAIN_FILE, "# Team rep🐾rt\n\nfffffffffff\nWe te🐾ted\n;;;;;;;;;;;;\n"); return "🐾 the cat walked over report.md"; }],
                         ai: "",
                     }],
                 done: (w) => work(w, MAIN_FILE).includes("🐾"),
-                after: () => `The recipe is mostly gone. Open it if you want to see the damage.`,
+                after: () => `The report is mostly gone. Open it if you want to see the damage.`,
             },
             {
                 id: "restore",
                 kind: "act",
                 say: () => `Git still has your last saved version. Throw away what the cat did.`,
-                acts: [{ label: "Discard changes to pancakes.md", steps: () => [`git restore ${MAIN_FILE}`], ai: "undo my unsaved changes to pancakes.md" }],
+                acts: [{ label: "Discard changes to report.md", steps: () => [`git restore ${MAIN_FILE}`], ai: "undo my unsaved changes to report.md" }],
                 done: (w) => !work(w, MAIN_FILE).includes("🐾"),
                 after: () => `Back exactly as you last saved it. Unsaved changes can be thrown away. Saved versions stay safe.`,
             },
@@ -192,11 +173,11 @@ export const chapters = [
                     {
                         label: "Open the first version",
                         steps: (w) => [`git switch --detach ${G.short([...G.ancestors(w, you(w).branches.main)].map((id) => w.commits[id]).sort((a, b) => a.n - b.n)[0].id)}`],
-                        ai: "show me the very first version of the recipe",
+                        ai: "show me the very first version of the report",
                     },
                 ],
                 done: (w) => !!desk(w)?.detached && w.commits[desk(w).detached].parents.length === 0,
-                after: () => `Your files now match the first version: no oil. <b>You are here</b> moved back a dot. The newer version is still on the line.`,
+                after: () => `Your files now match the first version. <b>You are here</b> moved back a dot. The newer version is still on the line.`,
                 term: ["HEAD", "Git's name for <b>you are here</b>: the version your files currently match."],
                 more: [["What's a code like 3fa9c21?", "Every version gets a unique ID made from its contents. Tools show it so you can point at an exact version."]],
             },
@@ -211,8 +192,8 @@ export const chapters = [
             {
                 id: "save-shop",
                 kind: "act",
-                say: () => `Save the shopping list too, so nothing is left unsaved.`,
-                acts: [commitAct("Add butter to the shopping list", "shopping.txt")],
+                say: () => `Save the notes too, so nothing is left unsaved.`,
+                acts: [commitAct("Add a note about the budget", "notes.txt")],
                 done: (w) => clean(w) && count(w, you(w).branches.main) >= 3,
                 after: () => `Three versions, nothing unsaved.`,
             },
@@ -226,7 +207,7 @@ export const chapters = [
             {
                 id: "publish",
                 kind: "act",
-                say: () => `Everything is on your laptop only. If it breaks, the recipe is gone, and nobody else can see it.<br><br>Put a copy on GitHub.`,
+                say: () => `Everything is on your laptop only. If it breaks, the report is gone, and nobody else can see it.<br><br>Put a copy on GitHub.`,
                 acts: [{
                         label: "Publish to GitHub",
                         steps: () => [`git remote add origin ${G.REPO_URL}`, "git push -u origin main"],
@@ -243,12 +224,12 @@ export const chapters = [
             {
                 id: "edit3",
                 kind: "edit",
-                say: () => `Change something: add a topping to <b>pancakes.md</b>. Maple syrup?`,
+                say: () => `Add a line to <b>report.md</b>: a result, a number, anything.`,
                 edit: {
                     files: [MAIN_FILE],
-                    ask: () => "Add a topping",
+                    ask: () => "Add a line",
                     check: (w) => changed(w),
-                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE) + "Serve with maple syrup.\n"),
+                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE) + "Results: two of three ideas worked.\n"),
                 },
                 done: (w) => changed(w),
             },
@@ -256,7 +237,7 @@ export const chapters = [
                 id: "commit3",
                 kind: "act",
                 say: () => `Save it as a new version.`,
-                acts: [commitAct("Serve with maple syrup")],
+                acts: [commitAct("Add results")],
                 done: (w) => clean(w) && !!gh(w) && you(w).branches.main !== gh(w).branches.main,
                 after: () => `GitHub doesn't have this dot. Saving only happens on your laptop. It says <b>1 version not uploaded</b>.`,
             },
@@ -292,8 +273,8 @@ export const chapters = [
                         label: "Watch Albert do it",
                         who: "albert",
                         steps: () => [
-                            (w) => { const d = albert(w).desks[0]; d.work[MAIN_FILE] = insertAfter(d.work[MAIN_FILE], /milk/i, "- 1 tsp vanilla (Albert's idea)"); return "(Albert edits pancakes.md)"; },
-                            `git commit -am "Add vanilla"`,
+                            (w) => { const d = albert(w).desks[0]; d.work[MAIN_FILE] = insertAfter(d.work[MAIN_FILE], /next step/i, "See the chart in the appendix."); return "(Albert edits report.md)"; },
+                            `git commit -am "Point to the chart"`,
                             "git push",
                         ],
                     }],
@@ -306,7 +287,7 @@ export const chapters = [
                 say: () => `Bring Albert's version down to your laptop.`,
                 acts: [pullAct],
                 done: (w) => synced(w, "main") && desk(w).branch === "main",
-                after: () => `pancakes.md has the vanilla now, and Albert's dot is on your line with his name on it. <b>Push</b> sends up, <b>pull</b> brings down.`,
+                after: () => `report.md has Albert's line now, and his dot is on your line with his name on it. <b>Push</b> sends up, <b>pull</b> brings down.`,
                 term: ["pull", "Download new versions from GitHub and update your files to match."],
             },
         ],
@@ -314,32 +295,32 @@ export const chapters = [
     {
         title: "Try an idea safely",
         short: "branch",
-        goal: "try ideas without breaking the main recipe",
+        goal: "try ideas without breaking main",
         beats: [
             {
                 id: "mkbranch",
                 kind: "act",
-                say: () => `You want to try blueberries, but main is the version everyone cooks from. Don't break it with a half-tested idea.<br><br>Start a <b>branch</b>: a separate line of versions for the experiment.`,
+                say: () => `You want to try a summary at the top, but main is the version everyone reads. Don't break it with a half-finished idea.<br><br>Start a <b>branch</b>: a separate line of versions for the experiment.`,
                 acts: [{
                         label: "New branch",
-                        inputs: [{ key: "name", label: "Branch name", def: () => "blueberries" }],
-                        steps: (_w, v) => [`git switch -c ${(v.name ?? "").trim().replace(/\s+/g, "-") || "blueberries"}`],
-                        ai: "start a new branch for trying blueberries",
+                        inputs: [{ key: "name", label: "Branch name", def: () => "summary" }],
+                        steps: (_w, v) => [`git switch -c ${(v.name ?? "").trim().replace(/\s+/g, "-") || "summary"}`],
+                        ai: "start a new branch for trying a summary",
                     }],
                 done: (w) => !!desk(w)?.branch && desk(w).branch !== "main",
                 onDone: (w) => { w.vars.branch = desk(w).branch; },
                 after: (w) => `<b>${br(w)}</b> sits on the same dot as main. You're on it now, so your next version goes there.`,
-                term: ["branch", "A named line of versions. <b>main</b> is the one everyone treats as the real recipe."],
+                term: ["branch", "A named line of versions. <b>main</b> is the one everyone treats as the real version."],
             },
             {
                 id: "edit4",
                 kind: "edit",
-                say: () => `Add blueberries to <b>pancakes.md</b>.`,
+                say: () => `Add a one-line summary under the title in <b>report.md</b>.`,
                 edit: {
                     files: [MAIN_FILE],
-                    ask: () => "Add blueberries",
+                    ask: () => "Add a summary",
                     check: (w) => changed(w),
-                    canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /milk/i, "- a handful of blueberries")),
+                    canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /^# /, "Summary: idea two wins.")),
                 },
                 done: (w) => changed(w),
             },
@@ -347,7 +328,7 @@ export const chapters = [
                 id: "commit4",
                 kind: "act",
                 say: (w) => `Save it on ${br(w)}.`,
-                acts: [commitAct("Add blueberries")],
+                acts: [commitAct("Add a summary")],
                 done: (w) => clean(w) && you(w).branches[br(w)] !== you(w).branches.main,
                 after: () => `Your dot sits on its own lane. main didn't move.`,
             },
@@ -357,15 +338,15 @@ export const chapters = [
                 say: () => `Peek at main.`,
                 acts: [{ label: "Switch to main", steps: () => ["git switch main"], ai: "switch to the main branch" }],
                 done: (w) => desk(w)?.branch === "main",
-                after: () => `No blueberries! Switching branches swaps the files in your folder to match. The experiment waits on its own line.`,
+                after: () => `No summary! Switching branches swaps the files in your folder to match. The experiment waits on its own line.`,
             },
             {
                 id: "back",
                 kind: "act",
                 say: (w) => `Switch back to ${br(w)}.`,
-                acts: [{ label: "Switch back", steps: (w) => [`git switch ${br(w)}`], ai: "go back to my blueberry branch" }],
+                acts: [{ label: "Switch back", steps: (w) => [`git switch ${br(w)}`], ai: "go back to my summary branch" }],
                 done: (w) => desk(w)?.branch === br(w),
-                after: () => `Blueberries are back.`,
+                after: () => `The summary is back.`,
             },
         ],
     },
@@ -377,7 +358,7 @@ export const chapters = [
             {
                 id: "pubbranch",
                 kind: "act",
-                say: (w) => `The blueberries are ready. Before they go into main, you want someone to check them. Start by putting <b>${br(w)}</b> on GitHub.`,
+                say: (w) => `The summary is ready. Before it goes into main, you want someone to check it. Start by putting <b>${br(w)}</b> on GitHub.`,
                 acts: [{ label: "Publish branch", steps: (w) => [`git push -u origin ${br(w)}`], ai: "put my branch on GitHub" }],
                 done: (w) => synced(w, br(w)),
                 after: (w) => `GitHub has two lines now: main and ${br(w)}.`,
@@ -389,7 +370,7 @@ export const chapters = [
                 acts: [{
                         label: "Create pull request",
                         look: "github",
-                        inputs: [{ key: "title", label: "Title", def: () => "Add blueberries" }],
+                        inputs: [{ key: "title", label: "Title", def: () => "Add a summary" }],
                         steps: (w, v) => [`gh pr create --title "${q(v.title)}" --base main --head ${br(w)}`],
                         ai: "open a pull request for my branch",
                     }],
@@ -400,34 +381,34 @@ export const chapters = [
             {
                 id: "review",
                 kind: "watch",
-                say: () => `Toby, who also works on the recipe, gets a notification and reviews it.`,
+                say: () => `Toby, who also works on the report, gets a notification and reviews it.`,
                 acts: [{
                         label: "Watch Toby review it",
                         ai: "",
-                        steps: () => [(w) => { w.prs[0].comments.push({ who: "Toby", text: "Tasty! Add a squeeze of lemon? It makes the berries pop." }); return "(Toby comments on the pull request)"; }],
+                        steps: () => [(w) => { w.prs[0].comments.push({ who: "Toby", text: "Nice. Can you mark it as a draft, so nobody quotes it yet?" }); return "(Toby comments on the pull request)"; }],
                     }],
                 done: (w) => (w.prs[0]?.comments.length ?? 0) >= 1,
                 after: () => `Toby's comment is on the pull request. Reviews happen there, before anything reaches main.`,
             },
             {
-                id: "lemon",
+                id: "draft",
                 kind: "edit",
-                say: () => `Fair. Add a squeeze of lemon to <b>pancakes.md</b>.`,
+                say: () => `Fair. Add the word <b>draft</b> to the summary in <b>report.md</b>.`,
                 edit: {
                     files: [MAIN_FILE],
-                    ask: () => "Add lemon",
-                    check: (w) => /lemon/i.test(work(w, MAIN_FILE)) && changed(w),
-                    canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /blueberr/i, "- a squeeze of lemon")),
+                    ask: () => "Mark it as a draft",
+                    check: (w) => /draft/i.test(work(w, MAIN_FILE)) && changed(w),
+                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE).replace(/^Summary:/m, "Summary (draft):")),
                 },
-                done: (w) => /lemon/i.test(work(w, MAIN_FILE)) && changed(w),
+                done: (w) => /draft/i.test(work(w, MAIN_FILE)) && changed(w),
             },
             {
                 id: "pushfix",
                 kind: "act",
                 say: (w) => `Save and push. No new pull request needed: it follows ${br(w)} and updates itself.`,
-                acts: [commitAct("Add lemon"), pushAct],
-                done: (w) => synced(w, br(w)) && /lemon/i.test(G.treeOf(w, gh(w).branches[br(w)])[MAIN_FILE] ?? ""),
-                after: () => `The pull request shows the lemon too.`,
+                acts: [commitAct("Mark the summary as a draft"), pushAct],
+                done: (w) => synced(w, br(w)) && /draft/i.test(G.treeOf(w, gh(w).branches[br(w)])[MAIN_FILE] ?? ""),
+                after: () => `The pull request shows the change too.`,
             },
             {
                 id: "approve",
@@ -446,7 +427,7 @@ export const chapters = [
                 say: () => `Approved. Press merge.`,
                 acts: [{ label: "Merge pull request", look: "github", steps: () => ["gh pr merge 1 --merge"], ai: "merge the approved pull request" }],
                 done: (w) => w.prs[0]?.state === "merged",
-                after: (w) => `main on GitHub has your blueberries. A dot with two parents joins ${br(w)} back into main.`,
+                after: (w) => `main on GitHub has your summary. A dot with two parents joins ${br(w)} back into main.`,
                 term: ["merge", "Combine the versions from one branch into another."],
             },
             {
@@ -465,39 +446,39 @@ export const chapters = [
         goal: "settle a clash between two changes",
         beats: [
             {
-                id: "albert-eggs",
+                id: "albert-deadline",
                 kind: "watch",
-                say: () => `Albert thinks the batter is too thin. He changes the eggs line and pushes straight to main.`,
+                say: () => `Albert hears the deadline moved. He changes the deadline line and pushes straight to main.`,
                 acts: [{
                         label: "Watch Albert do it",
                         who: "albert",
                         steps: () => [
                             "git pull",
-                            (w) => { const d = albert(w).desks[0]; d.work[MAIN_FILE] = d.work[MAIN_FILE].replace(eggLine(d.work[MAIN_FILE]), "- 3 eggs"); return "(Albert changes the eggs to 3)"; },
-                            `git commit -am "Use 3 eggs"`,
+                            (w) => { const d = albert(w).desks[0]; d.work[MAIN_FILE] = d.work[MAIN_FILE].replace(keyLine(d.work[MAIN_FILE]), "Deadline: Thursday"); return "(Albert changes the deadline to Thursday)"; },
+                            `git commit -am "Deadline is Thursday"`,
                             "git push",
                         ],
                     }],
-                done: (w) => !!gh(w) && eggLine(G.treeOf(w, gh(w).branches.main)[MAIN_FILE] ?? "") === "- 3 eggs",
-                after: () => `main on GitHub says 3 eggs. You haven't pulled, so your laptop still has the old line.`,
+                done: (w) => !!gh(w) && keyLine(G.treeOf(w, gh(w).branches.main)[MAIN_FILE] ?? "") === "Deadline: Thursday",
+                after: () => `main on GitHub says Thursday. You haven't pulled, so your laptop still has the old line.`,
             },
             {
-                id: "my-eggs",
+                id: "my-deadline",
                 kind: "edit",
-                say: () => `You decide the eggs are wrong too. In <b>pancakes.md</b>, change the eggs line to <b>1 egg</b>.`,
+                say: () => `You heard something else. In <b>report.md</b>, change the deadline to <b>Monday</b>.`,
                 edit: {
                     files: [MAIN_FILE],
-                    ask: () => "Change the eggs line",
-                    check: (w) => { const e = eggLine(work(w, MAIN_FILE)); return !!e && e !== eggLine(headTree(w)[MAIN_FILE] ?? "") && e !== "- 3 eggs"; },
-                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE).replace(eggLine(work(w, MAIN_FILE)), "- 1 egg")),
+                    ask: () => "Change the deadline",
+                    check: (w) => { const e = keyLine(work(w, MAIN_FILE)); return !!e && e !== keyLine(headTree(w)[MAIN_FILE] ?? "") && e !== "Deadline: Thursday"; },
+                    canon: (w) => setWork(w, MAIN_FILE, work(w, MAIN_FILE).replace(keyLine(work(w, MAIN_FILE)), "Deadline: Monday")),
                 },
-                done: (w) => { const e = eggLine(work(w, MAIN_FILE)); return !!e && e !== eggLine(headTree(w)[MAIN_FILE] ?? "") && e !== "- 3 eggs"; },
+                done: (w) => { const e = keyLine(work(w, MAIN_FILE)); return !!e && e !== keyLine(headTree(w)[MAIN_FILE] ?? "") && e !== "Deadline: Thursday"; },
             },
             {
                 id: "commit5",
                 kind: "act",
                 say: () => `Save it.`,
-                acts: [commitAct("Use 1 egg")],
+                acts: [commitAct("Deadline is Monday")],
                 done: (w) => clean(w) && !G.isAncestor(w, you(w).branches.main, gh(w).branches.main) && you(w).branches.main !== gh(w).branches.main,
             },
             {
@@ -520,7 +501,7 @@ export const chapters = [
             {
                 id: "resolve",
                 kind: "resolve",
-                say: () => `Open <b>pancakes.md</b>. Git marked both versions of the line. Pick which one stays.`,
+                say: () => `Open <b>report.md</b>. Git marked both versions of the line. Pick which one stays.`,
                 done: (w) => !G.hasMarkers(work(w, MAIN_FILE)),
                 after: () => `The marks are gone and the line says what you chose.`,
                 more: [["What are the <<<<<<< lines?", "Git's conflict marks inside the file: your version sits between <<<<<<< and =======, the other between ======= and >>>>>>>. Editors turn them into buttons like the ones you used."]],
@@ -529,7 +510,7 @@ export const chapters = [
                 id: "finish",
                 kind: "act",
                 say: () => `Save the result and push.`,
-                acts: [commitAct("Settle the eggs"), pushAct],
+                acts: [commitAct("Settle the deadline"), pushAct],
                 done: (w) => !desk(w)?.merging && synced(w, "main"),
                 after: () => `Both changes are in the history, and so is your decision. Albert gets it on his next pull.`,
             },
@@ -543,23 +524,23 @@ export const chapters = [
             {
                 id: "choc",
                 kind: "act",
-                say: () => `New idea: chocolate chips. Start a branch for it.`,
-                acts: [{ label: "New branch", steps: () => ["git switch -c chocolate"], ai: "start a branch called chocolate" }],
-                done: (w) => !!you(w)?.branches.chocolate,
-                after: () => `You're on <b>chocolate</b>.`,
+                say: () => `New idea: a chart. Start a branch for it.`,
+                acts: [{ label: "New branch", steps: () => ["git switch -c chart"], ai: "start a branch called chart" }],
+                done: (w) => !!you(w)?.branches.chart,
+                after: () => `You're on <b>chart</b>.`,
             },
             {
                 id: "choc-edit",
                 kind: "edit",
-                say: () => `Add a line for chocolate chips to <b>pancakes.md</b>. Don't save it yet; you're not sure.`,
+                say: () => `Add a line about the chart to <b>report.md</b>. Don't save it yet; you're not sure.`,
                 edit: {
                     files: [MAIN_FILE],
-                    ask: () => "Add chocolate chips",
+                    ask: () => "Add a chart idea",
                     check: (w) => changed(w),
-                    canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /milk/i, "- chocolate chips (how many??)")),
+                    canon: (w) => setWork(w, MAIN_FILE, insertAfter(work(w, MAIN_FILE), /next step/i, "Maybe a chart here? (unsure)")),
                 },
-                done: (w) => desk(w)?.branch === "chocolate" && changed(w),
-                after: () => `Albert messages you: "There's a typo on main, can you fix it right now?"<br><br>Your chocolate work is half done. Switching now means saving a half idea or throwing it away.`,
+                done: (w) => desk(w)?.branch === "chart" && changed(w),
+                after: () => `Albert messages you: "There's a typo on main, can you fix it right now?"<br><br>Your chart work is half done. Switching now means saving a half idea or throwing it away.`,
             },
             {
                 id: "wt",
@@ -567,7 +548,7 @@ export const chapters = [
                 say: () => `Open a <b>second desk</b> instead: another folder on your laptop, on its own branch, sharing the same history.`,
                 acts: [{ label: "Open a second desk", steps: () => ["git worktree add ../my-recipe-fix -b fix-typo main"], ai: "give me a separate folder to fix a typo on main without touching my current work" }],
                 done: (w) => (you(w)?.desks.length ?? 0) >= 2,
-                after: () => `A second folder, <b>my-recipe-fix</b>, on a new branch fix-typo. The chocolate work sits untouched on desk one.`,
+                after: () => `A second folder, <b>my-recipe-fix</b>, on a new branch fix-typo. The chart work sits untouched on desk one.`,
                 term: ["worktree", "An extra folder for the same project, each on its own branch. People and AI coding tools use them to work on several things at once."],
                 more: [["Why do AI tools care?", "An AI agent in your folder would trip over your half-done changes. Giving each agent its own worktree lets several work at once, each on its own branch, and you review each as a pull request."]],
             },
@@ -575,19 +556,19 @@ export const chapters = [
                 id: "typo",
                 kind: "edit",
                 desk: 1,
-                say: (w) => /buter\b/.test(G.treeOf(w, head(w, 1))[MAIN_FILE] ?? "")
-                    ? `On the second desk, open <b>pancakes.md</b> and fix the typo: <b>buter</b> should be <b>butter</b>.`
-                    : `You already fixed the butter typo earlier. On the second desk, open <b>pancakes.md</b> and fix something small.`,
+                say: (w) => /helpd\b/.test(G.treeOf(w, head(w, 1))[MAIN_FILE] ?? "")
+                    ? `On the second desk, open <b>report.md</b> and fix the typo: <b>helpd</b> should be <b>helped</b>.`
+                    : `You already fixed the typo earlier. On the second desk, open <b>report.md</b> and fix something small.`,
                 edit: {
                     files: [MAIN_FILE],
                     ask: () => "Fix the typo",
-                    check: (w) => changed(w, MAIN_FILE, 1) && !/buter\b/.test(work(w, MAIN_FILE, 1)),
+                    check: (w) => changed(w, MAIN_FILE, 1) && !/helpd\b/.test(work(w, MAIN_FILE, 1)),
                     canon: (w) => {
                         const t = work(w, MAIN_FILE, 1);
-                        setWork(w, MAIN_FILE, /buter\b/.test(t) ? t.replace(/buter\b/, "butter") : t + "Fry on medium heat.\n", 1);
+                        setWork(w, MAIN_FILE, /helpd\b/.test(t) ? t.replace(/helpd\b/, "helped") : t + "Fry on medium heat.\n", 1);
                     },
                 },
-                done: (w) => changed(w, MAIN_FILE, 1) && !/buter\b/.test(work(w, MAIN_FILE, 1)),
+                done: (w) => changed(w, MAIN_FILE, 1) && !/helpd\b/.test(work(w, MAIN_FILE, 1)),
             },
             {
                 id: "fixpush",
@@ -596,7 +577,7 @@ export const chapters = [
                 say: () => `Save it on the second desk and push fix-typo.`,
                 acts: [commitAct("Fix typo"), { label: "Publish branch", steps: () => ["git push -u origin fix-typo"], ai: "put the fix-typo branch on GitHub" }],
                 done: (w) => synced(w, "fix-typo") && you(w).branches["fix-typo"] !== you(w).branches.main,
-                after: () => `The fix is on GitHub, ready for a pull request. Desk one still has the chocolate work, exactly as you left it.`,
+                after: () => `The fix is on GitHub, ready for a pull request. Desk one still has the chart work, exactly as you left it.`,
             },
         ],
     },

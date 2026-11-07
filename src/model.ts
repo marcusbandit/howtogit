@@ -77,13 +77,13 @@ export function freshWorld(): World {
     commits: {},
     repos: {},
     folder: {
-      "pancakes.md":
-        "# Pancakes\n\n- 2 eggs\n- 1 cup flour\n- 1 cup milk\n\nMix everything, then fry in buter.\n",
-      "shopping.txt": "eggs\nflour\n",
+      "report.md":
+        "# Team report\n\nWe tested three ideas this month.\nThe second one worked best.\nNext step: try it with real users.\n\nDeadline: Friday\nThanks to everyone who helpd.\n",
+      "notes.txt": "rough notes\n- check the numbers\n",
     },
     prs: [],
     counter: 0,
-    vars: { branch: "blueberries" },
+    vars: { branch: "summary" },
   };
 }
 

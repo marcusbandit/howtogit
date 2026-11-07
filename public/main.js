@@ -12,6 +12,7 @@
 import * as G from "./model.js";
 import { chapters, MAIN_FILE } from "./story.js";
 import { exec, replayTo } from "./engine.js";
+import { showIntro, introSeen } from "./intro.js";
 import { circlePath, linePath, smooth, drawOn, el, prefersReduced } from "./sketch.js";
 const $ = (s) => document.querySelector(s);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -520,14 +521,11 @@ function setPart(node, html) {
 const fileStateSeen = new Map();
 function renderWorld() {
     const root = $("#world");
-    const view = ci === 0 ? (bi === 0 ? "mess" : "map") : "places";
+    const view = "places";
     if (root.dataset.view !== view) {
         root.innerHTML = view === "places" ? `<div class="world__recap"></div>` : "";
         root.dataset.view = view;
-    }
-    if (view !== "places") {
-        setPart(root, view === "mess" ? messHtml() : mapHtml());
-        return;
+        parts.clear(); // everything cached for the old view is gone from the page
     }
     setPart(root.querySelector(".world__recap"), ci === chapters.length - 1 ? mapHtml(true) : "");
     const cols = columns();
@@ -573,17 +571,6 @@ function renderWorld() {
     });
     syncScroll();
 }
-function messHtml() {
-    const files = ["pancakes.doc", "pancakes_v2.doc", "pancakes_final.doc", "pancakes_final_REALLY.doc", "pancakes (edited).doc", "pancakes_final_USE_THIS.doc", "pancakes_final_USE_THIS_2.doc"];
-    return `<div class="mess">
-    <div class="place place--you"><header class="place__head"><span class="ico ico--laptop"></span><h3>Your computer</h3></header>
-      <div class="desk"><p class="desk__title"><span class="folder"></span> recipes</p>
-        <ul class="files">${files.map((f, i) => `<li class="file-row" style="--tilt:${(i % 3) - 1}deg"><span class="fname">${esc(f)}</span></li>`).join("")}</ul>
-      </div>
-    </div>
-    <p class="mess__q">Which one is the real one?</p>
-  </div>`;
-}
 /* the idea in one picture: two computers, one shared copy online */
 function mapHtml(recap = false) {
     return `<div class="map ${recap ? "map--recap" : ""}">
@@ -628,7 +615,7 @@ function leftHtml(id) {
         return deskHtml("you", null, 0);
     return r.desks.map((_, i) => deskHtml(id, r, i)).join("");
 }
-/* the recipe as it is in this folder right now; lines you changed since the
+/* the main file as it is in this folder right now; lines you changed since the
  * last saved version are marked, so you can see what a commit will hold */
 function peekHtml(d, r) {
     const text = d ? d.work[MAIN_FILE] : w.folder?.[MAIN_FILE];
@@ -1044,6 +1031,19 @@ function boot() {
     else {
         goto(0, 0, { replay: true });
     }
+    const intro = (first) => showIntro(mode, (m) => {
+        mode = m;
+        renderMode();
+        if (first)
+            goto(0, 0, { replay: true });
+        else {
+            renderLesson();
+            save();
+        }
+    });
+    if (q.has("intro") || (!introSeen() && !q.has("ch")))
+        intro(true);
+    $(".brand").addEventListener("click", (e) => { e.preventDefault(); intro(false); });
     if (q.has("done")) {
         // dev: finish the current beat the typical way, to screenshot its after state
         w = replayTo(ci, bi + 1);
