@@ -428,7 +428,7 @@ function colorOf(b) {
     return branchColor.get(b);
 }
 const drawn = new Map();
-const COL = 74, X0 = 46;
+const COL = 100, X0 = 56;
 const STATE_WORDS = {
     saved: "saved", changed: "changed", staged: "ready to save", "staged+changed": "ready, then changed again",
     new: "new", conflict: "conflict!", deleted: "deleted", "staged-deleted": "deletion ready to save",

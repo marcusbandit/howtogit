@@ -408,7 +408,7 @@ function colorOf(b: string) {
   return branchColor.get(b)!;
 }
 const drawn = new Map<string, Set<string>>();
-const COL = 74, X0 = 46;
+const COL = 100, X0 = 56;
 
 const STATE_WORDS: Record<G.FileState, string> = {
   saved: "saved", changed: "changed", staged: "ready to save", "staged+changed": "ready, then changed again",
