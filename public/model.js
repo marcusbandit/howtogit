@@ -12,7 +12,7 @@
  */
 export class GitError extends Error {
 }
-export const REPO_URL = "https://github.com/you/my-recipe.git";
+export const REPO_URL = "https://github.com/you/my-report.git";
 export const urlOk = (u) => /^(https:\/\/)?github\.com\/[\w.-]+\/[\w.-]+?(\.git)?$/i.test(u) ||
     /^git@github\.com:[\w.-]+\/[\w.-]+?(\.git)?$/i.test(u);
 export function freshWorld() {
@@ -216,14 +216,14 @@ function newCommit(w, msg, parents, tree, author) {
 }
 export function init(w) {
     if (w.repos.you)
-        return "Reinitialized existing Git repository in ~/my-recipe/.git/";
+        return "Reinitialized existing Git repository in ~/my-report/.git/";
     w.repos.you = {
         id: "you", label: "Your computer", bare: false, branches: {},
-        desks: [{ path: "~/my-recipe", branch: "main", detached: null, work: { ...(w.folder ?? {}) }, index: {}, merging: null }],
+        desks: [{ path: "~/my-report", branch: "main", detached: null, work: { ...(w.folder ?? {}) }, index: {}, merging: null }],
         remote: null, tracking: {}, upstream: {},
     };
     w.folder = null;
-    return "Initialized empty Git repository in ~/my-recipe/.git/";
+    return "Initialized empty Git repository in ~/my-report/.git/";
 }
 export function add(_w, _r, d, specs) {
     const all = specs.some((s) => s === "." || s === "-A" || s === "--all");
@@ -572,7 +572,7 @@ export function cloneTo(w, id, label, url, path) {
     if (!gh || !gh.branches.main)
         throw new GitError(`fatal: repository '${url}' not found`);
     if (w.repos[id])
-        throw new GitError(`fatal: destination path 'my-recipe' already exists and is not an empty directory.`);
+        throw new GitError(`fatal: destination path 'my-report' already exists and is not an empty directory.`);
     const tracking = {};
     for (const [b, c] of Object.entries(gh.branches))
         tracking[`origin/${b}`] = c;
@@ -583,7 +583,7 @@ export function cloneTo(w, id, label, url, path) {
         desks: [{ path, branch: "main", detached: null, work: { ...tree }, index: { ...tree }, merging: null }],
         remote: { name: "origin", url }, tracking, upstream: { main: "origin/main" },
     };
-    return `Cloning into 'my-recipe'...\nReceiving objects: 100% (${ancestors(w, gh.branches.main).size} commits), done.`;
+    return `Cloning into 'my-report'...\nReceiving objects: 100% (${ancestors(w, gh.branches.main).size} commits), done.`;
 }
 export function worktreeAdd(w, r, from, path, newBranch, start) {
     const full = "~/" + path.replace(/^\.\.\//, "").replace(/^~\//, "").replace(/\/$/, "");
@@ -622,7 +622,7 @@ export function prCreate(w, head, base, title, author) {
         throw new GitError(`a pull request for branch "${head}" already exists: #${open.n}`);
     const n = w.prs.length + 1;
     w.prs.push({ n, title, head, base, author, state: "open", approved: false, comments: [] });
-    return `https://github.com/you/my-recipe/pull/${n}`;
+    return `https://github.com/you/my-report/pull/${n}`;
 }
 export function prMerge(w, n, author) {
     const pr = w.prs.find((p) => p.n === n);

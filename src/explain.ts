@@ -164,7 +164,7 @@ export function explain(cmd: string): Explained | null {
         else P(rest[i], "the version to start from");
       }
       A("git worktree list", "see every desk and its branch");
-      A("git worktree remove ../my-recipe-fix", "put a desk away when you're done");
+      A("git worktree remove ../my-report-fix", "put a desk away when you're done");
       break;
     case "status":
       P("status", "say what's changed, what's staged, and which branch you're on");

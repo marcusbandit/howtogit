@@ -63,7 +63,7 @@ export function showIntro(mode, onStart) {
             </div>
           </div>
           <div class="preview__pane preview__pane--command">
-            <div class="pv-term"><p><b>~/my-recipe $</b> <span class="pv-type">git commit -m "First version"</span><span class="pv-caret"></span></p>
+            <div class="pv-term"><p><b>~/my-report $</b> <span class="pv-type">git commit -m "First version"</span><span class="pv-caret"></span></p>
               <p class="pv-out">[main 3fa9c21] First version</p></div>
           </div>
           <div class="preview__pane preview__pane--ai">

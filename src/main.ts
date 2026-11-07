@@ -521,7 +521,7 @@ function buttonsHtml(mine: Act[], acts: Act[]): string {
       </div>
     </div>` : ""}
     ${web.length ? `<div class="webwin">
-      <p class="webwin__bar"><span class="webwin__dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="webwin__url">github.com/you/my-recipe</span></p>
+      <p class="webwin__bar"><span class="webwin__dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="webwin__url">github.com/you/my-report</span></p>
       <div class="webwin__body acts">${web.map(act).join("")}</div>
     </div>` : ""}`;
 }
@@ -537,7 +537,7 @@ function hintCmds(mine: Act[]): string[] {
 function prompt(): string {
   const r = w.repos.you;
   const d = r?.desks[termDesk] ?? r?.desks[0];
-  const where = d ? d.path : "~/my-recipe";
+  const where = d ? d.path : "~/my-report";
   const br = d ? (d.detached ? G.short(d.detached) : d.branch) : null;
   return `${esc(where)}${r && br ? ` <span class="pr-br">(${esc(br)})</span>` : ""} $`;
 }
@@ -852,7 +852,7 @@ function mapHtml(recap = false): string {
 function headHtml(id: Place): string {
   const r = w.repos[id];
   const title = id === "github" ? "GitHub" : id === "you" ? "Your computer" : "Albert's computer";
-  const sub = id === "github" ? "github.com/you/my-recipe · the shared copy" : id === "you" ? "your laptop" : "Albert's laptop, at his place";
+  const sub = id === "github" ? "github.com/you/my-report · the shared copy" : id === "you" ? "your laptop" : "Albert's laptop, at his place";
   let badge = "";
   if (r && id !== "github") {
     const ab = G.aheadBehind(w, r, r.desks[0]);
@@ -894,7 +894,7 @@ const typos = (html: string) => html.replace(TYPOS, '<span class="typo" title="s
 function deskHtml(place: "you" | "albert", r: G.Repo | null, i: number): string {
   const d = r?.desks[i] ?? null;
   const files = r && d ? G.fileStates(w, r, d) : Object.keys(w.folder ?? {}).sort().map((p) => ({ path: p, state: "plain" as const }));
-  const name = d ? d.path.replace("~/", "") : "my-recipe";
+  const name = d ? d.path.replace("~/", "") : "my-report";
   const on = d ? (d.detached ? `<span class="desk__on">looking at an old version</span>` : `<span class="desk__on">on <b style="color:${colorOf(d.branch!)}">${esc(d.branch!)}</b></span>`) : "";
   const label = r && r.desks.length > 1 ? `<span class="desk__n">desk ${i + 1}</span>` : "";
   return `<div class="desk">
