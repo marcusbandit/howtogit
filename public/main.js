@@ -1478,14 +1478,78 @@ function glideStrip(id, cols, heres) {
     };
     tweens.set(id, window.requestAnimationFrame(step));
 }
-/* keep every strip scrolled together, and pinned to the newest versions */
+/* keep every strip scrolled together, and pinned to the newest versions.
+ * Phones: the strips don't scroll themselves; one invisible scroller laid over
+ * the whole overview takes the swipe (with the phone's own momentum) and every
+ * strip copies its one position in the same frame, so they can't drift apart.
+ * Wider screens: only the strip you're touching leads; the rest follow it and
+ * never echo their own scroll back. */
+let lead = null;
 function syncScroll() {
     const strips = [...document.querySelectorAll(".strip")];
+    const ov = ovScroller();
     strips.forEach((s) => {
         s.scrollLeft = s.scrollWidth;
-        s.onscroll = () => strips.forEach((o) => { if (o !== s && Math.abs(o.scrollLeft - s.scrollLeft) > 1)
-            o.scrollLeft = s.scrollLeft; });
+        const take = () => { lead = s; };
+        s.onpointerdown = take;
+        s.onwheel = take;
+        s.ontouchstart = take;
+        s.onscroll = () => {
+            if (narrow() || (lead && lead !== s))
+                return;
+            strips.forEach((o) => { if (o !== s)
+                o.scrollLeft = s.scrollLeft; });
+        };
     });
+    placeOv();
+    ov.scrollLeft = ov.scrollWidth;
+}
+function ovScroller() {
+    let ov = document.querySelector("#world > .ov-scroll");
+    if (ov)
+        return ov;
+    ov = document.createElement("div");
+    ov.className = "ov-scroll";
+    ov.setAttribute("aria-hidden", "true");
+    ov.innerHTML = `<div class="ov-scroll__w"></div>`;
+    $("#world").append(ov);
+    ov.addEventListener("scroll", () => {
+        const x = ov.scrollLeft;
+        document.querySelectorAll("#world .strip").forEach((s) => { s.scrollLeft = x; });
+    }, { passive: true });
+    new ResizeObserver(placeOv).observe($("#world"));
+    return ov;
+}
+/* the scroller covers the overview, from the first place's name down to the last line */
+function placeOv() {
+    const ov = document.querySelector("#world > .ov-scroll");
+    if (!ov)
+        return;
+    if (!narrow()) {
+        ov.hidden = true;
+        return;
+    }
+    const parts = overview();
+    const strips = [...document.querySelectorAll("#world .strip")].filter((e) => e.getBoundingClientRect().height > 0);
+    if (!parts.length || !strips.length) {
+        ov.hidden = true;
+        return;
+    }
+    ov.hidden = false;
+    const box = $("#world").getBoundingClientRect();
+    const top = Math.min(...parts.map((e) => e.getBoundingClientRect().top)) - box.top;
+    const bottom = Math.max(...parts.map((e) => e.getBoundingClientRect().bottom)) - box.top;
+    const s0 = strips[0].getBoundingClientRect();
+    ov.style.top = `${top}px`;
+    ov.style.height = `${bottom - top}px`;
+    // same inner width as the lines, so both reach their ends together
+    ov.style.left = `${s0.left - box.left + strips[0].clientLeft}px`;
+    ov.style.width = `${strips[0].clientWidth}px`;
+    const w = Math.max(...strips.map((s) => s.scrollWidth));
+    ov.firstElementChild.style.width = `${w}px`;
+    // the strips may have been pinned to the newest end; the scroller starts there too
+    if (Math.abs(ov.scrollLeft - strips[0].scrollLeft) > 1)
+        ov.scrollLeft = strips[0].scrollLeft;
 }
 function snapshotFx() {
     const have = {};

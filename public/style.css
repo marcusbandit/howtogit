@@ -941,7 +941,7 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
  * (tap for the list), your git words, and a menu holding the mode and the
  * theme. Back, Undo and Next stay pinned at the bottom in thumb reach, and the
  * places show one at a time as tabs under the lesson. */
-.chap-pill, .menu-btn, .world__tabs { display: none; }
+.chap-pill, .menu-btn, .world__tabs, .ov-scroll { display: none; }
 .menu-btn { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--card); place-items: center; flex: none; }
 .menu-btn svg { width: 20px; height: 20px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; }
 .chap-pill { align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 4px 14px 4px 4px; border-radius: 999px; border: 1.5px solid var(--accent); background: var(--card); color: var(--ink); text-align: left; }
@@ -1013,6 +1013,7 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
   /* one place at a time; the others keep their width so their graphs stay drawn */
   .world { position: relative; gap: 10px; }
   .world__tabs:not(:empty) { display: flex; gap: 6px; }
+  .ov-scroll:not([hidden]) { display: block; }
   .wtab { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 4px 8px;
     border-radius: 999px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink-soft); font-size: 14px; font-weight: 600; white-space: nowrap; }
   .wtab .ico { flex: none; transform: scale(.8); }
@@ -1039,6 +1040,13 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
   .place--github > .place__head, .place--github .strip { border-color: color-mix(in srgb, var(--pen-remote) 60%, transparent); background: color-mix(in srgb, var(--pen-remote) 6%, var(--card)); }
   .place--albert > .place__head, .place--albert .strip { border-color: color-mix(in srgb, var(--friend) 55%, transparent); }
   .place > .place__head, .place .strip { box-sizing: border-box; }
+  /* one scroller for every line; the lines themselves only follow it */
+  .world { position: relative; }
+  .place .strip, .place .strip.is-gliding { overflow-x: hidden; }
+  .place > .place__head { position: relative; z-index: 2; }
+  .ov-scroll { position: absolute; z-index: 1; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .ov-scroll::-webkit-scrollbar { display: none; }
+  .ov-scroll__w { height: 1px; }
   .place__head h3 { font-size: 20px; }
   .place__head .ico { transform: scale(.85); }
   .place__sub { display: none; }
