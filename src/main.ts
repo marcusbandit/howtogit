@@ -699,6 +699,23 @@ function setPart(node: Element | null, html: string): boolean {
 }
 const fileStateSeen = new Map<string, string>();
 
+/* retype a label: backspace the old words, then type the new ones, with a caret.
+ * The "▲ " in front stays put. */
+function typeOver(t: SVGTextElement, from: string, to: string, ms: number) {
+  const keep = from.startsWith("▲ ") && to.startsWith("▲ ") ? "▲ " : "";
+  const a = from.slice(keep.length), b = to.slice(keep.length);
+  const steps = a.length + b.length;
+  const tick = Math.max(18, ms / Math.max(1, steps));
+  let i = 0;
+  t.textContent = from;
+  const timer = window.setInterval(() => {
+    i++;
+    const shown = i <= a.length ? a.slice(0, a.length - i) : b.slice(0, i - a.length);
+    t.textContent = keep + shown + (i < steps ? "|" : "");
+    if (i >= steps) window.clearInterval(timer);
+  }, tick);
+}
+
 /* where each HEAD marker sat before a change: screen position and commit */
 function hereSpots(): Map<string, { x: number; y: number; at: string; text: string }> {
   const m = new Map<string, { x: number; y: number; at: string; text: string }>();
@@ -723,17 +740,11 @@ function slideHere(before: Map<string, { x: number; y: number; at: string; text:
     const word = t.textContent ?? "";
     const tie = t.parentElement?.querySelector<SVGPathElement>(`[data-tie="${t.dataset.at}"]`);
     tie?.animate([{ opacity: 0 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }], { duration: 750 });
-    if (was.text !== word) t.textContent = was.text;
     // a straight, even glide along the line to the commit it now points at
     t.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
       { duration: 650, easing: "cubic-bezier(.4,0,.2,1)" });
-    if (was.text !== word) {
-      setTimeout(() => {
-        // the new word appears mid-slide; only opacity here, so the slide keeps moving
-        t.textContent = word;
-        t.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 260, easing: "ease-out" });
-      }, 380);
-    }
+    // and on the way, the old words are backspaced and the new ones typed in
+    if (was.text !== word) typeOver(t, was.text, word, 900);
   });
 }
 
