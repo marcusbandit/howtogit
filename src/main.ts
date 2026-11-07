@@ -307,27 +307,6 @@ function afterChange() {
   focusPlace = null;
 }
 let lastPlace: string | null = null;
-
-/* ?debug=1 turns on a small on-screen log of what the graph and the pen do,
- * frame by frame, to see a real phone's behaviour; ?debug=0 turns it off */
-(() => {
-  const q = new URLSearchParams(location.search).get("debug");
-  try { if (q === "1") localStorage.setItem("htg-debug", "1"); if (q === "0") localStorage.removeItem("htg-debug"); } catch { /* private mode */ }
-  let on = q === "1";
-  try { on = on || localStorage.getItem("htg-debug") === "1"; } catch { /* private mode */ }
-  if (!on) return;
-  const box = document.createElement("pre");
-  box.id = "htg-debug";
-  box.style.cssText = "position:fixed;left:4px;right:4px;top:64px;z-index:99;max-height:40vh;overflow:auto;margin:0;padding:6px;font:12px/1.3 monospace;background:rgba(0,0,0,.82);color:#9f9;border-radius:6px;pointer-events:auto;white-space:pre-wrap";
-  const t0 = performance.now();
-  const lines: string[] = [`${navigator.userAgent.replace(/^Mozilla\/5.0 /, "")}`];
-  const show = () => { box.textContent = lines.slice(-60).join("\n"); };
-  (window as unknown as { __htgDbg: (m: string) => void }).__htgDbg = (m) => { lines.push(`${Math.round(performance.now() - t0)} ${m}`); show(); };
-  addEventListener("DOMContentLoaded", () => document.body.append(box));
-  if (document.body) document.body.append(box);
-  show();
-})();
-const dbg = (m: string) => (window as unknown as { __htgDbg?: (m: string) => void }).__htgDbg?.(m);
 let worldReady: Promise<void> = Promise.resolve();
 
 /* phones show one place at a time, picked with tabs; a step's change switches
@@ -378,7 +357,6 @@ function goto(c: number, b: number, opts: { replay?: boolean } = {}) {
   instant = false;
   save();
   $("#lesson").scrollTop = 0;
-  dbg(`goto ch${c + 1} step${b + 1}`);
   if (opts.replay || window.innerWidth < 900) window.scrollTo({ top: 0, behavior: prefersReduced ? "auto" : "smooth" });
 }
 
@@ -1237,7 +1215,6 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   const svg = host?.querySelector<SVGSVGElement>("svg");
   if (!r || !svg) return;
   const hostH = frame ? 0 : host!.getBoundingClientRect().height;
-  if (!frame) dbg(`draw ${id} cols=${cols.length}`);
   // what was drawn before this change, for the glide down when a lane is added
   const prevHave = frame ? undefined : lastHave.get(id), prevLabels = frame ? undefined : lastLabels.get(id);
   const all = placeCommits(r);
@@ -1298,17 +1275,14 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
   if (!frame) {
     const base = baseY * scale, was = lastBase.get(id);
     lastBase.set(id, base);
-    if (was !== undefined && Math.abs(base - was) > 1) dbg(`lane shift ${id} ${Math.round(was)}->${Math.round(base)} instant=${instant} had=${!!prevHave}`);
     if (was !== undefined && Math.abs(base - was) > 1 && !instant && !prefersReduced && prevHave) {
       easeHeight(host!, hostH);
-      let frames = 0;
       if (prevLabels) lastLabels.set(id, prevLabels);
       const from = (was - base) / scale, t0 = performance.now(), dur = 320;
       settleUntil = Math.max(settleUntil, t0 + dur + 20);
       const step = () => {
         const t = Math.min(1, (performance.now() - t0) / dur);
-        if (t >= 1) { dbg(`lane shift ${id} done frames=${frames}`); drawStrip(id, cols); syncScroll(false); return; }
-        frames++;
+        if (t >= 1) { drawStrip(id, cols); syncScroll(false); return; }
         drawStrip(id, cols, { scale, col, only: prevHave, k: 1, dy: from * Math.pow(1 - t, 3) });
         tweens.set(id, window.requestAnimationFrame(step));
       };
@@ -1331,7 +1305,6 @@ function drawStrip(id: string, cols: string[], frame?: { scale: number; col: num
     seen.add(key);
     if (into) {
       dur = lineMs(p);
-      dbg(`ink line into ${into.slice(0, 5)} ${p.getAttribute("d")!.length > 0 ? "ok" : "empty"}`);
       inkedInto.set(into, Math.max(inkedInto.get(into) ?? 0, dur));
       inkUntil = Math.max(inkUntil, performance.now() + dur);
       void drawOn(p, { duration: dur, even: true });
@@ -1461,7 +1434,6 @@ function glideStrip(id: string, cols: string[], heres: ReturnType<typeof hereSpo
   if (instant || prefersReduced || !host || !prev || !had || !w.repos[id.split(":")[0]]) return finish();
   const next = layoutOf(host, cols);
   if (Math.abs(next.scale - prev.scale) < 0.01 && Math.abs(next.col - prev.col) < 0.5) return finish();
-  dbg(`side glide ${id}`);
   const dur = 320, t0 = performance.now();
   host.classList.add("is-gliding"); // no scrollbar flashing while it moves
   settleUntil = Math.max(settleUntil, t0 + dur);

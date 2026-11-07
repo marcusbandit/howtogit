@@ -209,12 +209,8 @@ export function drawOn(pathEl: SVGPathElement, opts: DrawOnOptions = {}): Promis
     // precision than performance.now() (Firefox with stricter privacy), and
     // mixing the two can make a line jump straight to finished
     const start = performance.now() + delay;
-    let ticks = 0;
-    const dbg = (window as unknown as { __htgDbg?: (m: string) => void }).__htgDbg;
-    dbg?.(`pen start len=${Math.round(len)} dur=${duration} delay=${delay}`);
     const tick = () => {
       const now = performance.now();
-      ticks++;
       if (drawIds.get(pathEl) !== id) { nib?.remove(); resolve(); return; }
       const t = Math.max(0, Math.min(1, (now - start) / duration));
       const e = even ? (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2) : 1 - Math.pow(1 - t, 3); // in-out, or out, cubic
@@ -227,7 +223,6 @@ export function drawOn(pathEl: SVGPathElement, opts: DrawOnOptions = {}): Promis
       if (t < 1) {
         requestAnimationFrame(tick);
       } else {
-        dbg?.(`pen done len=${Math.round(len)} ticks=${ticks} took=${Math.round(performance.now() - start)}ms`);
         pathEl.style.strokeDasharray = "none";
         if (nib) {
           const fading = nib;
