@@ -609,9 +609,15 @@ export function renderGhPage(host, w, o, strip, opts = {}) {
         page = host.querySelector(".ghp");
         lastParts.delete(host);
     }
+    // a run that is gone (Undo) is forgotten: run ids count up from the list's
+    // length, so the run that comes back in its place plays again
+    const live = new Set((w.runs ?? []).map((r) => r.id));
+    for (const id of seenRuns)
+        if (!live.has(id))
+            seenRuns.delete(id);
     if (opts.instant)
-        for (const r of w.runs ?? [])
-            seenRuns.add(r.id);
+        for (const id of live)
+            seenRuns.add(id);
     for (const h of mounted.keys())
         if (!h.isConnected)
             mounted.delete(h);

@@ -646,7 +646,11 @@ export function renderGhPage(host: HTMLElement, w: World, o: GhOpts, strip?: HTM
     page = host.querySelector<HTMLElement>(".ghp")!;
     lastParts.delete(host);
   }
-  if (opts.instant) for (const r of w.runs ?? []) seenRuns.add(r.id);
+  // a run that is gone (Undo) is forgotten: run ids count up from the list's
+  // length, so the run that comes back in its place plays again
+  const live = new Set((w.runs ?? []).map((r) => r.id));
+  for (const id of seenRuns) if (!live.has(id)) seenRuns.delete(id);
+  if (opts.instant) for (const id of live) seenRuns.add(id);
   for (const h of mounted.keys()) if (!h.isConnected) mounted.delete(h);
   const tabs = tabsHtml(w, o.tab), panel = panelHtml(w, o);
   const was = lastParts.get(host);
