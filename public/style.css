@@ -556,7 +556,7 @@ code { font-family: var(--mono); font-size: inherit; }
 /* ------------------------------------------------------------- intro */
 
 body[data-intro] .app, body[data-intro] .top__mid, body[data-intro] .mode, body[data-intro] .deck-btn { display: none; }
-.intro { min-height: calc(100dvh - var(--top-h) - 2px); display: grid; place-items: center; padding: 24px 16px 40px; }
+.intro { min-height: calc(100dvh - var(--top-h) - 2px); display: grid; place-items: center; padding: 24px 16px 40px; overflow-x: clip; }
 .intro[hidden] { display: none; }
 .intro.is-leaving { animation: leave .28s ease forwards; }
 @keyframes leave { to { opacity: 0; transform: translateY(-10px); } }
