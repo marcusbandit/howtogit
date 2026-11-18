@@ -1762,34 +1762,65 @@ let lead = null;
 /* a place far behind the others has all its versions left of what the strip
  * shows; its newest one's label then waits at the left edge with an arrow */
 const tipOf = new Map();
+/* a label's box only changes when the strip is drawn again, which makes new
+ * label elements, so it is measured once per element instead of per scroll */
+const labelBoxes = new WeakMap();
+function labelBox(l) {
+    const key = `${l.getAttribute("x")}|${l.textContent}`;
+    let b = labelBoxes.get(l);
+    if (b?.key !== key) {
+        const r = l.getBBox();
+        b = { key, x: r.x, w: r.width };
+        labelBoxes.set(l, b);
+    }
+    return b;
+}
+function edgeMarksOf(s) {
+    if (!s.isConnected || !s.dataset.strip || !s.closest("#world"))
+        return;
+    // a label the strip's edge cuts in half reads as noise ("ck"), so it waits
+    // until you scroll it fully into view
+    const svg = s.querySelector("svg");
+    const vb = svg?.viewBox.baseVal;
+    if (svg && vb?.width) {
+        const k = svg.width.baseVal.value / vb.width;
+        const left = s.scrollLeft, right = left + s.clientWidth;
+        svg.querySelectorAll("text.label").forEach((l) => {
+            const b = labelBox(l);
+            l.classList.toggle("is-cut", b.x * k < left - 2 || (b.x + b.w) * k > right + 2);
+        });
+    }
+    const t = tipOf.get(s.dataset.strip);
+    let m = s.querySelector(":scope > .strip__edge");
+    if (!t || !svg || t.px >= s.scrollLeft + 12) {
+        m?.remove();
+        return;
+    }
+    if (!m) {
+        m = document.createElement("div");
+        m.className = "strip__edge";
+        m.setAttribute("aria-hidden", "true");
+        s.prepend(m);
+    }
+    const html = `<span style="color:${t.color};top:${Math.round((t.y ?? 26) - 12)}px">← ${esc(t.text)}</span>`;
+    if (m.innerHTML !== html)
+        m.innerHTML = html;
+}
 function edgeMarks() {
-    document.querySelectorAll("#world .strip[data-strip]").forEach((s) => {
-        // a label the strip's edge cuts in half reads as noise ("ck"), so it waits
-        // until you scroll it fully into view
-        const svg = s.querySelector("svg");
-        const vb = svg?.viewBox.baseVal;
-        if (svg && vb?.width) {
-            const k = svg.width.baseVal.value / vb.width;
-            svg.querySelectorAll("text.label").forEach((l) => {
-                const b = l.getBBox();
-                l.classList.toggle("is-cut", b.x * k < s.scrollLeft - 2 || (b.x + b.width) * k > s.scrollLeft + s.clientWidth + 2);
-            });
-        }
-        const t = tipOf.get(s.dataset.strip);
-        let m = s.querySelector(":scope > .strip__edge");
-        if (!t || !s.querySelector("svg") || t.px >= s.scrollLeft + 12) {
-            m?.remove();
-            return;
-        }
-        if (!m) {
-            m = document.createElement("div");
-            m.className = "strip__edge";
-            m.setAttribute("aria-hidden", "true");
-            s.prepend(m);
-        }
-        const html = `<span style="color:${t.color};top:${Math.round((t.y ?? 26) - 12)}px">← ${esc(t.text)}</span>`;
-        if (m.innerHTML !== html)
-            m.innerHTML = html;
+    document.querySelectorAll("#world .strip[data-strip]").forEach(edgeMarksOf);
+}
+/* while scrolling: only the strips that moved, at most once a frame */
+const edgeDue = new Set();
+let edgeRaf = 0;
+function edgeMarksSoon(s) {
+    edgeDue.add(s);
+    if (edgeRaf)
+        return;
+    edgeRaf = requestAnimationFrame(() => {
+        edgeRaf = 0;
+        const due = [...edgeDue];
+        edgeDue.clear();
+        due.forEach(edgeMarksOf);
     });
 }
 // pin: jump to the newest versions, after the graph itself changed. A resize
@@ -1807,7 +1838,7 @@ function syncScroll(pin = true) {
         s.onwheel = take;
         s.ontouchstart = take;
         s.onscroll = () => {
-            edgeMarks();
+            edgeMarksSoon(s);
             if (narrow() || (lead && lead !== s))
                 return;
             strips.forEach((o) => { if (o !== s)
@@ -1832,8 +1863,8 @@ function ovScroller() {
     $("#world").append(ov);
     ov.addEventListener("scroll", () => {
         const x = ov.scrollLeft;
+        // each strip that moves gets its own scroll event, which redoes its marks
         document.querySelectorAll("#world .strip").forEach((s) => { s.scrollLeft = x; });
-        edgeMarks();
     }, { passive: true });
     new ResizeObserver(placeOv).observe($("#world"));
     return ov;
