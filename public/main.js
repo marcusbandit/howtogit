@@ -262,7 +262,7 @@ function runSteps(act, vals) {
 /* an act you already ran in this step that would change nothing if pressed
  * again shows as done, so a two-button step reads "1 done, now the next" */
 const ranActs = new Set();
-const worldKey = (x) => JSON.stringify([x.commits, x.repos, x.prs]);
+const worldKey = (x) => JSON.stringify([x.commits, x.repos, x.prs, x.issues, x.labels, x.runs, x.rules, x.pages]);
 const spentMemo = new Map();
 function spent(a) {
     if (!ranActs.has(a) || a.pick)

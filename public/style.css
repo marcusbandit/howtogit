@@ -262,6 +262,23 @@ code { font-family: var(--mono); font-size: inherit; }
 .recap dt { font-weight: 700; }
 .recap dd { font-size: 14px; color: var(--ink-soft); }
 
+/* a loop of steps drawn as a ring: three across, then back along the second
+ * row, with an arrow in each gap (the GitHub track's recap uses it) */
+.loop { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 30px; row-gap: 30px; margin: 14px 0 12px; padding: 0; }
+.loop li { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 56px; padding: 6px 8px; text-align: center; border: 2px solid var(--line-strong); border-radius: 12px; background: var(--card); }
+.loop b { font: 700 28px var(--hand); line-height: 1; overflow-wrap: anywhere; }
+.loop li:nth-child(4) { grid-area: 2 / 3; }
+.loop li:nth-child(5) { grid-area: 2 / 2; }
+.loop li:nth-child(6) { grid-area: 2 / 1; }
+.loop li::after { position: absolute; display: flex; align-items: center; justify-content: center; font: 700 20px var(--ui); color: var(--ink-soft); }
+.loop li:nth-child(-n+2)::after { content: "→"; left: 100%; width: 30px; top: 0; bottom: 0; }
+.loop li:nth-child(3)::after { content: "↓"; top: 100%; height: 30px; left: 0; right: 0; }
+.loop li:nth-child(4)::after, .loop li:nth-child(5)::after { content: "←"; right: 100%; width: 30px; top: 0; bottom: 0; }
+.loop li:nth-child(6)::after { content: "↑"; bottom: 100%; height: 30px; left: 0; right: 0; }
+.loop li:first-child, .loop li:last-child { border-color: var(--pen-blue); }
+/* a diff quoted in the lesson text, as a review step shows one */
+.say .pr__diff { margin: 10px 0; }
+
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* --------------------------------------------------------------- world */
