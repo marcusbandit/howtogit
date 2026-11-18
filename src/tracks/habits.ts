@@ -160,7 +160,7 @@ export const habits: Track = {
             ],
           },
           done: (w) => chose(w, "pick"),
-          term: ["subject line", "The first line of a commit message: what the commit does, in about 50 characters. It's what <code>git log --oneline</code> and GitHub's lists show."],
+          term: ["subject line", "The first line of a commit message: what the commit does, in about 50 characters. It's all the one-line history and GitHub's lists show."],
         },
         {
           id: "mood",
