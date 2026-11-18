@@ -44,16 +44,84 @@ export interface Repo {
   upstream: Record<string, string>; // local branch -> "origin/main"
 }
 
+/* ------------------------------------------------ GitHub, beyond git
+ * Issues, labels, reviews, Actions runs and branch rules are GitHub features,
+ * not git ones. They live on the GitHub side of the world only. Issues and
+ * pull requests share one number sequence, as on GitHub (w.num). */
+
+export interface Label { name: string; color: string; desc: string }
+
+export interface Note {
+  who: string;
+  text: string;
+  file?: string; // a review comment on one line of the diff
+  line?: number;
+}
+
+export interface Issue {
+  n: number;
+  title: string;
+  body: string;
+  author: string;
+  labels: string[];
+  assignees: string[];
+  state: "open" | "closed";
+  reason?: "completed" | "not_planned" | "duplicate";
+  closedBy?: number; // the pull request whose merge closed it
+  comments: Note[];
+}
+
+export interface Review {
+  who: string;
+  state: "approved" | "changes_requested" | "commented";
+  text: string;
+  commit: string; // the head commit the reviewer looked at
+  notes: Note[]; // line comments that came with the review
+}
+
 export interface PR {
   n: number;
   title: string;
   head: string;
   base: string;
   author: string;
-  state: "open" | "merged";
-  approved: boolean;
-  comments: { who: string; text: string }[];
+  state: "open" | "merged" | "closed";
+  approved: boolean; // kept for the git track; true once any review approves
+  comments: Note[];
   mergeCommit?: string;
+  body?: string;
+  draft?: boolean;
+  labels?: string[];
+  assignees?: string[];
+  reviewers?: string[]; // review requested from, still waiting
+  reviews?: Review[];
+  closes?: number[]; // issues named with "Closes #N" in the body
+  method?: "merge" | "squash" | "rebase";
+  branchDeleted?: boolean;
+}
+
+/* one GitHub Actions run of one workflow file, already finished: the page
+ * animates "queued" and "running" itself, the model only keeps the outcome */
+export interface Run {
+  id: number;
+  workflow: string; // the workflow's name: line
+  file: string; // .github/workflows/checks.yml
+  event: "push" | "pull_request";
+  branch: string;
+  commit: string;
+  pr?: number;
+  jobs: { name: string; ok: boolean; steps: { name: string; ok: boolean; log: string[] }[] }[];
+  ok: boolean;
+}
+
+/* a branch ruleset (Settings > Rules > Rulesets), the modern branch protection */
+export interface Ruleset {
+  name: string;
+  branch: string;
+  requirePR: boolean;
+  approvals: number;
+  checks: string[]; // job names that must pass
+  blockForcePush: boolean;
 }
 
 export interface World {
@@ -61,6 +129,12 @@ export interface World {
   repos: Record<string, Repo>;
   folder: Files | null; // your folder before git was switched on
   prs: PR[];
+  issues?: Issue[];
+  labels?: Label[];
+  runs?: Run[];
+  rules?: Ruleset[];
+  num?: number; // last issue or pull request number handed out
+  pages?: { url: string; commit: string }; // a site deployed by Actions
   counter: number;
   vars: Record<string, string>;
 }
