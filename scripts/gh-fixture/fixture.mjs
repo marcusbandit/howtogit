@@ -14,8 +14,8 @@ const R3 = R2.replace("helpd", "helped");
 const R4 = "# Team report\n\nSummary: idea two won.\n\n" + R2.slice("# Team report\n\n".length);
 const R5 = R4.replace("Summary: idea two won.", "Summary: the second idea won, and it was the cheapest.");
 const NOTES = "rough notes\n- check the numbers\n";
-const CHECKS = "name: Checks\non: [pull_request]\njobs:\n  spelling:\n    name: Check spelling\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: codespell-project/actions-codespell@v2\n";
-const DEPLOY = "name: Deploy\non:\n  push:\n    branches: [main]\njobs:\n  deploy:\n    name: Publish the report\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/deploy-pages@v4\n";
+const CHECKS = "name: Checks\non: [pull_request]\njobs:\n  spelling:\n    name: Check spelling\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v7\n      - uses: codespell-project/actions-codespell@v2\n";
+const DEPLOY = "name: Deploy\non:\n  push:\n    branches: [main]\njobs:\n  deploy:\n    name: Publish the report\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v7\n      - uses: actions/deploy-pages@v5\n";
 
 function baseWorld() {
   let n = 0;

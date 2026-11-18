@@ -1611,7 +1611,7 @@ function runStep(w, wf, job, s, ws, ev, art, run) {
                 if (dir && !files.length)
                     return exit([...head, `tar: ${raw}: Cannot open: No such file or directory`, "tar: Error is not recoverable: exiting now"], 2);
                 art.pages = true;
-                return { ok: true, log: [...head, ...files.map((p) => `./${dir ? p.slice(dir.length + 1) : p}`), "Run actions/upload-artifact@v4", "With the provided path, there will be 1 file uploaded", "Artifact github-pages has been successfully uploaded!"] };
+                return { ok: true, log: [...head, ...files.map((p) => `./${dir ? p.slice(dir.length + 1) : p}`), "Run actions/upload-artifact@v7", "With the provided path, there will be 1 file uploaded", "Artifact github-pages has been successfully uploaded!"] };
             }
             case "actions/deploy-pages": {
                 const perms = job.permissions ?? wf.permissions;
@@ -2087,7 +2087,7 @@ export const WORKFLOWS = {
         "  spelling:",
         "    runs-on: ubuntu-latest",
         "    steps:",
-        "      - uses: actions/checkout@v4",
+        "      - uses: actions/checkout@v7",
         "      - uses: codespell-project/actions-codespell@v2",
         "",
     ].join("\n"),
@@ -2107,12 +2107,12 @@ export const WORKFLOWS = {
         "      name: github-pages",
         "      url: ${{ steps.deployment.outputs.page_url }}",
         "    steps:",
-        "      - uses: actions/checkout@v4",
-        "      - uses: actions/upload-pages-artifact@v3",
+        "      - uses: actions/checkout@v7",
+        "      - uses: actions/upload-pages-artifact@v5",
         "        with:",
         "          path: .",
         "      - id: deployment",
-        "        uses: actions/deploy-pages@v4",
+        "        uses: actions/deploy-pages@v5",
         "",
     ].join("\n"),
 };

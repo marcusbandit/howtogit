@@ -212,7 +212,7 @@ eq(w.runs.length, 1, "pull_request run starts when the PR opens");
 const r1 = w.runs[0];
 eq([r1.workflow, r1.event, r1.branch, r1.pr, r1.ok, r1.jobs.map((j) => j.name), r1.commit], ["Checks", "pull_request", "spell-check", prCi.n, false, ["spelling"], gh(w).branches["spell-check"]], "a failing spell check run");
 eq(r1.jobs[0].steps.map((s) => [s.name, s.ok, !!s.skipped]),
-  [["Set up job", true, false], ["Run actions/checkout@v4", true, false], ["Run codespell-project/actions-codespell@v2", false, false], ["Post Run actions/checkout@v4", true, false], ["Complete job", true, false]],
+  [["Set up job", true, false], ["Run actions/checkout@v7", true, false], ["Run codespell-project/actions-codespell@v2", false, false], ["Post Run actions/checkout@v7", true, false], ["Complete job", true, false]],
   "steps of the failing job");
 const typoLine = you(w).work["report.md"].split("\n").indexOf("We recieved good feedback.") + 1;
 ok(r1.jobs[0].steps[2].log.includes(`./report.md:${typoLine}: recieved ==> received`), "codespell prints the typo like codespell");
@@ -224,7 +224,7 @@ sh(w, "you", `gh run view ${r1.id}`, {
     "ANNOTATIONS", "X recieved ==> received", `spelling: report.md#${typoLine}`, `To see what failed, try: gh run view ${r1.id} --log-failed`],
 });
 sh(w, "you", `gh run view ${r1.id} --log-failed`, { has: [`spelling\tRun codespell-project/actions-codespell@v2\t./report.md:${typoLine}: recieved ==> received`, "spelling\tRun codespell-project/actions-codespell@v2\tError: Process completed with exit code 65."], not: ["Set up job"] });
-sh(w, "you", `gh run view ${r1.id} --log`, { has: ["spelling\tSet up job\tCurrent runner version", "spelling\tRun actions/checkout@v4\tSyncing repository: you/my-report"] });
+sh(w, "you", `gh run view ${r1.id} --log`, { has: ["spelling\tSet up job\tCurrent runner version", "spelling\tRun actions/checkout@v7\tSyncing repository: you/my-report"] });
 sh(w, "you", "gh run view 123", { fails: true, has: ["HTTP 404: Not Found"] });
 sh(w, "you", "gh workflow list", { has: ["NAME    STATE   ID", "Checks  active"] });
 // fix it: the push to the PR's branch runs the check again
@@ -393,7 +393,7 @@ sh(w, "you", "gh workflow list", { has: ["Checks", "Publish", "active"] });
   ok(t.run.error?.includes("Expected format {org}/{repo}[/path]@ref. Actual 'actions/checkout'"), "uses needs @ref");
   t = runOn("name: Bad\non: push\njobs:\n  a:\n    runs-on: [ubuntu\n");
   ok(t.run.error?.includes("You have an error in your yaml syntax"), "a YAML error");
-  t = runOn("name: Spell\non: push\njobs:\n  spell:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: codespell\n", { "notes.txt": "teh notes\n" });
+  t = runOn("name: Spell\non: push\njobs:\n  spell:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v7\n      - run: codespell\n", { "notes.txt": "teh notes\n" });
   ok(!t.run.ok && t.run.jobs[0].steps[2].log.includes("./notes.txt:1: teh ==> the"), "run: codespell");
 }
 
