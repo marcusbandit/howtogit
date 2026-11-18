@@ -1519,6 +1519,15 @@ function drawStrip(id, cols, frame) {
     }
     else
         lastLabels.set(id, new Map(labels));
+    if (!frame) {
+        // where this place's newest version sits, for the marker at the strip's edge
+        const tip = [...have].sort((a, b) => cols.indexOf(b) - cols.indexOf(a))[0];
+        const lb = tip ? labels.get(tip)?.[0] : undefined;
+        if (tip && lb)
+            tipOf.set(id, { px: x(tip) * scale, lane: L.get(tip)?.lane ?? 0, text: lb.text, color: lb.color });
+        else
+            tipOf.delete(id);
+    }
     // labels of commits on main hang below the line; labels of commits on the
     // top branch lane sit right above them (lower lanes keep theirs below), so a branch name is next to its branch
     const above = (cid) => { const l = L.get(cid)?.lane ?? 0; return l > 0 && l === maxLane; };
@@ -1530,6 +1539,10 @@ function drawStrip(id, cols, frame) {
     const maxLabels = Math.max(1, ...[...labels].filter(([c]) => !above(c)).map(([, a]) => a.length));
     const H = baseY - off + 34 + maxLabels * 21;
     const W = X0 * 2 + 30 + Math.max(0, cols.length - 1) * col;
+    if (!frame && tipOf.has(id)) {
+        const t = tipOf.get(id);
+        t.y = (laneY(t.lane) - off) * scale;
+    }
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     host.style.setProperty("--strip-scale", String(scale));
     svg.setAttribute("width", String(Math.floor(W * scale)));
@@ -1746,6 +1759,39 @@ function glideStrip(id, cols, heres) {
  * Wider screens: only the strip you're touching leads; the rest follow it and
  * never echo their own scroll back. */
 let lead = null;
+/* a place far behind the others has all its versions left of what the strip
+ * shows; its newest one's label then waits at the left edge with an arrow */
+const tipOf = new Map();
+function edgeMarks() {
+    document.querySelectorAll("#world .strip[data-strip]").forEach((s) => {
+        // a label the strip's edge cuts in half reads as noise ("ck"), so it waits
+        // until you scroll it fully into view
+        const svg = s.querySelector("svg");
+        const vb = svg?.viewBox.baseVal;
+        if (svg && vb?.width) {
+            const k = svg.width.baseVal.value / vb.width;
+            svg.querySelectorAll("text.label").forEach((l) => {
+                const b = l.getBBox();
+                l.classList.toggle("is-cut", b.x * k < s.scrollLeft - 2 || (b.x + b.width) * k > s.scrollLeft + s.clientWidth + 2);
+            });
+        }
+        const t = tipOf.get(s.dataset.strip);
+        let m = s.querySelector(":scope > .strip__edge");
+        if (!t || !s.querySelector("svg") || t.px >= s.scrollLeft + 12) {
+            m?.remove();
+            return;
+        }
+        if (!m) {
+            m = document.createElement("div");
+            m.className = "strip__edge";
+            m.setAttribute("aria-hidden", "true");
+            s.prepend(m);
+        }
+        const html = `<span style="color:${t.color};top:${Math.round((t.y ?? 26) - 12)}px">← ${esc(t.text)}</span>`;
+        if (m.innerHTML !== html)
+            m.innerHTML = html;
+    });
+}
 // pin: jump to the newest versions, after the graph itself changed. A resize
 // (a phone's address bar sliding away mid-scroll is one) keeps where you are.
 function syncScroll(pin = true) {
@@ -1761,6 +1807,7 @@ function syncScroll(pin = true) {
         s.onwheel = take;
         s.ontouchstart = take;
         s.onscroll = () => {
+            edgeMarks();
             if (narrow() || (lead && lead !== s))
                 return;
             strips.forEach((o) => { if (o !== s)
@@ -1772,6 +1819,7 @@ function syncScroll(pin = true) {
         ov.scrollLeft = ov.scrollWidth;
     else if (narrow())
         strips.forEach((s) => { s.scrollLeft = ov.scrollLeft; });
+    edgeMarks();
 }
 function ovScroller() {
     let ov = document.querySelector("#world > .ov-scroll");
@@ -1785,6 +1833,7 @@ function ovScroller() {
     ov.addEventListener("scroll", () => {
         const x = ov.scrollLeft;
         document.querySelectorAll("#world .strip").forEach((s) => { s.scrollLeft = x; });
+        edgeMarks();
     }, { passive: true });
     new ResizeObserver(placeOv).observe($("#world"));
     return ov;
