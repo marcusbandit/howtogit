@@ -1009,7 +1009,11 @@ function aiRun() {
             ok = runSteps(a, v);
     }
     const err = [...log].reverse().find((l) => l.kind === "err");
-    log.push({ kind: "ai", text: ok ? "Done. The picture shows what changed." : `Git stopped with a message: <i>${esc((err?.text ?? "").split("\n")[0])}</i>` });
+    // the line that says what went wrong, not "To github.com/..." above it
+    const lines = (err?.text ?? "").split("\n");
+    const said = lines.find((l) => /error|rejected|not successful|not mergeable|fatal/i.test(l)) ?? lines[0];
+    // a refusal can be the very thing the step is about (a rule, a red check)
+    log.push({ kind: "ai", text: ok ? "Done. The picture shows what changed." : beat().done(w) ? `GitHub said no, and that's what this step is about: <i>${esc(said)}</i>` : `Git stopped with a message: <i>${esc(said)}</i>` });
     renderLesson();
     save();
 }
