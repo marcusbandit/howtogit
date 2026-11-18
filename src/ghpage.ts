@@ -160,7 +160,23 @@ function runWord(run: Run, done: string): string {
 
 const issuesOf = (w: World) => w.issues ?? [];
 const runsOf = (w: World) => [...(w.runs ?? [])].sort((a, b) => b.id - a.id);
-const latestRunFor = (w: World, pr: number) => runsOf(w).find((r) => r.pr === pr);
+/* the runs behind a pull request's checks: on its head commit, the newest run
+ * of each workflow and event, the same runs gh pr checks and the rules read */
+function headRuns(w: World, p: PR): Run[] {
+  const head = G.prHead(w, p);
+  const latest = new Map<string, Run>();
+  if (head) for (const r of w.runs ?? []) if (r.commit === head) latest.set(`${r.file}|${r.event}`, r);
+  return [...latest.values()].sort((a, b) => b.id - a.id);
+}
+/* checks a rule needs that no run on the head commit reported yet */
+function expectedChecks(w: World, p: PR, runs: Run[]): string[] {
+  if (p.state !== "open") return [];
+  const have = new Set(runs.flatMap((r) => r.jobs.map((j) => j.name)));
+  const need = (w.rules ?? []).filter((r) => G.ruleCovers(r, p.base)).flatMap((r) => r.checks);
+  return [...new Set(need)].filter((c) => !have.has(c));
+}
+const failedJobs = (runs: Run[]) => runs.reduce((k, r) => k + r.jobs.filter((j) => !j.ok && !j.skipped).length, 0);
+const waitMark = () => `<span class="ghp-st"><span class="ghp-st__f">${ICON.queued()}</span></span>`;
 const commitMsg = (w: World, id: string) => w.commits[id]?.msg.split("\n")[0] ?? "";
 const runTitle = (w: World, r: Run) => r.title || commitMsg(w, r.commit) || r.workflow;
 const runNum = (r: Run) => r.number ?? r.id;
@@ -379,13 +395,13 @@ function prStatus(p: PR): string {
 }
 
 function prRow(w: World, p: PR): string {
-  const run = latestRunFor(w, p.n);
+  const runs = headRuns(w, p), run = runs[0];
   const who = esc(person(p.author).name);
   const meta = p.state === "open" ? `#${p.n} opened by ${who}` : `#${p.n} by ${who}, ${p.state === "merged" ? "merged" : "closed"}`;
   const talk = p.comments.length + (p.reviews ?? []).reduce((k, r) => k + (r.text ? 1 : 0) + r.notes.length, 0);
   return `<li><button type="button" class="ghp-row" data-gh-pr="${p.n}">
     <span class="ghp-row__ico">${prIcon(p)}</span>
-    <span class="ghp-row__main"><span class="ghp-row__title">${esc(p.title)}</span>${run ? runMark(run, run.ok) : ""}${p.draft && p.state === "open" ? `<span class="ghp-tag">Draft</span>` : ""}${labelsHtml(w, p.labels)}</span>
+    <span class="ghp-row__main"><span class="ghp-row__title">${esc(p.title)}</span>${run ? runMark(run, !failedJobs(runs)) : ""}${p.draft && p.state === "open" ? `<span class="ghp-tag">Draft</span>` : ""}${labelsHtml(w, p.labels)}</span>
     <span class="ghp-row__meta">${meta}${prStatus(p)}</span>
     <span class="ghp-row__side">${avStack(p.assignees ?? [], "Assigned to")}${commentCount(talk)}</span>
   </button></li>`;
@@ -450,12 +466,17 @@ function reviewHtml(w: World, r: Review, placed: Set<Note>, outdated: boolean): 
 }
 
 function checksHtml(w: World, p: PR): string {
-  const run = latestRunFor(w, p.n);
-  if (!run) return "";
-  const bad = run.jobs.filter((j) => !j.ok && !j.skipped).length;
+  const runs = headRuns(w, p), expected = expectedChecks(w, p, runs);
+  if (!runs.length && !expected.length) return "";
+  const bad = failedJobs(runs), lead = runs[0];
+  const word = bad ? `${bad} failed` : expected.length ? "Waiting for checks" : "All passed";
+  const head = lead ? `${runMark(lead, !bad)}<b>Checks</b>${runWord(lead, word)}`
+    : `${waitMark()}<b>Checks</b><span class="ghp-ph"><span class="ghp-st__f">${word}</span></span>`;
+  const jobs = runs.flatMap((run) => run.jobs.map((j) => `<li><button type="button" class="ghp-job-link" data-gh-run="${run.id}">${runMark(run, j.ok, "", j.skipped)}<span><b>${esc(j.name)}</b> <span class="ghp-soft">· ${esc(run.workflow)}</span></span></button></li>`));
+  const wait = expected.map((c) => `<li><div class="ghp-job-link ghp-job-link--wait">${waitMark()}<span><b>${esc(c)}</b> <span class="ghp-soft">· Expected</span></span></div></li>`);
   return `<section class="ghp-box">
-    <p class="ghp-box__head">${runMark(run, run.ok)}<b>Checks</b>${runWord(run, bad ? `${bad} failed` : "All passed")}</p>
-    <ul class="ghp-jobs">${run.jobs.map((j) => `<li><button type="button" class="ghp-job-link" data-gh-run="${run.id}">${runMark(run, j.ok, "", j.skipped)}<span><b>${esc(j.name)}</b> <span class="ghp-soft">· ${esc(run.workflow)}</span></span></button></li>`).join("")}</ul>
+    <p class="ghp-box__head">${head}</p>
+    <ul class="ghp-jobs">${[...jobs, ...wait].join("")}</ul>
   </section>`;
 }
 
@@ -485,15 +506,15 @@ function mergeBoxHtml(w: World, p: PR, o: GhOpts): string {
   if (approvers.length) ok.push(`Approved by ${approvers.join(" and ")}`);
   const okList = ok.length ? `<ul class="ghp-reasons ghp-reasons--ok">${ok.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : "";
   // like GitHub: a red check that no rule requires still leaves merging open
-  const run = latestRunFor(w, p.n);
-  const bad = run && !run.ok ? run.jobs.filter((j) => !j.ok && !j.skipped).length : 0;
+  const runs = headRuns(w, p);
+  const bad = failedJobs(runs);
   if (bad) {
     ok.push("No conflicts with the base branch");
     return `<section class="ghp-merge ghp-merge--blocked">${ICON.bad()}<div><b>Some checks were not successful</b>
       <ul class="ghp-reasons"><li>${bad} failing check${bad > 1 ? "s" : ""}</li></ul>
       <ul class="ghp-reasons ghp-reasons--ok">${ok.map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div></section>`;
   }
-  return `<section class="ghp-merge ghp-merge--ok">${ICON.ok()}<div><b>${run?.ok ? "All checks have passed" : "Ready to merge"}</b>
+  return `<section class="ghp-merge ghp-merge--ok">${ICON.ok()}<div><b>${runs.length && !expectedChecks(w, p, runs).length ? "All checks have passed" : "Ready to merge"}</b>
     ${okList}</div></section>`;
 }
 

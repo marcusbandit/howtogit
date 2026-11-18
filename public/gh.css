@@ -262,6 +262,8 @@
 .ghp-job-link > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .ghp-job-link b { font-weight: 700; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 .ghp-job-link:hover b { text-decoration-color: currentColor; }
+.ghp-job-link--wait, .ghp-job-link--wait:hover { background: none; color: var(--ink-soft); }
+.ghp-job-link--wait b { text-decoration: none; }
 
 .ghp-merge { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px 14px;
   border: 2px solid var(--m); border-radius: var(--wobble-2); background: color-mix(in srgb, var(--m) 8%, var(--card)); }
