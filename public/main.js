@@ -987,7 +987,7 @@ function askAi(text) {
     const msgs = mine.flatMap((a) => (a.inputs ?? []).map((i) => i.key === "msg" ? `with the commit message <b>"${val(a, i)}"</b>` : i.key === "name" ? `called <b>${val(a, i)}</b>` : i.key === "title" ? `titled <b>"${val(a, i)}"</b>` : ""));
     log.push({
         kind: "ai",
-        text: `Sure${msgs.filter(Boolean).length ? `, ${msgs.filter(Boolean).join(" and ")}` : ""}. I'll run ${cmds.length > 1 ? "these git commands" : "this git command"}:
+        text: `Sure${msgs.filter(Boolean).length ? `, ${msgs.filter(Boolean).join(" and ")}` : ""}. I'll run ${cmds.length > 1 ? "these" : "this"}${cmds.some((c) => /^gh\s/.test(c)) ? "" : " git"} command${cmds.length > 1 ? "s" : ""}:
       ${cmds.map((c) => `<code class="cmd-hint">${hl(c)}</code>`).join("")}
       <button type="button" class="btn btn--small btn--go" data-ai-run>Yes, run ${cmds.length > 1 ? "them" : "it"}</button>`,
         cmds,
@@ -1013,7 +1013,7 @@ function aiRun() {
     const lines = (err?.text ?? "").split("\n");
     const said = lines.find((l) => /error|rejected|not successful|not mergeable|fatal/i.test(l)) ?? lines[0];
     // a refusal can be the very thing the step is about (a rule, a red check)
-    log.push({ kind: "ai", text: ok ? "Done. The picture shows what changed." : beat().done(w) ? `GitHub said no, and that's what this step is about: <i>${esc(said)}</i>` : `Git stopped with a message: <i>${esc(said)}</i>` });
+    log.push({ kind: "ai", text: ok ? "Done. The picture shows what changed." : beat().done(w) ? `That's the answer this step is about: <i>${esc(said)}</i>` : `Git stopped with a message: <i>${esc(said)}</i>` });
     renderLesson();
     save();
 }
