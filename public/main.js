@@ -1366,7 +1366,7 @@ function deskHtml(place, r, i) {
     return `<div class="desk">
     <p class="desk__title"><span class="folder"></span>${esc(name)}${label} ${on}</p>
     <ul class="files">${files.map((f) => `<li class="file-row">
-      <button type="button" class="fname" data-file="${f.path}" data-place="${place}" data-desk="${i}">${esc(f.path)}</button>
+      <button type="button" class="fname" data-file="${f.path}" data-place="${place}" data-desk="${i}">${esc(f.path).replace(/\//g, "/<wbr>")}</button>
       ${f.state === "plain" ? "" : `<span class="state state--${f.state.replace("+", "-")}" data-state-key="${place}:${i}:${f.path}" data-state="${f.state}" data-path="${f.path}">${STATE_WORDS[f.state]}</span>`}
     </li>`).join("")}</ul>
     ${place === "you" ? peekHtml(d, r) : ""}
