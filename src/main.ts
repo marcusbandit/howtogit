@@ -613,7 +613,10 @@ function renderLesson() {
 function inputsHtml(a: Act, ai: number) {
   return (a.inputs ?? []).map((inp) => `
     <label class="field"><span>${esc(inp.label)}</span>
-      <input type="text" data-act="${ai}" data-key="${inp.key}" value="${esc(valueFor(beat(), ai, inp, w))}" maxlength="${inp.max ?? 60}" ${beatDone ? "disabled" : ""} /></label>`).join("");
+      ${(inp.max ?? 60) > 80
+        // room for a few sentences (a description): a box that wraps
+        ? `<textarea data-act="${ai}" data-key="${inp.key}" rows="${Math.min(6, Math.max(2, Math.ceil(valueFor(beat(), ai, inp, w).length / 34)))}" maxlength="${inp.max}" ${beatDone ? "disabled" : ""}>${esc(valueFor(beat(), ai, inp, w))}</textarea>`
+        : `<input type="text" data-act="${ai}" data-key="${inp.key}" value="${esc(valueFor(beat(), ai, inp, w))}" maxlength="${inp.max ?? 60}" ${beatDone ? "disabled" : ""} />`}</label>`).join("");
 }
 
 /* the "do" area: what you press or type, depending on the mode */
@@ -875,8 +878,8 @@ function wireLesson() {
     const a = beat().acts![Number(btn.dataset.run)];
     const vals: Record<string, string> = btn.dataset.pick ? { id: btn.dataset.pick } : {};
     a.inputs?.forEach((inp) => {
-      const field = root.querySelector<HTMLInputElement>(`input[data-act="${btn.dataset.run}"][data-key="${inp.key}"]`);
-      vals[inp.key] = field?.value.trim() || inp.def(w);
+      const field = root.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-act="${btn.dataset.run}"][data-key="${inp.key}"]`);
+      vals[inp.key] = field?.value.replace(/\s*\n\s*/g, " ").trim() || inp.def(w);
       choices[choiceKey(beat(), Number(btn.dataset.run), inp.key)] = vals[inp.key];
     });
     runSteps(a, vals);

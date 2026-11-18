@@ -193,10 +193,11 @@ code { font-family: var(--mono); font-size: inherit; }
 .act { display: grid; gap: 8px; }
 .act .btn { justify-self: start; }
 .field { display: grid; gap: 4px; font-size: 14px; color: var(--ink-soft); }
-.field input, .chat__in input, .term__in input {
+.field input, .field textarea, .chat__in input, .term__in input {
   border: 1.5px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; background: var(--paper); color: var(--ink); font-size: 16px;
 }
-.field input:focus, .chat__in input:focus { outline: none; border-color: var(--ink); }
+.field textarea { font-family: inherit; line-height: 1.4; resize: vertical; }
+.field input:focus, .field textarea:focus, .chat__in input:focus { outline: none; border-color: var(--ink); }
 
 .cmd-hint { display: block; font-family: var(--mono); font-size: 14px; background: var(--term-bg); color: var(--term-ink); padding: 6px 10px; border-radius: 6px; margin: 4px 0; white-space: pre-wrap; word-break: break-word; }
 .cmd-hint.is-friend { background: color-mix(in srgb, var(--friend) 30%, var(--term-bg)); }
