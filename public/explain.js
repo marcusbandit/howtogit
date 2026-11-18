@@ -85,12 +85,16 @@ export function explain(cmd) {
             break;
         case "commit": {
             P("commit", "keep what's staged as a new version");
-            const m = rest.indexOf("-m");
-            if (m >= 0) {
-                P("-m", "a flag that tells commit the value right after it is the commit message, so git doesn't open an editor to ask you for one.");
+            // each -m is one paragraph: the first is the subject, a second one the body
+            const ms = rest.flatMap((x, i) => (x === "-m" ? [i] : []));
+            ms.forEach((m, k) => {
+                if (k === 0)
+                    P("-m", "a flag that tells commit the value right after it is the commit message, so git doesn't open an editor to ask you for one.");
+                else
+                    P("-m", "another message flag: its value becomes the next paragraph, the body under the subject line.");
                 if (rest[m + 1])
-                    P(rest[m + 1], "the commit message itself (the quotes keep the words together as one value)", "value");
-            }
+                    P(rest[m + 1], k === 0 ? "the commit message itself (the quotes keep the words together as one value)" : "the body: why the change was made", "value");
+            });
             const am = rest.indexOf("-am");
             if (am >= 0) {
                 P("-am", "two short flags written together: -a stages every changed file git already knows, -m takes the message.");
