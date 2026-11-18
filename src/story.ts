@@ -41,6 +41,9 @@ export interface Choose {
 }
 
 export type GhTab = "code" | "issues" | "pulls" | "actions" | "settings";
+/* a tab and the thing to open on it when you arrive at the step: a pull
+ * request or an issue by number, a run by its ID */
+export interface GhView { tab: GhTab; pr?: number; issue?: number; run?: number }
 
 export interface Beat {
   id: string; // unique within its track
@@ -50,7 +53,7 @@ export interface Beat {
   acts?: Act[];
   edit?: EditTask;
   choose?: Choose;
-  ghTab?: GhTab; // which GitHub tab this step is about; the GitHub page opens on it
+  ghTab?: GhTab | ((w: World) => GhView); // which GitHub tab this step is about; the GitHub page opens on it
   done: (w: World) => boolean;
   after?: (w: World) => string;
   term?: [string, string];

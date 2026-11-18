@@ -15,9 +15,29 @@ export function exec(w, cmd, who, desk) {
         w.vars.sawLog = "1";
     if (r.ok && /^\s*git\s+(switch|checkout)\b.*--detach|^\s*git\s+checkout\s+[0-9a-f]{5,}\s*$/.test(cmd))
         w.vars.movedHead = "1";
+    // looks that change nothing on GitHub, kept so a step can ask whether you looked:
+    // the runs whose checks gh pr checks listed (it fails when one is red), and the
+    // run whose log gh run view printed
+    if (/^\s*gh\s+pr\s+checks\b/.test(cmd) && /checks were/.test(r.out))
+        w.vars.sawChecks = [...r.out.matchAll(/actions\/runs\/(\d+)/g)].map((m) => m[1]).join(" ");
+    if (r.ok && /^\s*gh\s+run\s+view\b.*--log/.test(cmd))
+        w.vars.sawRunLog = runViewed(w, cmd);
+    const blocked = /#(\d+) is not mergeable: the base branch policy/.exec(r.out);
+    if (blocked)
+        w.vars.mergeBlocked = blocked[1];
     return r;
 }
-const refused = (out) => /\[(remote )?rejected\]/.test(out);
+/* the run gh run view showed: the one its job belongs to, the ID given, or the newest */
+function runViewed(w, cmd) {
+    const runs = w.runs ?? [];
+    const job = /(?:--job[= ]|-j\s+)(\d+)/.exec(cmd)?.[1];
+    if (job)
+        return String(runs.find((r) => r.jobs.some((j) => String(j.id) === job))?.id ?? "");
+    return /\s(\d+)(?=\s|$)/.exec(cmd)?.[1] ?? String(runs.at(-1)?.id ?? "");
+}
+/* GitHub saying no on purpose: a rejected push, a red check, a merge the rules
+ * block. A step can be about exactly that, so a replay goes on past it. */
+const refused = (out) => /\[(remote )?rejected\]|Some checks were not successful|the base branch policy prohibits the merge/.test(out);
 /* the world a track begins in: an empty folder, or what its start builds */
 export function startWorld(t) {
     const w = G.freshWorld();
@@ -31,7 +51,7 @@ export function startWorld(t) {
             throw new Error(`start of ${t.id}: ${cmd}\n${r.out}`);
     });
     // what the start did is not something you did in a step
-    for (const k of ["rejected", "ruleRejected", "sawLog", "movedHead"])
+    for (const k of ["rejected", "ruleRejected", "sawLog", "movedHead", "sawChecks", "sawRunLog", "mergeBlocked"])
         delete w.vars[k];
     return w;
 }

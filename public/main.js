@@ -787,7 +787,8 @@ function taskSteps() {
     let from = 0;
     return hintCmds(mine).map((cmd) => {
         const e = explain(cmd);
-        const words = e?.parts[1]?.means ?? "run it";
+        // gh commands come in two words (gh pr checks): the second one says what it does
+        const words = (e?.parts[0]?.t === "gh" && e.parts[2]?.kind === "command" ? e.parts[2].means : e?.parts[1]?.means) ?? "run it";
         const at = typed.findIndex((l, i) => i >= from && sameCmd(l.text, cmd));
         const done = beatDone || at >= 0;
         if (at >= 0)
@@ -811,6 +812,13 @@ function coach(line, r, before) {
         return null; // a look around (git status, git log): no comment needed
     }
     const o = r.out;
+    // GitHub saying no on purpose (a rule, a red check): often what the step is about
+    const said = /GH013/.test(o) ? "GitHub's rules for main refused the push. Changes to main go through a pull request."
+        : /checks were not successful/.test(o) ? "A check failed, so gh ends with an error too. The X marks the red one."
+            : /base branch policy prohibits/.test(o) ? "The rules for main block this merge. The last lines say why."
+                : "";
+    if (said)
+        return beat().done(w) ? { text: `✓ ${said}`, good: true } : { text: `✗ ${said}${next ? ` The step needs: ${esc(next.words.toLowerCase())}.` : ""}`, good: false };
     const why = /not a git repository/.test(o) ? "This folder isn't a repository yet. Run <code>git init</code> first."
         : /pathspec|did not match any/.test(o) ? "There's no file or name like that here. Check the spelling; <code>git status</code> lists your files."
             : /nothing to commit|no changes added/.test(o) ? "Nothing is staged yet. Stage your changes with <code>git add</code> first."
@@ -1001,7 +1009,7 @@ function askAi(text) {
     const msgs = mine.flatMap((a) => (a.inputs ?? []).map((i) => i.key === "msg" ? `with the commit message <b>"${val(a, i)}"</b>` : i.key === "name" ? `called <b>${val(a, i)}</b>` : i.key === "title" ? `titled <b>"${val(a, i)}"</b>` : ""));
     log.push({
         kind: "ai",
-        text: `Sure${msgs.filter(Boolean).length ? `, ${msgs.filter(Boolean).join(" and ")}` : ""}. I'll run ${cmds.length > 1 ? "these git commands" : "this git command"}:
+        text: `Sure${msgs.filter(Boolean).length ? `, ${msgs.filter(Boolean).join(" and ")}` : ""}. I'll run ${cmds.length > 1 ? "these" : "this"}${cmds.some((c) => /^gh\s/.test(c)) ? "" : " git"} command${cmds.length > 1 ? "s" : ""}:
       ${cmds.map((c) => `<code class="cmd-hint">${hl(c)}</code>`).join("")}
       <button type="button" class="btn btn--small btn--go" data-ai-run>Yes, run ${cmds.length > 1 ? "them" : "it"}</button>`,
         cmds,
@@ -1023,7 +1031,11 @@ function aiRun() {
             ok = runSteps(a, v);
     }
     const err = [...log].reverse().find((l) => l.kind === "err");
-    log.push({ kind: "ai", text: ok ? "Done. The picture shows what changed." : `Git stopped with a message: <i>${esc((err?.text ?? "").split("\n")[0])}</i>` });
+    // the line that says what went wrong, not "To github.com/..." above it
+    const lines = (err?.text ?? "").split("\n");
+    const said = lines.find((l) => /error|rejected|not successful|not mergeable|fatal/i.test(l)) ?? lines[0];
+    // a refusal can be the very thing the step is about (a rule, a red check)
+    log.push({ kind: "ai", text: ok ? "Done. The picture shows what changed." : beat().done(w) ? `That's the answer this step is about: <i>${esc(said)}</i>` : `Git stopped with a message: <i>${esc(said)}</i>` });
     renderLesson();
     save();
 }
