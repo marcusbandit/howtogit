@@ -402,7 +402,7 @@ export const habits: Track = {
           id: "open-pr",
           kind: "act",
           ghTab: "pulls",
-          say: () => `Open the pull request. The title reads like a commit subject. The description says what, why, how you checked, and which issue it closes.`,
+          say: () => `Open the pull request, and ask Toby to review it. The title reads like a commit subject. The description says what, why, how you checked, and which issue it closes.`,
           acts: [{
             label: "Create pull request",
             look: "github",
@@ -410,8 +410,8 @@ export const habits: Track = {
               { key: "title", label: "Title", def: () => "Move the deadline to the top", max: 80 },
               { key: "body", label: "Description", def: (w) => `Readers missed the deadline at the bottom, so it now sits under the title. Checked the preview on GitHub. Closes #${deadlineIssue(w)}`, max: 240 },
             ],
-            steps: (_w, v) => [`gh pr create --title "${q(v.title)}" --body "${q(v.body)}"`],
-            ai: "open a pull request for this branch that closes the deadline issue",
+            steps: (_w, v) => [`gh pr create --title "${q(v.title)}" --body "${q(v.body)}" --reviewer toby`],
+            ai: "open a pull request for this branch that closes the deadline issue, and ask Toby to review it",
           }],
           done: (w) => (myPr(w)?.closes ?? []).includes(deadlineIssue(w)),
           status: (w) => {
@@ -420,7 +420,7 @@ export const habits: Track = {
               ? `Pull request #${p.n} is up, but its description doesn't say <code>Closes #${deadlineIssue(w)}</code>, so the issue would stay open. Press <b>Undo</b> and add it, or fix the description: <code>gh pr edit ${p.n} --body "... Closes #${deadlineIssue(w)}"</code>`
               : "";
           },
-          after: (w) => `Pull request #${myPr(w)?.n} is up and linked to issue #${deadlineIssue(w)}: one task, one small change, and a description Toby can read in a few seconds.`,
+          after: (w) => `Pull request #${myPr(w)?.n} is up, linked to issue #${deadlineIssue(w)}, with Toby asked to review it: one task, one small change, and a description he can read in a few seconds.`,
           more: [
             ["How small is small?", "Small enough to review in one sitting. If the description needs an <i>and also</i>, it's probably two pull requests."],
             ["Not ready for review yet?", "<code>gh pr create --draft</code> opens it as a <b>draft</b>: people can see it, and it says it isn't ready. <code>gh pr ready</code> marks it ready later."],
@@ -524,7 +524,7 @@ export const habits: Track = {
           choose: {
             options: [
               { html: "<b>link broken</b><br>doesnt work pls fix", right: false, why: "Which link? Broken how? Albert has to come back and ask before he can start." },
-              { html: "<b>Survey link in report.md shows Page not found</b><br>Clicked the survey link on GitHub. Expected the May survey, got Page not found.", right: true, why: "What you did, what you expected, what happened. Albert can see the problem for himself without asking a thing." },
+              { html: "<b>Survey link shows Page not found</b><br>Clicked the survey link on GitHub. Expected the May survey, got Page not found.", right: true, why: "What you did, what you expected, what happened. Albert can see the problem for himself without asking a thing." },
             ],
           },
           done: (w) => chose(w, "good-issue"),
@@ -538,7 +538,7 @@ export const habits: Track = {
             label: "Submit new issue",
             look: "github",
             inputs: [
-              { key: "title", label: "Title", def: () => "Survey link in report.md shows Page not found", max: 80 },
+              { key: "title", label: "Title", def: () => "Survey link shows Page not found", max: 80 },
               { key: "body", label: "Description", def: () => "Clicked the survey link on GitHub. Expected the May survey, got Page not found.", max: 240 },
             ],
             steps: (_w, v) => [`gh issue create --title "${q(v.title)}" --body "${q(v.body)}" --label bug --assignee albert`],
