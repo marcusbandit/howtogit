@@ -26,7 +26,7 @@ export function explain(cmd: string): Explained | null {
   const parts: Explained["parts"] = [];
   const also: Explained["also"] = [];
   const P = (tok: string, means: string, kind?: Kind) => {
-    const k: Kind = kind ?? (parts.length === 0 ? "program" : /^-/.test(tok) ? "flag" : parts.length === 1 || (parts.length === 2 && /^(remote|worktree|pr)$/.test(parts[1].t)) ? "command" : "value");
+    const k: Kind = kind ?? (parts.length === 0 ? "program" : /^-/.test(tok) ? "flag" : parts.length === 1 || (parts.length === 2 && /^(remote|worktree|pr|run)$/.test(parts[1].t)) ? "command" : "value");
     const long = k === "flag" && LONG[tok] ? ` Short for ${LONG[tok]}.` : "";
     // the kind tag already says flag or value, so the text doesn't repeat it
     const text = means.replace(/^a (flag|value)( that tells| meaning|:)?\s*/i, (_m, _k, how) => (how && /tells/.test(how) ? "tells " : ""));
@@ -37,6 +37,40 @@ export function explain(cmd: string): Explained | null {
   if (t[0] === "gh") {
     P("gh", "GitHub's own command line tool (git itself knows nothing about pull requests)");
     if (t[1] === "pr") P("pr", "work with pull requests");
+    if (t[1] === "run") P("run", "work with Actions runs: each time a workflow ran");
+    if (t[1] === "api") {
+      P("api", "call GitHub's API directly, for things gh has no command of its own for", "command");
+      for (let i = 2; i < t.length; i++) {
+        if (t[i] === "--method" || t[i] === "-X") { P(t[i], "a flag: the value after it says what to do. POST makes something new"); P(t[i + 1] ?? "", "the method", "value"); i++; }
+        else if (t[i] === "--input") { P("--input", "a flag: send the file named after it as the request"); P(t[i + 1] ?? "", "that file", "value"); i++; }
+        else if (!t[i].startsWith("-")) P(t[i], /rulesets/.test(t[i]) ? "which part of GitHub: this repository's rulesets" : "which part of GitHub's API", "value");
+      }
+      A("Settings, then Rules, on github.com", "the same thing, in the browser");
+    }
+    if (t[1] === "run" && t[2] === "view") {
+      P("view", "show one run");
+      for (let i = 3; i < t.length; i++) {
+        if (t[i] === "--log-failed") P("--log-failed", "a flag: print the log of the steps that failed, nothing else");
+        else if (t[i] === "--log") P("--log", "a flag: print the whole log");
+        else if (!t[i].startsWith("-")) P(t[i], "which run, by its ID", "value");
+      }
+      A("the run on the Actions tab", "the same log, in the browser");
+    }
+    if (t[1] === "pr" && t[2] === "checks") {
+      P("checks", "list a pull request's checks and whether they passed");
+      if (t[3]) P(t[3], "which pull request, by its number");
+      A("the checks box on the pull request", "the same list, in the browser");
+    }
+    if (t[1] === "pr" && t[2] === "review") {
+      P("review", "review a pull request");
+      for (let i = 3; i < t.length; i++) {
+        if (t[i] === "--approve") P("--approve", "a flag: approve it");
+        else if (t[i] === "--request-changes") P("--request-changes", "a flag: ask for changes before it goes in");
+        else if (t[i] === "--body") { P("--body", "a flag: the value after it is what you write"); P(t[i + 1] ?? "", "your review", "value"); i++; }
+        else if (!t[i].startsWith("-")) P(t[i], "which pull request, by its number");
+      }
+      A("Review changes on the pull request's Files changed tab", "the same thing, in the browser");
+    }
     if (t[2] === "create") {
       P("create", "open a new pull request");
       for (let i = 3; i < t.length; i++) {
@@ -52,7 +86,7 @@ export function explain(cmd: string): Explained | null {
       if (t.includes("--merge")) P("--merge", "a flag choosing how to merge: keep every commit and add a merge commit (squash and rebase are the other styles)");
       A("the Merge pull request button on github.com", "the same thing, in the browser");
     }
-    return { parts, also, flags: parts.some((p) => p.kind === "flag"), docs: "https://cli.github.com/manual/gh_pr" };
+    return { parts, also, flags: parts.some((p) => p.kind === "flag"), docs: `https://cli.github.com/manual/gh_${t[1] ?? ""}${t[1] === "api" || !t[2] || t[2].startsWith("-") ? "" : "_" + t[2]}` };
   }
   if (t[0] !== "git") return null;
   P("git", "the git program");

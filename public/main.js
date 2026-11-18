@@ -768,7 +768,8 @@ function taskSteps() {
     let from = 0;
     return hintCmds(mine).map((cmd) => {
         const e = explain(cmd);
-        const words = e?.parts[1]?.means ?? "run it";
+        // gh commands come in two words (gh pr checks): the second one says what it does
+        const words = (e?.parts[0]?.t === "gh" && e.parts[2]?.kind === "command" ? e.parts[2].means : e?.parts[1]?.means) ?? "run it";
         const at = typed.findIndex((l, i) => i >= from && sameCmd(l.text, cmd));
         const done = beatDone || at >= 0;
         if (at >= 0)
