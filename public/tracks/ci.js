@@ -274,7 +274,7 @@ export const ci = {
                     id: "review",
                     kind: "act",
                     ghTab: onPr(albertPr),
-                    say: () => `Red means stop: this doesn't go into main yet. Ask Albert for changes.<br><br>The check found the typo. Your part is what a computer can't judge: does the plan make sense? <b>1000 people</b> in one month is a lot.`,
+                    say: () => `Red means stop. GitHub still says <b>Ready to merge</b>, because nothing makes the check count yet, so stopping is up to you. Ask Albert for changes.<br><br>The check found the typo. Your part is what a computer can't judge: does the plan make sense? <b>1000 people</b> in one month is a lot.`,
                     acts: [{
                             label: "Request changes",
                             look: "github",
@@ -350,11 +350,11 @@ export const ci = {
                     id: "rule-why",
                     kind: "choose",
                     ghTab: "settings",
-                    say: () => `The check only helps if nobody can skip it. What would have stopped Albert?`,
+                    say: () => `The check only helps if nobody can skip it. Albert just skipped it, and a red pull request can be merged too: Albert's said <b>Ready to merge</b> while it was red.<br><br>What would stop both?`,
                     choose: {
                         options: [
-                            { html: "Asking everyone to always open a pull request", right: false, why: "People forget, or they're in a hurry, like Albert just now." },
-                            { html: "A rule on GitHub that refuses pushes to main", right: true, why: "GitHub applies it to everyone, every time. A set of rules like that is a <b>ruleset</b>." },
+                            { html: "Asking everyone to always open a pull request and wait for green", right: false, why: "People forget, or they're in a hurry, like Albert just now." },
+                            { html: "A rule on GitHub: main only takes pull requests with a green check", right: true, why: "GitHub applies it to everyone, every time. A set of rules like that is a <b>ruleset</b>." },
                         ],
                     },
                     done: (w) => chose(w, "rule-why"),
