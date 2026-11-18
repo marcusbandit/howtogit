@@ -18,8 +18,8 @@ export type Mode = "buttons" | "command" | "ai";
 export function trackIcon(id: TrackId): string {
   const p = (d: string, cls = "") => `<path d="${d}"${cls ? ` class="${cls}"` : ""}/>`;
   const art: Record<TrackId, string> = {
-    git: p(linePath(5, 28, 35, 28, 3, 0.6)) + p(elbowPath(16, 25, 29, 12, true, 4)) + p(circlePath(16, 28, 3.6, 5, 0.5), "ticon__dot")
-      + p(circlePath(30, 28, 3.6, 6, 0.5), "ticon__dot") + p(circlePath(31.5, 12, 3.6, 7, 0.5), "ticon__dot ticon__dot--on"),
+    git: p(circlePath(8, 30, 3.8, 5, 0.5)) + p(linePath(12, 30, 16, 30, 3, 0.4)) + p(circlePath(20, 30, 3.8, 6, 0.5)) + p(linePath(24, 30, 28, 30, 4, 0.4))
+      + p(circlePath(32, 30, 3.8, 7, 0.5)) + p(elbowPath(20, 26, 28, 11, true, 8)) + p(circlePath(32, 11, 3.8, 9, 0.5), "ticon__dot--on"),
     github: p(circlePath(11, 9, 4, 8, 0.5)) + p(linePath(11, 13.5, 11, 26.5, 9, 0.5)) + p(circlePath(11, 31, 4, 10, 0.5))
       + p(circlePath(29, 31, 4, 11, 0.5), "ticon__dot--on") + p(linePath(29, 26.5, 29, 16, 12, 0.5)) + p("M 29 16 Q 29 9.5 22.5 9.5 L 18.5 9.5")
       + p("M 22 5.8 L 18.2 9.6 L 22.2 13.2"),

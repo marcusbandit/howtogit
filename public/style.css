@@ -1082,7 +1082,6 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
  * What you came to learn. A pill left of the chapters names the track and
  * opens a small sheet of all four; on phones the list lives in the menu. */
 .ticon { width: 32px; height: 32px; flex: none; fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
-.ticon .ticon__dot { fill: var(--card); }
 .ticon .ticon__dot--on { stroke: var(--accent); }
 .ticon .ticon__tick { stroke: var(--ok); stroke-width: 2.8; }
 .ticon .ticon__leaf { fill: color-mix(in srgb, var(--pen-green) 16%, transparent); }
@@ -1116,7 +1115,7 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .intro__tracks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; width: min(760px, 100%); }
 .intro__track { display: flex; align-items: center; justify-content: flex-start; gap: 10px; text-align: left; padding: 8px 12px 8px 10px; min-height: 56px; }
 .intro__track b { line-height: 1.25; }
-.intro__track[aria-checked="true"] .ticon .ticon__dot { fill: var(--accent-soft); }
+.intro__track .ticon { width: 36px; height: 36px; }
 @media (max-width: 620px) {
   .intro__tracks { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .intro__track { min-height: 52px; padding: 6px 8px; gap: 8px; }
@@ -1139,7 +1138,7 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .choice__btn:disabled { cursor: var(--cur); }
 .choice__mark { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--line-strong);
   font-size: 12px; font-weight: 700; color: var(--ink-soft); }
-.choice__t code { background: var(--card-2); padding: 1px 5px; border-radius: 4px; }
+.choice__t code { font-size: 14px; background: var(--card-2); padding: 1px 5px; border-radius: 4px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .choice:not(.is-right):not(.is-wrong) .choice__btn:disabled { opacity: .45; }
 .choice.is-right .choice__btn { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, var(--card)); }
 .choice.is-right .choice__mark { background: var(--ok); border-color: var(--ok); color: var(--card); }

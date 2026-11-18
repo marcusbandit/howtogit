@@ -2160,7 +2160,7 @@ function tracksHtml() {
         const started = !!s && (s.ci > 0 || s.bi > 0);
         const prog = done ? `<span class="track-row__done" aria-label="finished">✓</span>`
             : started ? `<span class="track-row__n" aria-label="chapter ${s.ci + 1} of ${n}">${s.ci + 1}/${n}</span>` : "";
-        return `<li><button type="button" class="track-row ${t === track ? "is-now" : ""}" data-track="${t.id}" ${t === track ? 'aria-current="true"' : ""}>${trackIcon(t.id)}<b>${esc(t.title)}</b>${prog}</button></li>`;
+        return `<li><button type="button" class="track-row ${t === track ? "is-now" : ""}" data-to-track="${t.id}" ${t === track ? 'aria-current="true"' : ""}>${trackIcon(t.id)}<b>${esc(t.title)}</b>${prog}</button></li>`;
     }).join("");
 }
 function boot() {
@@ -2265,12 +2265,12 @@ function boot() {
     pop.addEventListener("click", (e) => { if (e.target === pop)
         pop.close(); });
     document.addEventListener("click", (e) => {
-        const b = e.target.closest("[data-track]");
+        const b = e.target.closest("[data-to-track]");
         if (!b)
             return;
         pop.close();
         sheet("#menu").close();
-        const t = trackById(b.dataset.track);
+        const t = trackById(b.dataset.toTrack);
         if (t)
             switchTrack(t);
     });
