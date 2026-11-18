@@ -294,7 +294,7 @@ export const habits: Track = {
             ],
           },
           done: (w) => chose(w, "why-small"),
-          more: [["Two changes in the same file?", "<code>git add -p</code> goes through a file piece by piece and asks which pieces to stage. Editors offer the same as <i>Stage selected lines</i>."]],
+          more: [["Two changes in the same file?", "<code>git add -p</code> goes through a file piece by piece and asks which pieces to stage. Editors like VS Code let you select lines and stage just those."]],
         },
       ],
     },
