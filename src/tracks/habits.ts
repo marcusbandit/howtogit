@@ -497,14 +497,13 @@ export const habits: Track = {
           choose: {
             options: [
               { html: "Delete .env and commit", right: false, why: "The old commit still has the key, and every clone has that commit. Deleting the file only hides it from the newest version." },
-              { html: "Make the repository private", right: false, why: "Whoever saw it or cloned it still has it." },
+              { html: "Rewrite the history so the key is gone", right: false, why: "Worth doing later, with a tool like <code>git filter-repo</code>. But every clone made before still has the key, and it rewrites every commit after it, so everyone has to clone again." },
               { html: "Cancel the key on the survey site, then get a new one", right: true, why: "Once a key has been pushed, treat it as stolen. A cancelled key is useless to whoever has it. Then clean up." },
             ],
           },
           done: (w) => chose(w, "leaked"),
           term: ["revoke", "Cancel a key or password so it stops working. The first thing to do when one leaks."],
           more: [
-            ["Can I remove it from the history?", "Yes, with a tool like <code>git filter-repo</code>, but it rewrites every commit after it and everyone has to clone again. Do it after revoking the key, never instead."],
             ["Does GitHub help?", "GitHub's <b>secret scanning</b> knows many kinds of keys and can block a push that contains one. Don't count on it: it doesn't know every kind."],
           ],
         },
