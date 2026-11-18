@@ -870,7 +870,7 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .hist__list li { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content max-content; gap: 10px; align-items: baseline; padding: 4px 6px; border-radius: 6px; font-size: 14px; }
 .hist__list li.is-head { background: color-mix(in srgb, var(--pen-blue) 10%, transparent); }
 .hist__id { font-family: var(--mono); font-size: 12px; color: var(--pen-blue); }
-.hist__msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist__msg { overflow-wrap: anywhere; }
 .hist__who { font-size: 12px; color: var(--ink-soft); }
 .hist__head, .hist__first { font-size: 12px; font-weight: 700; padding: 0 6px; border-radius: 999px; }
 .hist__head { color: var(--card); background: var(--ink); }
@@ -904,6 +904,8 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .hood__earlier summary { font-size: 12px; color: var(--ink-soft); margin: 2px 0 4px; }
 .hood__earlier[open] { opacity: .7; }
 .hist__cols, .hist__list li { grid-template-columns: 64px minmax(0, 1fr) 40px 96px; }
+.hist:not(.hist--pick) :is(.hist__cols, .hist__list li) { grid-template-columns: 64px minmax(0, 1fr) 48px; }
+.hist__msg .hist__head { white-space: nowrap; margin-left: 2px; }
 /* while a box eases to a new height it clips its content instead of overflowing */
 .is-easing { overflow: hidden !important; }
 

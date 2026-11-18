@@ -794,11 +794,14 @@ function historyHtml(pickAct = -1): string {
   const marker = headKnown() ? "HEAD" : "you are here";
   return `<div class="hist ${pickAct >= 0 ? "hist--pick" : ""}">
     <p class="hist__k">History of main, newest first</p>
-    <div class="hist__cols" aria-hidden="true"><span>ID</span><span>Commit message</span><span>By</span><span></span></div>
+    <div class="hist__cols" aria-hidden="true"><span>ID</span><span>Commit message</span><span>By</span>${pickAct >= 0 ? "<span></span>" : ""}</div>
     <ol class="hist__list">${list.map((c) => `<li class="${c.id === head ? "is-head" : ""}">
-      <code class="hist__id">${G.short(c.id)}</code><span class="hist__msg">${esc(G.subject(c.msg))}</span>
-      <span class="hist__who">${esc(c.author)}</span>${c.id === head ? `<span class="hist__head">${marker}</span>`
-        : pickAct >= 0 ? `<button type="button" class="hist__open" data-run="${pickAct}" data-pick="${G.short(c.id)}">Open</button>` : "<span></span>"}
+      <code class="hist__id">${G.short(c.id)}</code>
+      ${pickAct >= 0 ? `<span class="hist__msg">${esc(G.subject(c.msg))}</span>`
+        // only a list to read: the marker sits after the message, so messages get the room
+        : `<span class="hist__msg">${esc(G.subject(c.msg))}${c.id === head ? ` <span class="hist__head">${marker}</span>` : ""}</span>`}
+      <span class="hist__who">${esc(c.author)}</span>${pickAct < 0 ? "" : c.id === head ? `<span class="hist__head">${marker}</span>`
+        : `<button type="button" class="hist__open" data-run="${pickAct}" data-pick="${G.short(c.id)}">Open</button>`}
     </li>`).join("")}</ol>
   </div>`;
 }
