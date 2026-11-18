@@ -740,6 +740,12 @@ function coach(line: string, r: { ok: boolean; out: string }, before: { cmd: str
     return null; // a look around (git status, git log): no comment needed
   }
   const o = r.out;
+  // GitHub saying no on purpose (a rule, a red check): often what the step is about
+  const said = /GH013/.test(o) ? "GitHub's rules for main refused the push. Changes to main go through a pull request."
+    : /checks were not successful/.test(o) ? "A check failed, so gh ends with an error too. The X marks the red one."
+    : /base branch policy prohibits/.test(o) ? "The rules for main block this merge. The last lines say why."
+    : "";
+  if (said) return beat().done(w) ? { text: `✓ ${said}`, good: true } : { text: `✗ ${said}${next ? ` The step needs: ${esc(next.words.toLowerCase())}.` : ""}`, good: false };
   const why = /not a git repository/.test(o) ? "This folder isn't a repository yet. Run <code>git init</code> first."
     : /pathspec|did not match any/.test(o) ? "There's no file or name like that here. Check the spelling; <code>git status</code> lists your files."
     : /nothing to commit|no changes added/.test(o) ? "Nothing is staged yet. Stage your changes with <code>git add</code> first."
