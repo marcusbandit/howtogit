@@ -1402,7 +1402,7 @@ export function rulesetCreate(w, text, replace) {
         apiFail(422, "Validation Failed", "Name must be unique");
     const first = String(include[0] ?? "refs/heads/main");
     const rule = {
-        id: old?.id ?? 4800000 + (list.length + 1) * 1307,
+        id: old?.id ?? nextRulesetId(w),
         name: j.name,
         branch: first === "~DEFAULT_BRANCH" ? "main" : first === "~ALL" ? "*" : first.replace(/^refs\/heads\//, ""),
         requirePR: !!pr,
@@ -1421,6 +1421,10 @@ export function rulesetCreate(w, text, replace) {
     else
         list.push(rule);
     return JSON.stringify(rulesetView(rule), null, 2);
+}
+function nextRulesetId(w) {
+    w.ruleN = (w.ruleN ?? Math.max(0, ...(w.rules ?? []).map((r) => Math.round(((r.id ?? 0) - 4800000) / 1307)))) + 1;
+    return 4800000 + w.ruleN * 1307;
 }
 /* ------------------------------------------------------------ Actions
  * When commits reach GitHub, every workflow file in that commit whose on:

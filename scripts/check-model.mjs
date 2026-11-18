@@ -275,6 +275,19 @@ sh(w, "toby", `gh ruleset view ${rs.id}`, {
     "- pull_request: [dismiss_stale_reviews_on_push: false] [require_code_owner_review: false] [require_last_push_approval: false] [required_approving_review_count: 1] [required_review_thread_resolution: false]",
     "- required_status_checks: [required_status_checks: [map[context:spelling]]] [strict_required_status_checks_policy: false]"],
 });
+// a ruleset id never comes back after a delete
+{
+  const w2 = G.clone(w);
+  const make = (name) => {
+    you(w2).work[`${name}.json`] = JSON.stringify({ ...JSON.parse(rjson), name });
+    return JSON.parse(sh(w2, "you", `gh api --method POST repos/you/my-report/rulesets --input ${name}.json`)).id;
+  };
+  const a = make("A"), b = make("B");
+  sh(w2, "you", `gh api -X DELETE repos/you/my-report/rulesets/${a}`);
+  const c = make("C");
+  ok(new Set([rs.id, a, b, c]).size === 4, `ruleset ids stay unique after a delete: ${[rs.id, a, b, c]}`);
+  sh(w2, "you", `gh api repos/you/my-report/rulesets/${b}`, { has: ['"name": "B"'] });
+}
 // a push straight to main is refused (on a copy, so the main story goes on)
 {
   const w2 = G.clone(w);

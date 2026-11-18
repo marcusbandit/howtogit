@@ -163,6 +163,7 @@ export interface World {
   runs?: Run[];
   rules?: Ruleset[];
   num?: number; // last issue or pull request number handed out
+  ruleN?: number; // last ruleset handed out; ids never come back after a delete
   pages?: { url: string; commit: string }; // a site deployed by Actions
   tick?: number; // GitHub event clock: orders comments, reviews and runs
   counter: number;
@@ -1467,7 +1468,7 @@ export function rulesetCreate(w: World, text: string, replace?: number): string 
   if (list.some((r) => r !== old && r.name.toLowerCase() === j.name.toLowerCase())) apiFail(422, "Validation Failed", "Name must be unique");
   const first = String(include[0] ?? "refs/heads/main");
   const rule: Ruleset = {
-    id: old?.id ?? 4800000 + (list.length + 1) * 1307,
+    id: old?.id ?? nextRulesetId(w),
     name: j.name,
     branch: first === "~DEFAULT_BRANCH" ? "main" : first === "~ALL" ? "*" : first.replace(/^refs\/heads\//, ""),
     requirePR: !!pr,
@@ -1483,6 +1484,11 @@ export function rulesetCreate(w: World, text: string, replace?: number): string 
   };
   if (old) list[list.indexOf(old)] = rule; else list.push(rule);
   return JSON.stringify(rulesetView(rule), null, 2);
+}
+
+function nextRulesetId(w: World): number {
+  w.ruleN = (w.ruleN ?? Math.max(0, ...(w.rules ?? []).map((r) => Math.round(((r.id ?? 0) - 4800000) / 1307)))) + 1;
+  return 4800000 + w.ruleN * 1307;
 }
 
 /* ------------------------------------------------------------ Actions
