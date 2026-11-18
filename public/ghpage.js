@@ -733,13 +733,21 @@ export function changedTab(before, after) {
     return null;
 }
 /* the state to draw next. cur: the state now; before: the world before the
- * last action (null when arriving at a beat); beatTab: the beat's ghTab. */
+ * last action (null when arriving at a beat); beatTab: the beat's ghTab, a
+ * tab or a view worked out from the world (a pull request to open, a run). */
 export function nextGhState(cur, before, after, beatTab) {
+    const view = typeof beatTab === "function" ? beatTab(after) : beatTab ? { tab: beatTab } : undefined;
+    const tab = view?.tab;
     const ch = before ? changedTab(before, after) : null;
     const shut = { openIssue: null, openPr: null, openRun: null };
+    // arriving at a step that names what to open: open it, whatever was open before
+    const opens = !before && !!view && (view.pr != null || view.issue != null || view.run != null);
     let next = cur;
-    if (beatTab)
-        next = ch?.tab === beatTab ? { ...cur, ...shut, ...ch } : cur.tab === beatTab ? cur : { ...cur, ...shut, tab: beatTab };
+    if (tab) {
+        next = ch?.tab === tab ? { ...cur, ...shut, ...ch }
+            : opens ? { ...cur, tab, openPr: view.pr ?? null, openIssue: view.issue ?? null, openRun: view.run ?? null }
+                : cur.tab === tab ? cur : { ...cur, ...shut, tab };
+    }
     else if (ch)
         next = { ...cur, ...shut, ...ch };
     // something that was open and is gone now (an undo) shows its list instead
