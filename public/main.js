@@ -438,6 +438,10 @@ function arrive() {
     delete w.vars.ruleRejected; // or one a rule refused
     delete w.vars.sawLog; // likewise a git log
     termDesk = beatDesk();
+    // phones: a step about a GitHub page opens on the GitHub tab (an edit
+    // happens on your computer, so it stays there)
+    if (beat().ghTab && w.repos.github && beat().kind !== "edit" && beat().kind !== "resolve")
+        phoneTab = "github";
     log = [];
     if (beat().kind === "next")
         beatDone = true;
