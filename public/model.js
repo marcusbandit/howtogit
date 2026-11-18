@@ -1186,6 +1186,8 @@ export function prMerge(w, n, author, o = {}) {
     pr.method = method;
     pr.headCommit = head;
     const out = [`✓ ${method === "squash" ? "Squashed and merged" : "Merged"} pull request ${ref} (${pr.title})`];
+    if (o.deleteBranch && o.local?.r.branches[pr.head])
+        out.push(deleteLocal(w, o.local.r, o.local.d, pr.head, pr.base, author));
     if (o.deleteBranch) {
         delete gh.branches[pr.head];
         pr.branchDeleted = true;
@@ -1196,6 +1198,29 @@ export function prMerge(w, n, author, o = {}) {
         autoClose(w, pr.closes ?? [], { pr: n });
     reachedGithub(w, pr.base, base, id, loginOf(author));
     return out.join("\n");
+}
+/* gh pr merge --delete-branch, on your computer: when you're on the branch,
+ * gh switches to the base and pulls it (fast-forward only), then deletes the
+ * branch with -D, since a squash leaves it looking unmerged */
+function deleteLocal(w, r, d, head, base, author) {
+    const warn = [];
+    let switched = "";
+    if (d.branch === head && !d.detached) {
+        switchTo(w, r, d, base);
+        fetch(w, r);
+        const up = r.tracking[`origin/${base}`], at = r.branches[base];
+        if (up && isAncestor(w, at, up))
+            merge(w, r, d, `origin/${base}`, author);
+        else if (up && !isAncestor(w, up, at))
+            warn.push(`! warning: not possible to fast-forward to: "${base}"`);
+        switched = ` and switched to branch ${base}`;
+    }
+    const using = deskUsing(r, head, d);
+    if (using)
+        return [...warn, `! Branch ${head} is checked out at ${using.path}; skipping local delete`].join("\n");
+    delete r.branches[head];
+    delete r.upstream[head];
+    return [...warn, `✓ Deleted local branch ${head}${switched}`].join("\n");
 }
 /* ------------------------------------------------------- branch rules */
 export function ruleCovers(r, branch) {

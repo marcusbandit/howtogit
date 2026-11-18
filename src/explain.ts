@@ -90,7 +90,7 @@ export function explain(cmd: string): Explained | null {
       "--reason": ["a flag: why it's closed", "completed, or not planned"],
       "--squash": ["a flag choosing how to merge: pack every commit of the branch into one new commit"],
       "--merge": ["a flag choosing how to merge: keep every commit and add a merge commit (squash and rebase are the other styles)"],
-      "--delete-branch": ["a flag: delete the branch afterwards, its work is in main now"],
+      "--delete-branch": ["a flag: delete the branch on GitHub and on your computer afterwards"],
       "--checkout": ["a flag: switch to the new branch right away"],
       "--log-failed": ["a flag: print the log of the steps that failed, nothing else"],
       "--log": ["a flag: print the whole log"],

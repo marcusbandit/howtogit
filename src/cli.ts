@@ -767,7 +767,8 @@ function gh(w: World, ctx: Ctx, t: string[]): Result {
           if ([sq, mg, rb].filter(Boolean).length > 1) throw new G.GitError("only one of --merge, --rebase, or --squash can be enabled");
           // auto-merge is a repository setting, and it starts switched off
           if (auto) throw new G.GitError("GraphQL: Auto merge is not allowed for this repository (enablePullRequestAutoMerge)");
-          return ok(G.prMerge(w, pr.n, ctx.author, { method: sq ? "squash" : rb ? "rebase" : "merge", deleteBranch: del, subject, body, admin }));
+          return ok(G.prMerge(w, pr.n, ctx.author, { method: sq ? "squash" : rb ? "rebase" : "merge", deleteBranch: del, subject, body, admin,
+            local: local && R === undefined ? { r: local, d: deskOf(w, ctx)! } : undefined }));
         }
         case "close": {
           const comment = f.one("-c", "--comment");

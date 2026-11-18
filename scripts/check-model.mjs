@@ -166,7 +166,8 @@ sh(w, "you", "gh pr diff 3", { has: ["diff --git a/report.md b/report.md", "-Tha
 sh(w, "you", "gh pr merge 3 --rebase", { fails: true, has: ["Rebase merging is outside this lesson"] });
 sh(w, "you", "gh pr merge 3 --auto --squash", { fails: true, has: ["Auto merge is not allowed for this repository"] });
 const mainBefore = gh(w).branches.main;
-sh(w, "you", "gh pr merge 3 --squash --delete-branch", { has: ["✓ Squashed and merged pull request you/my-report#3 (Fix the typo in the report)", "✓ Deleted remote branch fix-typo"] });
+sh(w, "you", "gh pr merge 3 --squash --delete-branch", { has: ["✓ Squashed and merged pull request you/my-report#3 (Fix the typo in the report)", "✓ Deleted local branch fix-typo and switched to branch main", "✓ Deleted remote branch fix-typo"] });
+eq([you(w).branch, w.repos.you.branches["fix-typo"], w.repos.you.branches.main], ["main", undefined, gh(w).branches.main], "--delete-branch: local branch gone, on main, pulled");
 const sq = w.commits[gh(w).branches.main];
 eq([sq.parents, sq.msg, sq.author], [[mainBefore], "Fix the typo in the report (#3)", "You"], "squash: one commit, base as only parent");
 eq([pr3.state, pr3.method, pr3.branchDeleted, gh(w).branches["fix-typo"], G.prHead(w, pr3) === pr3.headCommit], ["merged", "squash", true, undefined, true], "merged, branch deleted on GitHub");
@@ -174,8 +175,7 @@ eq([w.issues[0].state, w.issues[0].reason, w.issues[0].closedBy], ["closed", "co
 eq([w.issues[1].state, w.issues[1].reason], ["closed", "not_planned"], "an issue closed as not planned stays that way");
 sh(w, "you", "gh pr merge 3", { fails: true, has: ["! Pull request you/my-report#3 was already merged"] });
 sh(w, "you", "gh pr view 3", { has: ["Merged • you wants to merge 1 commit into main from fix-typo"] });
-sh(w, "you", "git switch main");
-sh(w, "you", "git pull", { has: ["Fast-forward"] });
+sh(w, "you", "git pull", { has: ["Already up to date."] });
 
 // Albert: a merge commit, merged by Toby; then close and reopen
 sh(w, "albert", "git pull");

@@ -879,7 +879,8 @@ function gh(w, ctx, t) {
                     // auto-merge is a repository setting, and it starts switched off
                     if (auto)
                         throw new G.GitError("GraphQL: Auto merge is not allowed for this repository (enablePullRequestAutoMerge)");
-                    return ok(G.prMerge(w, pr.n, ctx.author, { method: sq ? "squash" : rb ? "rebase" : "merge", deleteBranch: del, subject, body, admin }));
+                    return ok(G.prMerge(w, pr.n, ctx.author, { method: sq ? "squash" : rb ? "rebase" : "merge", deleteBranch: del, subject, body, admin,
+                        local: local && R === undefined ? { r: local, d: deskOf(w, ctx) } : undefined }));
                 }
                 case "close": {
                     const comment = f.one("-c", "--comment");

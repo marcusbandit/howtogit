@@ -239,7 +239,7 @@ export const github: Track = {
           }],
           done: (w) => !!myPr(w),
           after: (w) => `Pull request <b>#${nMine(w)}</b> is up, marked <b>Draft</b>. Its sidebar lists issue #${nIdea(w)}, and the issue lists the pull request. When it merges into main, GitHub closes the issue by itself.`,
-          term: ["draft", "A pull request marked as not finished. Everyone can see it, but nobody can merge it until you mark it ready for review."],
+          term: ["draft", "A pull request marked as not finished. Everyone can see it, but nobody can merge it until it's marked ready for review."],
           more: [["Which words close an issue?", "<code>Closes</code>, <code>Fixes</code> or <code>Resolves</code>, then the number, like <code>Fixes #3</code>. It works when the pull request merges into the main branch."]],
         },
         {
@@ -405,7 +405,7 @@ export const github: Track = {
           id: "merge",
           kind: "act",
           ghTab: "pulls",
-          say: () => `Squash and merge it, and delete the branch on GitHub: its work is in main now.`,
+          say: () => `Squash and merge it. <code>--delete-branch</code> deletes the branch on GitHub and on your laptop, and puts you back on main.`,
           acts: [{ label: "Squash and merge", look: "github", steps: (w) => [`gh pr merge ${nMine(w)} --squash --delete-branch`], ai: "squash and merge my pull request, then delete its branch" }],
           done: (w) => myPr(w)?.state === "merged",
           after: (w) => {
@@ -446,15 +446,12 @@ export const github: Track = {
           id: "sync",
           kind: "act",
           ghTab: "code",
-          say: (w) => `GitHub's main has both changes; your laptop doesn't yet. Check out main, pull, and delete your old branch, <b>${esc(br(w))}</b>.`,
-          acts: [
-            { label: "Check out main", steps: () => ["git checkout main"], ai: "check out main" },
-            pullAct,
-            { label: "Delete old branch", steps: (w) => [`git branch -D ${br(w)}`], ai: "delete my old summary branch" },
-          ],
+          say: (w) => `Albert merged after you, so GitHub's main has a commit your laptop doesn't. Pull it.` +
+            (you(w).branches[br(w)] ? ` Your old branch, <b>${esc(br(w))}</b>, is still on your laptop too: delete it.` : ""),
+          acts: [pullAct],
           done: (w) => desk(w)?.branch === "main" && synced(w, "main") && !you(w).branches[br(w)],
           after: () => `Your laptop matches GitHub: main has one commit per pull request, and the finished branch is gone.`,
-          more: [["Why -D and not -d?", "<code>-d</code> only deletes a branch that's merged. After a squash, main has a new commit with the same change, and git can't tell they match, so <code>-d</code> refuses. <code>-D</code> deletes it anyway."]],
+          more: [["Deleting a branch by hand", "<code>-d</code> only deletes a branch git can see is merged. After a squash, main has a new commit with the same change, so git often can't tell. <code>-D</code> deletes it anyway."]],
         },
       ],
     },
