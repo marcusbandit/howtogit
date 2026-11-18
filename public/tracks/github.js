@@ -456,7 +456,7 @@ export const github = {
             beats: [{
                     id: "end",
                     kind: "next",
-                    ghTab: "issues",
+                    ghTab: "code",
                     say: () => `That's how a team works on GitHub, every day:${loopHtml()}Write it down, work on a branch, ask for a review, merge. The issue closes itself, and the next one starts the loop again.`,
                     done: () => false,
                 }],
