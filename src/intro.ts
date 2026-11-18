@@ -2,14 +2,33 @@
  *
  * No reading required: a short animation shows the whole idea. A pile of
  * report copies collapses into one file, a line of saved versions draws out
- * of it, and the line is copied up to GitHub. Then one big button, and a
- * choice of how you want to do things (buttons, commands or an AI).
+ * of it, and the line is copied up to GitHub. Then two choices, what you
+ * want to learn (a track) and how you want to do things (buttons, commands
+ * or an AI), and one big button.
  *
  * Shown on the first visit; the brand in the top bar brings it back.
  */
-import { drawOn, el, linePath, circlePath, prefersReduced } from "./sketch.js";
+import { drawOn, el, linePath, circlePath, elbowPath, prefersReduced } from "./sketch.js";
+import { tracks, type TrackId } from "./tracks.js";
 
 export type Mode = "buttons" | "command" | "ai";
+
+/* a small ink drawing per track, in the pen of the history lines: a branch
+ * off a line of versions, a pull request, a passing check, a sprout */
+export function trackIcon(id: TrackId): string {
+  const p = (d: string, cls = "") => `<path d="${d}"${cls ? ` class="${cls}"` : ""}/>`;
+  const art: Record<TrackId, string> = {
+    git: p(linePath(5, 28, 35, 28, 3, 0.6)) + p(elbowPath(16, 25, 29, 12, true, 4)) + p(circlePath(16, 28, 3.6, 5, 0.5), "ticon__dot")
+      + p(circlePath(30, 28, 3.6, 6, 0.5), "ticon__dot") + p(circlePath(31.5, 12, 3.6, 7, 0.5), "ticon__dot ticon__dot--on"),
+    github: p(circlePath(11, 9, 4, 8, 0.5)) + p(linePath(11, 13.5, 11, 26.5, 9, 0.5)) + p(circlePath(11, 31, 4, 10, 0.5))
+      + p(circlePath(29, 31, 4, 11, 0.5), "ticon__dot--on") + p(linePath(29, 26.5, 29, 16, 12, 0.5)) + p("M 29 16 Q 29 9.5 22.5 9.5 L 18.5 9.5")
+      + p("M 22 5.8 L 18.2 9.6 L 22.2 13.2"),
+    ci: p(circlePath(20, 20, 13, 13, 0.6)) + p("M 13.5 20.5 L 18.2 25.2 L 27 14.8", "ticon__tick"),
+    habits: p("M 20 35 C 20.6 29 19.4 23 20.2 15") + p("M 20.2 22 C 13 23 8.5 18.5 8 11.5 C 14.5 11 19.2 15 20.2 22 Z", "ticon__leaf")
+      + p("M 20.3 17 C 23 10.5 28 7.5 33.5 8 C 33 14.5 27.5 18 20.3 17 Z", "ticon__leaf ticon__leaf--on") + p(linePath(11, 35, 29, 35, 14, 0.5)),
+  };
+  return `<svg class="ticon ticon--${id}" viewBox="0 0 40 40" aria-hidden="true">${art[id]}</svg>`;
+}
 
 /* a quiet note for people who know there are other hosts: it only appears on
  * hover or focus, never in the way of someone who doesn't wonder */
@@ -28,25 +47,31 @@ const CAPTIONS = [
   "GitHub keeps a copy online, so others can join.",
 ];
 
-export function showIntro(mode: Mode, onStart: (mode: Mode) => void) {
+export function showIntro(mode: Mode, track: TrackId, onStart: (mode: Mode, track: TrackId) => void) {
   document.body.dataset.intro = "on";
   const root = document.getElementById("intro")!;
   root.hidden = false;
   root.innerHTML = `
     <div class="intro__inner">
-      <h1 class="intro__title">Git, explained by doing it.</h1>
-      <p class="intro__sub">How git and GitHub work, from zero. About ten minutes, nothing to install.</p>
+      <h1 class="intro__title">Git and GitHub, explained by doing it.</h1>
+      <p class="intro__sub">How git keeps versions and how a team works on GitHub. From zero, nothing to install.</p>
       <div class="intro__stage" aria-hidden="true">
         <svg class="intro__svg" viewBox="0 0 560 230"></svg>
         <div class="intro__files"></div>
       </div>
       <p class="intro__caption" aria-live="polite"></p>
-      <div class="intro__pick" role="radiogroup" aria-label="how you want to do things">
-        <p class="intro__ask">How do you want to do things?</p>
+      <div class="intro__pick" role="radiogroup" aria-labelledby="intro-ask-track">
+        <p class="intro__ask" id="intro-ask-track">What do you want to learn?</p>
+        <div class="intro__tracks">
+          ${tracks.map((t) => `<button type="button" class="intro__opt intro__track" role="radio" data-pick-track="${t.id}" aria-checked="${t.id === track}">${trackIcon(t.id)}<b>${t.title}</b></button>`).join("")}
+        </div>
+      </div>
+      <div class="intro__pick" role="radiogroup" aria-labelledby="intro-ask-mode">
+        <p class="intro__ask" id="intro-ask-mode">How do you want to do things?</p>
         <div class="intro__opts">
-          ${opt("buttons", "Buttons", "Click, like in VS Code or GitHub Desktop", mode)}
-          ${opt("command", "Commands", "Type real git commands", mode)}
-          ${opt("ai", "An AI", "Ask in plain words", mode)}
+          ${opt("buttons", "Buttons", mode)}
+          ${opt("command", "Commands", mode)}
+          ${opt("ai", "An AI", mode)}
         </div>
         <div class="preview" data-show="${mode}" aria-hidden="true">
           <div class="preview__pane preview__pane--buttons">
@@ -74,11 +99,14 @@ export function showIntro(mode: Mode, onStart: (mode: Mode) => void) {
             </div>
           </div>
         </div>
-        <p class="intro__hint">Same git underneath. You can switch any time.</p>
       </div>
       <button type="button" class="btn btn--go btn--big intro__start">Start <span aria-hidden="true">→</span></button>
     </div>`;
-  let picked = mode;
+  let picked = mode, pickedTrack = track;
+  root.querySelectorAll<HTMLButtonElement>("[data-pick-track]").forEach((b) => b.addEventListener("click", () => {
+    pickedTrack = b.dataset.pickTrack as TrackId;
+    root.querySelectorAll("[data-pick-track]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+  }));
   root.querySelectorAll<HTMLButtonElement>("[data-pick-mode]").forEach((b) => b.addEventListener("click", () => {
     picked = b.dataset.pickMode as Mode;
     root.querySelectorAll("[data-pick-mode]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
@@ -98,7 +126,7 @@ export function showIntro(mode: Mode, onStart: (mode: Mode) => void) {
       root.hidden = true;
       root.classList.remove("is-leaving");
       delete document.body.dataset.intro;
-      onStart(picked);
+      onStart(picked, pickedTrack);
     }, prefersReduced ? 0 : 280);
   });
   play(root);
@@ -106,9 +134,8 @@ export function showIntro(mode: Mode, onStart: (mode: Mode) => void) {
   (root.querySelector(".intro__start") as HTMLButtonElement).focus({ preventScroll: true });
 }
 
-function opt(m: Mode, title: string, sub: string, cur: Mode) {
-  return `<button type="button" class="intro__opt" role="radio" data-pick-mode="${m}" aria-checked="${m === cur}">
-    <b>${title}</b><span>${sub}</span></button>`;
+function opt(m: Mode, title: string, cur: Mode) {
+  return `<button type="button" class="intro__opt" role="radio" data-pick-mode="${m}" aria-checked="${m === cur}"><b>${title}</b></button>`;
 }
 
 let run = 0;

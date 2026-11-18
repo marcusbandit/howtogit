@@ -36,12 +36,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Hanken+Grotesk:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=story79" />
+  <link rel="stylesheet" href="style.css?v=story80" />
 </head>
 <body>
   <header class="top">
     <a class="brand" href="./" aria-label="howtogit home">howtogit<span>.dev</span></a>
-    <nav class="chapters" id="chapters" aria-label="chapters"></nav>
+    <div class="top__mid">
+      <button type="button" class="track-pill" id="track-btn" aria-haspopup="dialog"></button>
+      <nav class="chapters" id="chapters" aria-label="chapters"></nav>
+    </div>
     <button type="button" class="chap-pill" id="chap-pill" aria-haspopup="dialog" aria-label="chapters"></button>
     <div class="top__right">
       <button type="button" class="deck-btn" id="deck-btn" aria-label="your git words"></button>
@@ -89,7 +92,6 @@
   <dialog class="deck" id="deck" aria-labelledby="deck-title">
     <form method="dialog" class="deck__inner">
       <header class="editor__head"><h2 id="deck-title" class="deck__title">Your git words</h2><button class="editor__x" value="close" aria-label="Close">✕</button></header>
-      <p class="deck__sub">Every word you earn by doing it. The rest are still ahead.</p>
       <ul class="deck__list" id="deck-list"></ul>
     </form>
   </dialog>
@@ -100,14 +102,23 @@
     </form>
   </dialog>
 
+  <dialog class="track-pop" id="track-pop" aria-labelledby="track-pop-title">
+    <form method="dialog" class="track-pop__inner">
+      <h2 class="track-pop__title" id="track-pop-title">What do you want to learn?</h2>
+      <ul class="track-rows" id="track-list"></ul>
+    </form>
+  </dialog>
+
   <dialog class="sheet" id="menu" aria-labelledby="menu-title">
     <form method="dialog" class="sheet__inner">
       <header class="sheet__head"><h2 id="menu-title" class="sheet__title">howtogit<span>.dev</span></h2><button class="editor__x" value="close" aria-label="Close">✕</button></header>
+      <p class="sheet__label" id="menu-track-label">Learning</p>
+      <ul class="track-rows" id="menu-tracks" aria-labelledby="menu-track-label"></ul>
       <p class="sheet__label" id="menu-mode-label">Do it with</p>
       <div class="sheet__modes mode-pick" role="radiogroup" aria-labelledby="menu-mode-label">
-        <button type="button" role="radio" data-mode="buttons"><b>Buttons</b><span>Click, like in VS Code</span></button>
-        <button type="button" role="radio" data-mode="command"><b>Commands</b><span>Type real git commands</span></button>
-        <button type="button" role="radio" data-mode="ai"><b>An AI</b><span>Ask in plain words</span></button>
+        <button type="button" role="radio" data-mode="buttons"><b>Buttons</b></button>
+        <button type="button" role="radio" data-mode="command"><b>Commands</b></button>
+        <button type="button" role="radio" data-mode="ai"><b>An AI</b></button>
       </div>
       <button type="button" class="sheet__row" id="menu-theme"><span>Dark mode</span><span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="sheet__row" id="menu-intro"><span>Watch the intro again</span><span aria-hidden="true">→</span></button>
@@ -119,6 +130,6 @@
   </div>
   <button type="button" class="back-up" id="back-up" hidden><span aria-hidden="true">↑</span> Read what happened</button>
   <div class="fx" id="fx" aria-hidden="true"></div>
-  <script type="module" src="main.js?v=story79"></script>
+  <script type="module" src="main.js?v=story80"></script>
 </body>
 </html>

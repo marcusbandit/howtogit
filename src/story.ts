@@ -1,4 +1,5 @@
-/* story.ts: the lesson, as data.
+/* story.ts: the git track ("How git works"), as data, plus the beat types and
+ * helpers every track shares (src/tracks.ts lists the tracks).
  *
  * The story is kept small on purpose: a short report you save, undo and
  * put on GitHub; a friend (Albert) joins, another (Toby) reviews a pull
@@ -12,7 +13,7 @@
 import * as G from "./model.js";
 import type { World } from "./model.js";
 
-export type Who = "you" | "albert";
+export type Who = "you" | "albert" | "toby";
 export type Step = string | ((w: World) => string | void);
 
 export interface Act {
@@ -20,7 +21,7 @@ export interface Act {
   steps: (w: World, v: Record<string, string>) => Step[];
   inputs?: { key: string; label: string; def: (w: World) => string }[];
   ai?: string; // what you'd ask an AI assistant to do; "" marks a happening, same in every mode
-  who?: Who;
+  who?: Who; // albert and toby show as watch acts, the same in every mode
   look?: "github"; // drawn as a GitHub button rather than an app button
   pick?: "commit"; // buttons mode: you pick a commit from the history; its ID arrives as v.id
 }
@@ -32,13 +33,24 @@ export interface EditTask {
   canon: (w: World) => void; // what a typical edit looks like, for replay
 }
 
+/* a question with answer buttons, the same in every mode. Picking an answer
+ * shows its `why` under it; a wrong pick stays visible and you can pick again.
+ * The beat is done once a right one is picked: write `done: (w) => chose(w, "<beat id>")`. */
+export interface Choose {
+  options: { html: string; right: boolean; why: string }[];
+}
+
+export type GhTab = "code" | "issues" | "pulls" | "actions" | "settings";
+
 export interface Beat {
-  id: string;
-  kind: "next" | "act" | "edit" | "watch" | "resolve";
+  id: string; // unique within its track
+  kind: "next" | "act" | "edit" | "watch" | "resolve" | "choose";
   say: (w: World) => string;
   desk?: number;
   acts?: Act[];
   edit?: EditTask;
+  choose?: Choose;
+  ghTab?: GhTab; // which GitHub tab this step is about; the GitHub page opens on it
   done: (w: World) => boolean;
   after?: (w: World) => string;
   term?: [string, string];
@@ -57,40 +69,52 @@ export interface Chapter {
 
 /* ------------------------------------------------------------- helpers */
 
+/* exported for the other tracks (src/tracks/*.ts) */
 export const MAIN_FILE = "report.md";
-const you = (w: World) => w.repos.you;
-const desk = (w: World, i = 0) => w.repos.you?.desks[i];
-const head = (w: World, i = 0) => (you(w) ? G.headId(you(w), desk(w, i)) : undefined);
-const headTree = (w: World, i = 0) => G.treeOf(w, head(w, i));
-const work = (w: World, f: string, i = 0) => desk(w, i)?.work[f] ?? "";
-const gh = (w: World) => w.repos.github;
-const albert = (w: World) => w.repos.albert;
-const br = (w: World) => w.vars.branch || "summary";
-const q = (s: string | undefined) => (s ?? "").replace(/"/g, "'").trim() || "update";
-const count = (w: World, id: string | undefined) => G.ancestors(w, id).size;
-const clean = (w: World, i = 0) => !!you(w) && !G.isDirty(w, you(w), desk(w, i));
-const synced = (w: World, b: string) => !!gh(w) && !!you(w)?.branches[b] && gh(w).branches[b] === you(w).branches[b];
-const firstCommit = (w: World) => [...G.ancestors(w, you(w).branches.main)].map((id) => w.commits[id]).sort((a, b) => a.n - b.n)[0];
-const changed = (w: World, f = MAIN_FILE, i = 0) => work(w, f, i) !== headTree(w, i)[f];
+export const you = (w: World) => w.repos.you;
+export const desk = (w: World, i = 0) => w.repos.you?.desks[i];
+export const head = (w: World, i = 0) => (you(w) ? G.headId(you(w), desk(w, i)) : undefined);
+export const headTree = (w: World, i = 0) => G.treeOf(w, head(w, i));
+export const work = (w: World, f: string, i = 0) => desk(w, i)?.work[f] ?? "";
+export const gh = (w: World) => w.repos.github;
+export const albert = (w: World) => w.repos.albert;
+export const br = (w: World) => w.vars.branch || "summary";
+/* a typed value made safe to put inside "..." in a command */
+export const q = (s: string | undefined) => (s ?? "").replace(/"/g, "'").trim() || "update";
+export const count = (w: World, id: string | undefined) => G.ancestors(w, id).size;
+export const clean = (w: World, i = 0) => !!you(w) && !G.isDirty(w, you(w), desk(w, i));
+export const synced = (w: World, b: string) => !!gh(w) && !!you(w)?.branches[b] && gh(w).branches[b] === you(w).branches[b];
+export const firstCommit = (w: World) => [...G.ancestors(w, you(w).branches.main)].map((id) => w.commits[id]).sort((a, b) => a.n - b.n)[0];
+export const changed = (w: World, f = MAIN_FILE, i = 0) => work(w, f, i) !== headTree(w, i)[f];
 
 /* put a line into a file right after the first line matching `after` */
-function insertAfter(text: string, after: RegExp, line: string): string {
+export function insertAfter(text: string, after: RegExp, line: string): string {
   const lines = text.split("\n");
   const i = lines.findIndex((l) => after.test(l));
   lines.splice(i >= 0 ? i + 1 : lines.length - 1, 0, line);
   return lines.join("\n");
 }
-const setWork = (w: World, f: string, text: string, i = 0) => { desk(w, i).work[f] = text; };
+export const setWork = (w: World, f: string, text: string, i = 0) => { desk(w, i).work[f] = text; };
 export const keyLine = (s: string) => s.split("\n").find((l) => /deadline/i.test(l)) ?? "";
 
-const commitAct = (def: string, files = "-A"): Act => ({
+export const commitAct = (def: string, files = "-A"): Act => ({
   label: files === "-A" ? "Stage all and commit" : `Stage ${files} and commit`,
   inputs: [{ key: "msg", label: "Commit message", def: () => def }],
   steps: (_w, v) => [`git add ${files}`, `git commit -m "${q(v.msg)}"`],
   ai: "commit my changes with a short note",
 });
-const pushAct: Act = { label: "Push", steps: () => ["git push"], ai: "upload my versions to GitHub" };
-const pullAct: Act = { label: "Pull", steps: () => ["git pull"], ai: "get the latest changes from GitHub" };
+export const pushAct: Act = { label: "Push", steps: () => ["git push"], ai: "upload my versions to GitHub" };
+export const pullAct: Act = { label: "Pull", steps: () => ["git pull"], ai: "get the latest changes from GitHub" };
+
+/* choose beats: which answers were picked (in order), and whether a right one was */
+export const picks = (w: World, b: Beat): number[] => (w.vars[`chose:${b.id}`] ?? "").split(",").filter(Boolean).map(Number);
+export const chose = (w: World, id: string) => w.vars[`right:${id}`] === "1";
+export function pickAnswer(w: World, b: Beat, i: number): void {
+  const got = picks(w, b);
+  if (!got.includes(i)) got.push(i);
+  w.vars[`chose:${b.id}`] = got.join(",");
+  if (b.choose?.options[i]?.right) w.vars[`right:${b.id}`] = "1";
+}
 
 /* ------------------------------------------------------------- chapters */
 
@@ -699,7 +723,10 @@ export function valueFor(b: Beat, ai: number, inp: { key: string; def: (w: World
 /* what the beat looks like when someone "just does it", for replays */
 export function autoBeat(b: Beat, w: World, runCmd: (cmd: string, who: Who, deskI: number) => void, note?: (text: string, who: Who) => void): void {
   if (b.kind === "edit") b.edit!.canon(w);
-  else if (b.kind === "resolve") {
+  else if (b.kind === "choose") {
+    const right = b.choose!.options.findIndex((o) => o.right);
+    if (right >= 0) pickAnswer(w, b, right);
+  } else if (b.kind === "resolve") {
     const f = work(w, MAIN_FILE);
     setWork(w, MAIN_FILE, f.replace(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n[\s\S]*?>>>>>>> [^\n]*\n/g, "$1"));
   } else if (b.acts) {

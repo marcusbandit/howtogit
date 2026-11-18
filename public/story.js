@@ -1,4 +1,5 @@
-/* story.ts: the lesson, as data.
+/* story.ts: the git track ("How git works"), as data, plus the beat types and
+ * helpers every track shares (src/tracks.ts lists the tracks).
  *
  * The story is kept small on purpose: a short report you save, undo and
  * put on GitHub; a friend (Albert) joins, another (Toby) reviews a pull
@@ -11,38 +12,51 @@
  */
 import * as G from "./model.js";
 /* ------------------------------------------------------------- helpers */
+/* exported for the other tracks (src/tracks/*.ts) */
 export const MAIN_FILE = "report.md";
-const you = (w) => w.repos.you;
-const desk = (w, i = 0) => w.repos.you?.desks[i];
-const head = (w, i = 0) => (you(w) ? G.headId(you(w), desk(w, i)) : undefined);
-const headTree = (w, i = 0) => G.treeOf(w, head(w, i));
-const work = (w, f, i = 0) => desk(w, i)?.work[f] ?? "";
-const gh = (w) => w.repos.github;
-const albert = (w) => w.repos.albert;
-const br = (w) => w.vars.branch || "summary";
-const q = (s) => (s ?? "").replace(/"/g, "'").trim() || "update";
-const count = (w, id) => G.ancestors(w, id).size;
-const clean = (w, i = 0) => !!you(w) && !G.isDirty(w, you(w), desk(w, i));
-const synced = (w, b) => !!gh(w) && !!you(w)?.branches[b] && gh(w).branches[b] === you(w).branches[b];
-const firstCommit = (w) => [...G.ancestors(w, you(w).branches.main)].map((id) => w.commits[id]).sort((a, b) => a.n - b.n)[0];
-const changed = (w, f = MAIN_FILE, i = 0) => work(w, f, i) !== headTree(w, i)[f];
+export const you = (w) => w.repos.you;
+export const desk = (w, i = 0) => w.repos.you?.desks[i];
+export const head = (w, i = 0) => (you(w) ? G.headId(you(w), desk(w, i)) : undefined);
+export const headTree = (w, i = 0) => G.treeOf(w, head(w, i));
+export const work = (w, f, i = 0) => desk(w, i)?.work[f] ?? "";
+export const gh = (w) => w.repos.github;
+export const albert = (w) => w.repos.albert;
+export const br = (w) => w.vars.branch || "summary";
+/* a typed value made safe to put inside "..." in a command */
+export const q = (s) => (s ?? "").replace(/"/g, "'").trim() || "update";
+export const count = (w, id) => G.ancestors(w, id).size;
+export const clean = (w, i = 0) => !!you(w) && !G.isDirty(w, you(w), desk(w, i));
+export const synced = (w, b) => !!gh(w) && !!you(w)?.branches[b] && gh(w).branches[b] === you(w).branches[b];
+export const firstCommit = (w) => [...G.ancestors(w, you(w).branches.main)].map((id) => w.commits[id]).sort((a, b) => a.n - b.n)[0];
+export const changed = (w, f = MAIN_FILE, i = 0) => work(w, f, i) !== headTree(w, i)[f];
 /* put a line into a file right after the first line matching `after` */
-function insertAfter(text, after, line) {
+export function insertAfter(text, after, line) {
     const lines = text.split("\n");
     const i = lines.findIndex((l) => after.test(l));
     lines.splice(i >= 0 ? i + 1 : lines.length - 1, 0, line);
     return lines.join("\n");
 }
-const setWork = (w, f, text, i = 0) => { desk(w, i).work[f] = text; };
+export const setWork = (w, f, text, i = 0) => { desk(w, i).work[f] = text; };
 export const keyLine = (s) => s.split("\n").find((l) => /deadline/i.test(l)) ?? "";
-const commitAct = (def, files = "-A") => ({
+export const commitAct = (def, files = "-A") => ({
     label: files === "-A" ? "Stage all and commit" : `Stage ${files} and commit`,
     inputs: [{ key: "msg", label: "Commit message", def: () => def }],
     steps: (_w, v) => [`git add ${files}`, `git commit -m "${q(v.msg)}"`],
     ai: "commit my changes with a short note",
 });
-const pushAct = { label: "Push", steps: () => ["git push"], ai: "upload my versions to GitHub" };
-const pullAct = { label: "Pull", steps: () => ["git pull"], ai: "get the latest changes from GitHub" };
+export const pushAct = { label: "Push", steps: () => ["git push"], ai: "upload my versions to GitHub" };
+export const pullAct = { label: "Pull", steps: () => ["git pull"], ai: "get the latest changes from GitHub" };
+/* choose beats: which answers were picked (in order), and whether a right one was */
+export const picks = (w, b) => (w.vars[`chose:${b.id}`] ?? "").split(",").filter(Boolean).map(Number);
+export const chose = (w, id) => w.vars[`right:${id}`] === "1";
+export function pickAnswer(w, b, i) {
+    const got = picks(w, b);
+    if (!got.includes(i))
+        got.push(i);
+    w.vars[`chose:${b.id}`] = got.join(",");
+    if (b.choose?.options[i]?.right)
+        w.vars[`right:${b.id}`] = "1";
+}
 /* ------------------------------------------------------------- chapters */
 export const chapters = [
     {
@@ -641,6 +655,11 @@ export function valueFor(b, ai, inp, w) {
 export function autoBeat(b, w, runCmd, note) {
     if (b.kind === "edit")
         b.edit.canon(w);
+    else if (b.kind === "choose") {
+        const right = b.choose.options.findIndex((o) => o.right);
+        if (right >= 0)
+            pickAnswer(w, b, right);
+    }
     else if (b.kind === "resolve") {
         const f = work(w, MAIN_FILE);
         setWork(w, MAIN_FILE, f.replace(/<<<<<<< [^\n]*\n([\s\S]*?)=======\n[\s\S]*?>>>>>>> [^\n]*\n/g, "$1"));

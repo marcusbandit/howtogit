@@ -25,13 +25,18 @@ Live: https://howtogit.dev
   three-way merge with real conflict markers, worktrees, GitHub pull requests).
   Plain JSON, so it saves to localStorage and replays.
 - `src/cli.ts`: the `git` and `gh` command line on top of the model.
-- `src/story.ts`: the lesson as data: chapters, beats, what each button runs,
-  and when a beat counts as done.
-- `src/engine.ts`: runs commands and replays the story to any beat (no DOM).
+- `src/tracks.ts`: the four tracks you can pick on the intro (How git works,
+  Issues and pull requests, CI and GitHub Actions, Good habits), each with its
+  own chapters, starting world and saved progress.
+- `src/story.ts`: the git track as data: chapters, beats, what each button
+  runs, and when a beat counts as done. Its helpers are shared by the others.
+- `src/tracks/*.ts`: the other tracks, one file each.
+- `src/engine.ts`: runs commands and replays a track to any beat (no DOM).
 - `src/main.ts`: the page: lesson card, the three modes, the world, the editor.
 - `tsc` compiles `src/` to `public/`, which is committed and served as-is.
 
 Dev links: `/?ch=7&b=3` opens chapter 7, step 3 (replayed the typical way),
+`&t=github|ci|habits` picks another track (no `t` means git),
 `&mode=command|ai|buttons` picks the mode, `&done=1` shows that step finished.
 
 ## Develop
