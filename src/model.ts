@@ -1715,7 +1715,8 @@ function runStep(w: World, wf: Workflow, job: WfJob, s: WfStep, ws: { files: Fil
         return { ok: true, log: [...head, `Pages site is configured for ${FULL_NAME}`] };
       case "actions/upload-pages-artifact": {
         const raw = input("path") || "_site/";
-        const dir = raw.replace(/^\.\/?/, "").replace(/\/+$/, "");
+        // only a leading ./ or a lone . goes: .site stays .site
+        const dir = raw.replace(/^\.(\/|$)/, "").replace(/\/+$/, "");
         const files = Object.keys(ws.files ?? {}).sort()
           .filter((p) => (!dir || p.startsWith(dir + "/")) && !/^\.git(hub)?\//.test(dir ? p.slice(dir.length + 1) : p));
         if (dir && !files.length) return exit([...head, `tar: ${raw}: Cannot open: No such file or directory`, "tar: Error is not recoverable: exiting now"], 2);

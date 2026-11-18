@@ -385,6 +385,10 @@ sh(w, "you", "gh workflow list", { has: ["Checks", "Publish", "active"] });
   eq([t.run.ok, t.run.annotations.map((a) => a.message)], [false, ['Ensure GITHUB_TOKEN has permission "id-token: write".']], "deploy-pages needs id-token: write");
   t = runOn(pages.replace("          path: .\n", "").replace("        with:\n", ""));
   ok(!t.run.ok && t.run.jobs[0].steps.some((s) => s.log.includes("tar: _site/: Cannot open: No such file or directory")), "upload-pages-artifact defaults to _site/");
+  t = runOn(pages.replace("          path: .\n", "          path: .site\n"), { ".site/index.html": "<h1>Report</h1>\n" });
+  ok(t.run.ok && t.run.jobs[0].steps.some((s) => s.log.includes("./index.html")), "upload-pages-artifact keeps the dot in path: .site");
+  t = runOn(pages.replace("          path: .\n", "          path: ./.site/\n"), { ".site/index.html": "<h1>Report</h1>\n" });
+  ok(t.run.ok, "upload-pages-artifact takes path: ./.site/");
   t = runOn(pages.replace(/    environment:\n(      .*\n)+/, ""));
   ok(!t.run.ok && t.run.annotations.some((a) => a.message.startsWith("Missing environment")), "deploy-pages needs an environment");
   t = runOn([
