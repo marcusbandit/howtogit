@@ -1,15 +1,17 @@
 #!/usr/bin/env node
-/* check-play.mjs: play every step in the real page, in each mode, the way a
- * visitor would (buttons, typed commands, the AI's messages, the editor), and
- * fail on a page error or a step that doesn't finish.
+/* check-play.mjs: play every step of every track in the real page, in each
+ * mode, the way a visitor would (buttons, typed commands, the AI's messages,
+ * answer buttons, the editor), and fail on a page error or a step that
+ * doesn't finish.
  *
- *   node scripts/check-play.mjs [--url http://localhost:8787] [--mode buttons|command|ai]
+ *   node scripts/check-play.mjs [--url http://localhost:8787] [--mode buttons|command|ai] [--track git,github]
  */
 import { spawn } from "node:child_process";
 import net from "node:net";
 const arg = (k, d) => (process.argv.includes(k) ? process.argv[process.argv.indexOf(k) + 1] : d);
 const URL_BASE = arg("--url", "http://localhost:8787");
 const MODES = arg("--mode", "buttons,command,ai").split(",");
+const TRACKS = arg("--track", "")?.split(",").filter(Boolean);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const port = await new Promise((res) => { const s = net.createServer(); s.listen(0, () => { const p = s.address().port; s.close(() => res(p)); }); });
 const chrome = spawn(process.env.CHROME_BIN || "google-chrome-stable", ["--headless=new", "--disable-gpu", `--remote-debugging-port=${port}`, "--window-size=1440,1000", "about:blank"], { stdio: "ignore" });
@@ -25,13 +27,14 @@ try {
   const ev = async (x) => (await send("Runtime.evaluate", { expression: `(async()=>{const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));${x}})()`, returnByValue: true, awaitPromise: true })).result.result?.value;
   await send("Page.enable"); await send("Runtime.enable");
   const steps = JSON.parse(await (async () => { await send("Page.navigate", { url: `${URL_BASE}/?ch=1&b=1` }); await sleep(1500);
-    return ev(`const m = await import("./story.js"); return JSON.stringify(m.chapters.flatMap((c, i) => c.beats.map((b, j) => ({ c: i + 1, b: j + 1, id: b.id, kind: b.kind })))) `); })());
+    return ev(`const m = await import("./tracks.js"); return JSON.stringify(m.tracks.flatMap((t) => t.chapters.flatMap((c, i) => c.beats.map((b, j) => ({ t: t.id, c: i + 1, b: j + 1, id: b.id, kind: b.kind }))))) `); })())
+    .filter((s) => !TRACKS?.length || TRACKS.includes(s.t));
   for (const mode of MODES) {
     let bad = 0;
     for (const s of steps) {
       if (s.kind === "next") continue;
       errors.length = 0;
-      await send("Page.navigate", { url: `${URL_BASE}/?ch=${s.c}&b=${s.b}&mode=${mode}` });
+      await send("Page.navigate", { url: `${URL_BASE}/?t=${s.t}&ch=${s.c}&b=${s.b}&mode=${mode}` });
       await sleep(900);
       // play the step the way a visitor would in this mode
       const how = await ev(`
@@ -52,10 +55,22 @@ try {
             if (!/Deadline:/.test(t.value)) t.value += 'Deadline: Monday\\n';
             document.querySelector('#editor-save').click(); await sleep(400);
           }
+          if (!next()) { // still not: type what the step's typical edit looks like, file by file
+            const E = await import('./engine.js'), T = (await import('./tracks.js')).trackById('${s.t}');
+            const fw = E.finishBeat(T, ${s.c - 1}, ${s.b - 1}).w;
+            for (let k = 0; k < L.querySelectorAll('[data-open]').length; k++) {
+              const o = L.querySelectorAll('[data-open]')[k];
+              o.click(); await sleep(200);
+              document.querySelector('#editor-text').value = fw.repos.you.desks[Number(o.dataset.desk || 0)].work[o.dataset.open] ?? '';
+              document.querySelector('#editor-save').click(); await sleep(400);
+            }
+          }
           return next() ? 'edited' : 'edit did not finish';
         }
         for (let round = 0; round < 6 && !next(); round++) {
-          const watch = L.querySelector('.btn--friend:not([disabled]), .btn--event:not([disabled])');
+          const answer = L.querySelector('[data-choose]:not([disabled])'); // the first answer left, right or wrong
+          if (answer) { answer.click(); await sleep(450); continue; }
+          const watch = L.querySelector('.btn--friend:not([disabled]), .btn--toby:not([disabled]), .btn--event:not([disabled])');
           if (watch) { watch.click(); await sleep(1200); continue; }
           if ('${mode}' === 'buttons') {
             const hist = [...L.querySelectorAll('.hist__open')];
@@ -75,7 +90,7 @@ try {
         }
         return next() ? 'played' : 'stuck: ' + (L.querySelector('.say')?.textContent ?? '').slice(0, 60);`);
       const ok = /already|played|edited/.test(how ?? "") && !errors.length;
-      if (!ok) { bad++; fails++; console.log(`FAIL  ${mode.padEnd(8)} ${s.c}.${s.b} ${s.id}: ${how}${errors.length ? " | error: " + errors[0].split("\n")[0] : ""}`); }
+      if (!ok) { bad++; fails++; console.log(`FAIL  ${mode.padEnd(8)} ${s.t} ${s.c}.${s.b} ${s.id}: ${how}${errors.length ? " | error: " + errors[0].split("\n")[0] : ""}`); }
     }
     console.log(`${mode}: ${bad ? bad + " step(s) failed" : "every step plays"}`);
   }

@@ -26,7 +26,7 @@ export function explain(cmd: string): Explained | null {
   const parts: Explained["parts"] = [];
   const also: Explained["also"] = [];
   const P = (tok: string, means: string, kind?: Kind) => {
-    const k: Kind = kind ?? (parts.length === 0 ? "program" : /^-/.test(tok) ? "flag" : parts.length === 1 || (parts.length === 2 && /^(remote|worktree|pr)$/.test(parts[1].t)) ? "command" : "value");
+    const k: Kind = kind ?? (parts.length === 0 ? "program" : /^-/.test(tok) ? "flag" : parts.length === 1 || (parts.length === 2 && /^(remote|worktree|pr|run)$/.test(parts[1].t)) ? "command" : "value");
     const long = k === "flag" && LONG[tok] ? ` Short for ${LONG[tok]}.` : "";
     // the kind tag already says flag or value, so the text doesn't repeat it
     const text = means.replace(/^a (flag|value)( that tells| meaning|:)?\s*/i, (_m, _k, how) => (how && /tells/.test(how) ? "tells " : ""));
@@ -36,23 +36,80 @@ export function explain(cmd: string): Explained | null {
 
   if (t[0] === "gh") {
     P("gh", "GitHub's own command line tool (git itself knows nothing about pull requests)");
-    if (t[1] === "pr") P("pr", "work with pull requests");
-    if (t[2] === "create") {
-      P("create", "open a new pull request");
-      for (let i = 3; i < t.length; i++) {
-        if (t[i] === "--title") { P("--title", "a flag: the value after it is the title people see on GitHub"); P(t[i + 1] ?? "", "the title", "value"); i++; }
-        else if (t[i] === "--base") { P("--base", "a flag: the value after it is the branch the change should go into"); P(t[i + 1] ?? "", "that branch", "value"); i++; }
-        else if (t[i] === "--head") { P("--head", "a flag: the value after it is the branch that has your change"); P(t[i + 1] ?? "", "that branch", "value"); i++; }
+    const noun = t[1], verb = t[2];
+    const NOUN: Record<string, string> = {
+      pr: "work with pull requests", issue: "work with issues", label: "work with labels",
+      run: "work with Actions runs: each time a workflow ran",
+    };
+    if (noun && NOUN[noun]) P(noun, NOUN[noun], "command");
+    if (noun === "api") {
+      P("api", "call GitHub's API directly, for things gh has no command of its own for", "command");
+      for (let i = 2; i < t.length; i++) {
+        if (t[i] === "--method" || t[i] === "-X") { P(t[i], "a flag: the value after it says what to do. POST makes something new"); P(t[i + 1] ?? "", "the method", "value"); i++; }
+        else if (t[i] === "--input") { P("--input", "a flag: send the file named after it as the request"); P(t[i + 1] ?? "", "that file", "value"); i++; }
+        else if (!t[i].startsWith("-")) P(t[i], /rulesets/.test(t[i]) ? "which part of GitHub: this repository's rulesets" : "which part of GitHub's API", "value");
       }
-      A("the Create pull request button on github.com", "the same thing, in the browser");
+      A("Settings, then Rules, on github.com", "the same thing, in the browser");
+      return { parts, also, flags: parts.some((p) => p.kind === "flag"), docs: "https://cli.github.com/manual/gh_api" };
     }
-    if (t[2] === "merge") {
-      P("merge", "merge a pull request on GitHub");
-      if (t[3]) P(t[3], "which pull request, by its number");
-      if (t.includes("--merge")) P("--merge", "a flag choosing how to merge: keep every commit and add a merge commit (squash and rebase are the other styles)");
-      A("the Merge pull request button on github.com", "the same thing, in the browser");
+    const VERB: Record<string, Record<string, string>> = {
+      pr: {
+        create: "open a new pull request", merge: "merge a pull request on GitHub", ready: "mark a draft as ready for review",
+        edit: "change a pull request: its reviewers, labels, title or text", review: "review a pull request: approve it, comment, or ask for changes",
+        diff: "show what a pull request changes", view: "show one pull request", list: "list the open pull requests",
+        checks: "list a pull request's checks and whether they passed",
+        checkout: "put a pull request's branch on your computer", comment: "add a comment to a pull request",
+        close: "close a pull request without merging it", reopen: "open a closed pull request again",
+      },
+      issue: {
+        create: "open a new issue", edit: "change an issue: its labels, assignees, title or text", comment: "add a comment to an issue",
+        close: "close an issue", reopen: "open a closed issue again", view: "show one issue", list: "list the open issues",
+        develop: "make a branch for an issue, linked to it",
+      },
+      label: { create: "make a new label", list: "list the labels this repository has" },
+      run: { view: "show one run", list: "list the latest runs" },
+    };
+    if (noun && verb && VERB[noun]?.[verb]) P(verb, VERB[noun][verb], "command");
+    // flags: what each one does, and what its value is (none for a plain switch)
+    const FLAG: Record<string, [string, string?]> = {
+      "--title": ["a flag: the value after it is the title people see on GitHub", "the title"],
+      "--body": verb === "review" ? ["a flag: the value after it is what you write", "your review"] : verb === "comment" ? ["a flag: the value after it is what you write", "the comment"] : ["a flag: the value after it is the text under the title", "the text"],
+      "--base": ["a flag: the value after it is the branch the change should go into", "that branch"],
+      "--head": ["a flag: the value after it is the branch that has your change", "that branch"],
+      "--draft": ["a flag: open it as a draft, not ready for review and not mergeable yet"],
+      "--label": [verb === "list" ? "a flag: only the ones with this label" : "a flag: put this label on it", "the label"],
+      "--add-label": ["a flag: put this label on it", "the label"],
+      "--remove-label": ["a flag: take this label off", "the label"],
+      "--assignee": [verb === "list" ? "a flag: only the ones assigned to this person" : "a flag: who does it", "who (@me means you)"],
+      "--add-assignee": ["a flag: add this person as an assignee, the one doing it", "who (@me means you)"],
+      "--reviewer": ["a flag: ask this person to review it", "who"],
+      "--add-reviewer": ["a flag: ask this person to review it", "who"],
+      "--approve": ["a flag: approve it"],
+      "--request-changes": ["a flag: ask for changes before it goes in"],
+      "--comment": verb === "review" ? ["a flag: only comment, without approving or asking for changes"] : ["a flag: the value after it is a comment to leave as well", "the comment"],
+      "--reason": ["a flag: why it's closed", "completed, or not planned"],
+      "--squash": ["a flag choosing how to merge: pack every commit of the branch into one new commit"],
+      "--merge": ["a flag choosing how to merge: keep every commit and add a merge commit (squash and rebase are the other styles)"],
+      "--delete-branch": ["a flag: delete the branch on GitHub and on your computer afterwards"],
+      "--checkout": ["a flag: switch to the new branch right away"],
+      "--log-failed": ["a flag: print the log of the steps that failed, nothing else"],
+      "--log": ["a flag: print the whole log"],
+    };
+    for (let i = 3; i < t.length; i++) {
+      const f = FLAG[t[i]];
+      if (f) { P(t[i], f[0]); if (f[1] !== undefined) { P(t[i + 1] ?? "", f[1], "value"); i++; } }
+      else if (noun === "run" && !t[i].startsWith("-")) P(t[i], "which run, by its ID", "value");
+      else if (/^#?\d+$/.test(t[i])) P(t[i], noun === "issue" ? "which issue, by its number" : "which pull request, by its number");
+      else if (noun === "label" && verb === "create" && !/^-/.test(t[i])) P(t[i], "the new label's name");
     }
-    return { parts, also, flags: parts.some((p) => p.kind === "flag"), docs: "https://cli.github.com/manual/gh_pr" };
+    if (noun === "pr" && verb === "create") A("the Create pull request button on github.com", "the same thing, in the browser");
+    if (noun === "pr" && verb === "merge") A("the Merge pull request button on github.com", "the same thing, in the browser");
+    if (noun === "pr" && verb === "review") A("Review changes on the pull request's Files changed tab", "the same thing, in the browser, where you can also leave notes on single lines");
+    if (noun === "pr" && verb === "checks") A("the checks box on the pull request", "the same list, in the browser");
+    if (noun === "run" && verb === "view") A("the run on the Actions tab", "the same log, in the browser");
+    if (noun === "issue" && verb === "create") A("New issue on the Issues tab of github.com", "the same thing, in the browser");
+    const docs = noun && verb && VERB[noun]?.[verb] ? `https://cli.github.com/manual/gh_${noun}_${verb}` : noun && NOUN[noun] ? `https://cli.github.com/manual/gh_${noun}` : "https://cli.github.com/manual/";
+    return { parts, also, flags: parts.some((p) => p.kind === "flag"), docs };
   }
   if (t[0] !== "git") return null;
   P("git", "the git program");
@@ -124,7 +181,8 @@ export function explain(cmd: string): Explained | null {
       break;
     case "branch":
       P("branch", "list, make or delete branches");
-      rest.forEach((x) => P(x, "the branch name"));
+      rest.forEach((x) => P(x, x === "-d" ? "a flag: delete the branch, only if its work is merged" : x === "-D" ? "a flag: delete the branch even if git thinks its work isn't merged" : "the branch name"));
+      if (rest.includes("-D")) A("git branch -d <name>", "the careful delete: it refuses while the branch has work main doesn't");
       break;
     case "remote":
       P("remote", "manage the remote copies this repository knows about");

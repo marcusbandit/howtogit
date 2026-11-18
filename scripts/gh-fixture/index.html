@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitHub page fixture</title>
+  <!-- dev only: every state of the GitHub page (src/ghpage.ts) on hand-made worlds.
+       Serve the repo root (python3 serve.py 8791 .) and open /scripts/gh-fixture/?s=pr-changes
+       Params: s=scene, theme=dark, bare=1 (no scene list) -->
+  <script>
+    var q = new URLSearchParams(location.search);
+    document.documentElement.dataset.theme = q.get("theme") === "dark" ? "dark" : "light";
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Hanken+Grotesk:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../public/style.css" />
+  <link rel="stylesheet" href="../../public/gh.css" />
+  <style>
+    .fx-scenes { list-style: none; display: grid; gap: 2px; margin-top: 10px; }
+    .fx-scenes a { color: var(--ink); font-size: 14px; }
+    .fx-scenes a[aria-current] { font-weight: 700; color: var(--accent-deep); }
+    body.is-bare .lesson { display: none; }
+    body.is-bare .app { grid-template-columns: minmax(340px, 430px) minmax(0, 1fr); }
+    body.is-bare .app::before { content: ""; }
+    @media (max-width: 860px) { body.is-bare .app { grid-template-columns: minmax(0, 1fr); } body.is-bare .app::before { display: none; } }
+  </style>
+</head>
+<body>
+  <header class="top"><a class="brand" href="./">howtogit<span>.dev</span></a></header>
+  <main class="app">
+    <section class="lesson"><div class="kicker"><b>GitHub page</b></div><ul class="fx-scenes" id="scenes"></ul></section>
+    <section class="world" id="world">
+      <section class="place place--github is-shown" data-place="github">
+        <header class="place__head"><span class="ico ico--cloud"></span><h3>GitHub</h3><span class="place__sub">github.com/you/my-report · the shared copy</span></header>
+        <div class="place__rows"><div class="place__grid"><div class="place__left"></div><div class="strip" data-strip="github"></div></div></div>
+        <div class="place__prs"></div>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="./fixture.mjs"></script>
+</body>
+</html>

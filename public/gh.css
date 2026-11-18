@@ -1,0 +1,357 @@
+/* gh.css: the GitHub repo page in the world, for the tracks past "How git works".
+ * Tabs (Code, Issues, Pull requests, Actions, Settings) over one panel, drawn
+ * in the same paper and ink as the rest. src/ghpage.ts writes the markup.
+ * It reuses style.css for the diff (.pr__diff, .dl), branches (.branches, .dot),
+ * file names (.fname) and folders (.folder). */
+
+:root {
+  --gh-open: #1f7a3a;
+  --gh-merged: #8250df;
+  --gh-closed: #c8321f;
+  --gh-draft: var(--ink-soft);
+}
+:root[data-theme="dark"] {
+  --gh-open: #6fd39a;
+  --gh-merged: #b49bff;
+  --gh-closed: #ff8b7a;
+}
+
+/* the page takes over from the old GitHub rows: on wide screens the strip
+ * moves into the Code tab, on phones it stays in the overview */
+.place--github:has(.ghp) .place__left { display: none; }
+@media (min-width: 861px) {
+  .place--github:has(.ghp) > .place__rows { display: none; }
+}
+
+.ghp { container: ghp / inline-size; min-width: 0; scroll-margin-top: calc(var(--top-h) + 12px); }
+
+/* ------------------------------------------------------------- tabs */
+
+.ghp__tabs { display: flex; flex-wrap: wrap; gap: 2px 4px; margin: 2px 0 12px; border-bottom: 1.5px solid var(--line-strong); }
+.ghp-tab {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 10px 6px;
+  border: 0; background: none; color: var(--ink-soft); font-size: 14px; font-weight: 400; white-space: nowrap; border-radius: 8px 8px 0 0;
+}
+.ghp-tab:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.ghp-tab[aria-selected="true"] { color: var(--ink); font-weight: 600; }
+/* the chosen tab is underlined with the pen, a touch uneven */
+.ghp-tab[aria-selected="true"]::after {
+  content: ""; position: absolute; left: 6px; right: 6px; bottom: -2px; height: 3.5px;
+  background: var(--accent); border-radius: 3px 4px 2px 5px / 2px 3px 2px 3px;
+}
+.ghp-tab .ghp-i { width: 18px; height: 18px; }
+.ghp-count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); font-size: 12px; font-weight: 700; }
+
+/* ------------------------------------------------------------- body */
+
+.ghp__body { display: grid; gap: 18px; align-items: start; min-width: 0; }
+.ghp[data-gh-page="code"] .ghp__body { grid-template-columns: 290px minmax(0, 1fr); }
+.ghp:not([data-gh-page="code"]) .ghp__slot, .ghp__slot:empty { display: none; }
+.ghp__slot { min-width: 0; align-self: center; }
+.ghp__panel { min-width: 0; }
+@container ghp (max-width: 640px) {
+  .ghp[data-gh-page="code"] .ghp__body { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 860px) { .ghp__slot { display: none; } }
+
+/* ------------------------------------------------------------- icons, people, chips */
+
+.ghp-i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+.ghp-i__fill { fill: currentColor; stroke: none; }
+.ghp-i.is-open { color: var(--gh-open); }
+.ghp-i.is-merged { color: var(--gh-merged); }
+.ghp-i.is-closed { color: var(--gh-closed); }
+.ghp-i.is-soft { color: var(--ink-soft); }
+.ghp-i.is-ink { color: var(--ink); }
+.ghp-i.is-wait { color: var(--pen-amber); }
+.ghp-i__dots { stroke-dasharray: 6 7.4; }
+.ghp-i__track { opacity: .25; }
+.ghp-i__arc { stroke-dasharray: 32 68; animation: ghp-spin 0.9s linear infinite; }
+@keyframes ghp-spin { to { stroke-dashoffset: -100; } }
+
+.ghp-av {
+  display: inline-grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--who); color: var(--card); font-size: 12px; font-weight: 700; line-height: 1;
+  box-shadow: 0 0 0 2px var(--card);
+}
+.ghp-av--big { width: 32px; height: 32px; font-size: 14px; }
+.ghp-avs { display: inline-flex; }
+.ghp-avs .ghp-av + .ghp-av { margin-left: -4px; }
+.ghp-who { color: var(--who); font-weight: 700; }
+
+.ghp-labels { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: 1px; }
+.ghp-label {
+  display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 20px; white-space: nowrap;
+  background: var(--lc); color: var(--lt); border: 1.5px solid var(--lc);
+}
+/* dark: the label's colour as a tint with a lifted text, so any colour reads */
+:root[data-theme="dark"] .ghp-label {
+  background: color-mix(in srgb, var(--lc) 22%, var(--card));
+  color: color-mix(in srgb, var(--lc) 40%, #fff);
+  border-color: color-mix(in srgb, var(--lc) 55%, var(--ink));
+}
+
+.ghp-tag { display: inline-block; padding: 0 8px; border-radius: 999px; border: 1.5px solid var(--line-strong); color: var(--ink-soft);
+  font-size: 12px; font-weight: 700; line-height: 18px; white-space: nowrap; }
+.ghp-tag--ok { border-color: var(--ok); color: var(--ok); }
+.ghp-tag--bad { border-color: var(--bad); color: var(--bad); }
+
+.ghp-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px 2px 6px; border-radius: 999px; font-size: 14px; font-weight: 700;
+  background: var(--c); color: var(--card); white-space: nowrap; }
+.ghp-pill .ghp-i { color: inherit; width: 18px; height: 18px; }
+.ghp-pill--open { --c: var(--gh-open); }
+.ghp-pill--draft { --c: var(--gh-draft); }
+.ghp-pill--merged { --c: var(--gh-merged); }
+.ghp-pill--closed { --c: var(--gh-closed); }
+
+.ghp-br { color: var(--c); font-family: var(--mono); font-weight: 700; font-size: inherit; }
+.ghp-soft { color: var(--ink-soft); font-weight: 400; }
+.ghp code { font-family: var(--mono); font-size: inherit; }
+.ghp-h5 { font-size: 12px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.ghp-none { font-size: 14px; color: var(--ink-soft); }
+.ghp-empty { font-family: var(--hand); font-weight: 600; font-size: 20px; line-height: 1.25; color: var(--ink-soft); padding: 22px 16px; text-align: center; }
+.ghp-empty--left { text-align: left; padding: 6px 0 2px; }
+
+.ghp-ref { display: inline; border: 0; background: none; padding: 0; color: var(--pen-blue); font-weight: 700; text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--pen-blue) 40%, transparent); text-underline-offset: 3px; text-align: left; }
+.ghp-ref:hover { text-decoration-color: currentColor; }
+.ghp-ref--row { display: inline-flex; align-items: flex-start; gap: 6px; font-size: 14px; }
+.ghp-ref--row .ghp-i { width: 18px; height: 18px; margin-top: 1px; }
+
+/* ------------------------------------------------------------- cards and lists */
+
+.ghp-card { background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.ghp-list { background: var(--card); border: 1.5px solid var(--line-strong); border-radius: 10px; overflow: hidden; }
+.ghp-list__head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 6px 8px; background: var(--card-2); border-bottom: 1.5px solid var(--line); }
+.ghp-list__title { font-size: 14px; font-weight: 700; padding: 0 6px; line-height: 32px; }
+.ghp-filter { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 2px 10px 2px 6px; border-radius: 999px;
+  border: 1.5px solid transparent; background: none; color: var(--ink-soft); font-size: 14px; font-weight: 400; }
+.ghp-filter .ghp-i { width: 18px; height: 18px; }
+.ghp-filter[aria-pressed="false"] .ghp-i { color: var(--ink-soft); }
+.ghp-filter[aria-pressed="true"] { color: var(--ink); font-weight: 600; border-color: var(--line-strong); background: var(--card); }
+.ghp-filter:hover { color: var(--ink); }
+
+.ghp-rows { list-style: none; }
+.ghp-rows > li + li { border-top: 1.5px dashed var(--line); }
+.ghp-row {
+  width: 100%; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; grid-template-areas: "ico main side" "ico meta side";
+  gap: 4px 10px; align-items: start; padding: 10px 14px; border: 0; background: none; color: var(--ink); text-align: left;
+}
+.ghp-row:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.ghp-row__ico { grid-area: ico; padding-top: 2px; }
+.ghp-row__main { grid-area: main; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ghp-row__title { font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.ghp-row__meta { grid-area: meta; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: 14px; color: var(--ink-soft); }
+.ghp-row__meta b:not(.ghp-br) { color: var(--ink); font-weight: 600; }
+.ghp-row__meta code { font-size: 12px; }
+.ghp-row__side { grid-area: side; display: flex; align-items: center; gap: 10px; padding-top: 2px; }
+.ghp-cc { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: var(--ink-soft); }
+.ghp-cc .ghp-i { width: 18px; height: 18px; }
+@container ghp (max-width: 520px) {
+  /* narrow: the title takes the whole width, people and comments sit beside the meta line */
+  .ghp-row { grid-template-areas: "ico main main" "ico meta side"; padding: 10px 12px; }
+  .ghp-row__side { padding-top: 0; align-self: center; gap: 8px; }
+}
+
+/* ------------------------------------------------------------- Code */
+
+.ghp-code { display: grid; gap: 8px; align-content: start; }
+.ghp-code .ghp-h5 { margin-top: 6px; }
+.ghp-code .branches { margin-top: 0; }
+.ghp-live { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border-radius: 16px; border: 1.5px solid var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, var(--card)); color: var(--ink); font-size: 14px; font-weight: 600; justify-self: start; max-width: 100%; }
+.ghp-live .ghp-i { color: var(--ok); }
+.ghp-live span { min-width: 0; display: flex; flex-wrap: wrap; column-gap: 6px; }
+.ghp-live code { font-weight: 700; color: var(--ok); white-space: nowrap; }
+.ghp-commit { display: flex; align-items: center; gap: 8px; font-size: 14px; padding-bottom: 8px; border-bottom: 1.5px dashed var(--line); }
+.ghp-commit__msg { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.ghp-commit code { color: var(--ink-soft); font-size: 12px; }
+.ghp-tree { list-style: none; display: grid; gap: 2px; }
+.ghp-tree .ghp-tree { padding-left: 20px; border-left: 1.5px dashed var(--line); margin-left: 8px; }
+.ghp-tree__name { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 14px; padding: 2px 0; }
+.ghp-tree__name .folder { flex: none; margin-top: 3px; }
+.ghp-tree__file { display: flex; align-items: center; gap: 6px; }
+.ghp-tree__file .ghp-i { width: 18px; height: 18px; }
+
+/* ------------------------------------------------------------- an issue, a pull request, a run */
+
+.ghp-detail { display: grid; gap: 10px; min-width: 0; }
+.ghp-back { justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 14px 4px 10px;
+  border: 1.5px solid var(--line-strong); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 700; }
+.ghp-back:hover { border-color: var(--ink); }
+.ghp-detail__title { font-size: 20px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.ghp-detail__title > span, .ghp-detail__title span span { color: var(--ink-soft); font-weight: 400; }
+.ghp-detail__title--run { display: flex; align-items: flex-start; gap: 8px; }
+.ghp-detail__title--run > span { color: var(--ink); font-weight: 700; }
+.ghp-detail__title--run .ghp-i { width: 24px; height: 24px; margin-top: 2px; }
+.ghp-detail__state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 14px; color: var(--ink-soft);
+  padding-bottom: 10px; border-bottom: 1.5px solid var(--line); }
+.ghp-detail__state > span:not(.ghp-pill):not(.ghp-ph) { min-width: 0; overflow-wrap: anywhere; }
+.ghp-detail__state code { font-size: 12px; }
+.ghp-detail__state .ghp-ph { margin-left: auto; }
+.ghp-path { color: var(--ink-soft); }
+
+.ghp-detail__grid { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 16px; align-items: start; }
+.ghp-thread { display: grid; gap: 12px; min-width: 0; }
+.ghp-side { display: grid; gap: 4px; min-width: 0; }
+.ghp-side__box { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 8px 0 10px; }
+.ghp-side__box + .ghp-side__box { border-top: 1.5px dashed var(--line); }
+.ghp-people { list-style: none; display: grid; gap: 6px; font-size: 14px; }
+.ghp-people li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ghp-links { list-style: none; display: grid; gap: 6px; }
+@container ghp (max-width: 640px) {
+  .ghp-detail__grid { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  /* on a narrow page the facts come first, in two columns, then the talk */
+  .ghp-side { order: -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; padding-bottom: 6px; border-bottom: 1.5px solid var(--line); }
+  .ghp-side__box + .ghp-side__box { border-top: 0; }
+  .ghp-side__box { padding: 6px 0 8px; }
+  /* reviewers carry a state each, so they get the full width */
+  .ghp-side__box:has(.ghp-rev) { grid-column: 1 / -1; }
+  .ghp-thread { padding-top: 8px; }
+}
+
+.ghp-note { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; align-items: start; }
+.ghp-note__box { border: 1.5px solid var(--line-strong); border-radius: 10px; background: var(--card); overflow: hidden; }
+.ghp-note__head { font-size: 14px; color: var(--ink-soft); padding: 5px 12px; background: color-mix(in srgb, var(--who) 8%, var(--card-2)); border-bottom: 1.5px solid var(--line); }
+.ghp-note__text { font-size: 14px; padding: 8px 12px 10px; white-space: pre-line; overflow-wrap: anywhere; }
+.ghp-note__text code, .ghp-lnote code { background: var(--card-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.ghp-event { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-soft); padding: 2px 0 2px 6px; }
+.ghp-event .ghp-ref { margin-right: 2px; }
+
+/* the diff: style.css draws it; these add context lines, gaps and line notes */
+.ghp .pr__diff { margin-top: 0; background: var(--card); }
+.ghp .pr__file { font-size: 14px; }
+.ghp .dl { font-size: 14px; overflow-wrap: anywhere; }
+.dl--ctx { color: var(--ink-soft); }
+.dl--gap { color: var(--ink-soft); text-align: center; background: var(--card-2); line-height: 1.2; }
+.ghp-lnote {
+  display: flex; align-items: flex-start; gap: 8px; margin: 4px 10px 6px 26px; padding: 7px 10px; border-radius: 8px;
+  border: 1.5px solid var(--line-strong); border-left: 3px solid var(--who); background: var(--card);
+  font-family: var(--ui); font-size: 14px; line-height: 1.45; white-space: normal;
+}
+.ghp-lnote p { min-width: 0; overflow-wrap: anywhere; }
+.ghp-lnote .ghp-who { margin-right: 4px; }
+.ghp-lnote--loose { display: grid; gap: 2px; margin: 0 12px 10px; }
+.ghp-where { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); margin-right: 8px; }
+
+.ghp-review { border: 1.5px solid var(--line-strong); border-radius: 10px; background: var(--card); overflow: hidden; }
+.ghp-review__head { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-soft); padding: 6px 12px; background: var(--card-2); }
+.ghp-review__head > span { min-width: 0; }
+.ghp-review--approved { border-color: color-mix(in srgb, var(--ok) 55%, var(--line-strong)); }
+.ghp-review--approved .ghp-review__head { background: color-mix(in srgb, var(--ok) 10%, var(--card)); }
+.ghp-review--changes_requested { border-color: color-mix(in srgb, var(--bad) 55%, var(--line-strong)); }
+.ghp-review--changes_requested .ghp-review__head { background: color-mix(in srgb, var(--bad) 9%, var(--card)); }
+.ghp-review .ghp-note__text { border-top: 1.5px solid var(--line); }
+
+.ghp-rev { font-size: 12px; font-weight: 700; padding: 0 8px; line-height: 18px; border-radius: 999px; border: 1.5px solid currentColor; }
+.ghp-rev--waiting { color: var(--pen-amber); }
+.ghp-rev--approved { color: var(--ok); }
+.ghp-rev--changes_requested { color: var(--bad); }
+.ghp-rev--commented { color: var(--ink-soft); }
+
+/* checks and the merge box */
+.ghp-box { border: 1.5px solid var(--line-strong); border-radius: 10px; background: var(--card); overflow: hidden; }
+.ghp-box__head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 16px; }
+.ghp-box__head .ghp-ph { margin-left: auto; font-size: 14px; color: var(--ink-soft); }
+.ghp-jobs { list-style: none; border-top: 1.5px solid var(--line); }
+.ghp-jobs li + li { border-top: 1.5px dashed var(--line); }
+.ghp-job-link { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 12px 4px 30px; border: 0; background: none;
+  color: var(--ink); text-align: left; font-size: 14px; }
+.ghp-job-link:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.ghp-job-link > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.ghp-job-link b { font-weight: 700; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.ghp-job-link:hover b { text-decoration-color: currentColor; }
+.ghp-job-link--wait, .ghp-job-link--wait:hover { background: none; color: var(--ink-soft); }
+.ghp-job-link--wait b { text-decoration: none; }
+
+.ghp-merge { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px 14px;
+  border: 2px solid var(--m); border-radius: var(--wobble-2); background: color-mix(in srgb, var(--m) 8%, var(--card)); }
+.ghp-merge > .ghp-i { width: 28px; height: 28px; color: var(--m); }
+.ghp-merge > div > b { font-size: 16px; font-weight: 700; display: block; line-height: 1.6; }
+.ghp-merge p { font-size: 14px; color: var(--ink-soft); }
+.ghp-merge--ok { --m: var(--gh-open); }
+.ghp-merge--blocked { --m: var(--gh-closed); }
+.ghp-merge--merged { --m: var(--gh-merged); }
+.ghp-merge--closed { --m: var(--gh-draft); }
+.ghp-reasons { list-style: none; display: grid; gap: 2px; font-size: 14px; margin-top: 2px; }
+.ghp-reasons li { display: flex; gap: 8px; }
+.ghp-reasons li::before { content: "✗"; color: var(--gh-closed); font-weight: 700; }
+.ghp-reasons--ok li::before { content: "✓"; color: var(--gh-open); }
+
+/* a run: jobs, then steps you can open, the failed one already open */
+.ghp-job { border: 1.5px solid var(--line-strong); border-radius: 10px; background: var(--card); overflow: hidden; }
+.ghp-job__head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 16px; background: var(--card-2); border-bottom: 1.5px solid var(--line); }
+.ghp-steps { list-style: none; }
+.ghp-steps > li + li { border-top: 1.5px dashed var(--line); }
+.ghp-step summary { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 12px; font-size: 14px; list-style: none; }
+.ghp-step summary::-webkit-details-marker { display: none; }
+.ghp-step summary::after { content: ""; margin-left: auto; width: 7px; height: 7px; flex: none; border-right: 2px solid var(--ink-soft); border-bottom: 2px solid var(--ink-soft); transform: rotate(-45deg); }
+.ghp-step[open] summary::after { transform: rotate(45deg); }
+.ghp-step summary:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.ghp-step .is-bad { color: var(--bad); font-weight: 700; }
+.ghp-log { margin: 0 10px 10px; padding: 8px 12px; border-radius: 8px; background: var(--term-bg); color: #cfc2a6;
+  font-family: var(--mono); font-size: 12px; line-height: 1.6; overflow-x: auto; }
+.ghp-log > div { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ghp-log .is-err { color: #f4a08f; font-weight: 700; }
+@container ghp (max-width: 520px) {
+  .ghp-detail__state .ghp-ph { margin-left: 0; }
+  .ghp-lnote { margin-left: 10px; }
+}
+
+/* ------------------------------------------------------------- Settings */
+
+.ghp-set { display: grid; gap: 10px; }
+.ghp-set__title { display: flex; align-items: center; gap: 8px; font-family: var(--hand); font-weight: 700; font-size: 28px; line-height: 1; }
+.ghp-set__title .ghp-i { width: 24px; height: 24px; color: var(--pen-remote); }
+.ghp-rule { border: 1.5px solid var(--line-strong); border-radius: 10px; padding: 10px 14px 12px; background: var(--card); }
+.ghp-rule__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 16px; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1.5px dashed var(--line); }
+.ghp-rule__lines { list-style: none; display: grid; gap: 6px; font-size: 16px; }
+.ghp-rule__lines li { display: flex; align-items: center; gap: 8px; }
+
+/* ------------------------------------------------------------- a run, live
+ * Each status spot holds three marks; data-phase picks one while a new run
+ * plays. Without a phase it shows the result. */
+.ghp-st, .ghp-ph { display: inline-flex; align-items: center; flex: none; }
+.ghp-st > *, .ghp-ph > * { display: none; }
+.ghp-st > .ghp-st__f, .ghp-ph > .ghp-st__f { display: inline-flex; }
+.ghp-st[data-phase="queued"] > .ghp-st__f, .ghp-st[data-phase="running"] > .ghp-st__f,
+.ghp-ph[data-phase="queued"] > .ghp-st__f, .ghp-ph[data-phase="running"] > .ghp-st__f { display: none; }
+.ghp-st[data-phase="queued"] > .ghp-st__q, .ghp-ph[data-phase="queued"] > .ghp-st__q,
+.ghp-st[data-phase="running"] > .ghp-st__r, .ghp-ph[data-phase="running"] > .ghp-st__r { display: inline-flex; }
+.ghp-ph { font-size: 14px; font-weight: 600; color: var(--ink-soft); white-space: nowrap; }
+.ghp-ph[data-phase="queued"], .ghp-ph[data-phase="running"] { color: var(--pen-amber); }
+.ghp-st[data-phase="done"] > .ghp-st__f { animation: ghp-land .45s cubic-bezier(.2, 1.5, .4, 1) both; }
+@keyframes ghp-land { 0% { opacity: 0; transform: scale(.5); } 100% { opacity: 1; transform: none; } }
+/* a step's log appears once the step is done */
+.ghp-step[data-phase="queued"] .ghp-log, .ghp-step[data-phase="running"] .ghp-log { display: none; }
+.ghp-step[data-phase="queued"] summary > span:last-child { color: var(--ink-soft); }
+/* the result stays a surprise until the step is done */
+.ghp-step[data-phase="queued"] .is-bad, .ghp-step[data-phase="running"] .is-bad { color: inherit; font-weight: 400; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ghp-i__arc { animation: none; }
+}
+
+/* things you click or that are labels never pick up a text selection, so the
+ * right-click menu stays the browser's normal one */
+.ghp__tabs, .ghp-step summary, .ghp-label, .ghp-tag, .ghp-pill, .ghp-av, .ghp-count, .ghp-rev, .ghp-ph, .ghp-h5 { user-select: none; -webkit-user-select: none; }
+
+/* ------------------------------------------------------------- narrow
+ * five tabs fit one row on a phone once the icons step aside */
+@container ghp (max-width: 520px) {
+  .ghp__tabs { gap: 0; }
+  .ghp-tab { padding: 4px 7px 6px; gap: 5px; }
+  .ghp-tab .ghp-i { display: none; }
+  .ghp-tab[aria-selected="true"]::after { left: 3px; right: 3px; }
+}
+
+/* a run that could not start, its annotations, skipped jobs, uploads */
+.ghp-run-err { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; font-size: 14px;
+  border: 1.5px solid var(--gh-closed); background: color-mix(in srgb, var(--gh-closed) 8%, var(--card)); overflow-wrap: anywhere; }
+.ghp-notes ul { list-style: none; display: grid; gap: 6px; padding: 8px 12px 10px; }
+.ghp-notes li { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; overflow-wrap: anywhere; }
+.ghp-notes code { font-size: 12px; }
+.ghp-job.is-skipped .ghp-job__head { border-bottom: 0; color: var(--ink-soft); }
+.ghp-job__head .ghp-soft { margin-left: auto; font-size: 14px; }
+.ghp-artifacts { font-size: 14px; }

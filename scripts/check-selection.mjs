@@ -94,6 +94,33 @@ try {
   await click('#mode [data-mode="command"]', { count: 2 });
   await click('#mode [data-mode="buttons"]', { count: 2 });
   await rightClickEmpty("double clicks on the mode switch");
+  // 7. the tracks: answer buttons, the track pill and its rows, the intro's track cards
+  await send("Page.navigate", { url: `${URL_BASE}/?t=habits&ch=1&b=2` }); // a step with three answer buttons
+  await sleep(2200);
+  await click('[data-choose="0"]', { count: 2 });
+  await click('[data-choose="2"]', { drift: 6 });
+  await click('[data-choose="1"]', { count: 2 });
+  await rightClickEmpty("double clicks on answer buttons");
+  await click("#track-btn");
+  await sleep(300);
+  await click('[data-to-track="ci"]', { count: 2 });
+  await sleep(500);
+  await rightClickEmpty("double click on a track in the track sheet");
+  await send("Page.navigate", { url: `${URL_BASE}/?intro=1` });
+  await sleep(2200);
+  await click('[data-pick-track="github"]', { count: 2 });
+  await click('[data-pick-track="habits"]', { drift: 6 });
+  await rightClickEmpty("double clicks on the intro's track cards");
+  // 8. the GitHub page: tabs, rows and back links change the view under the pointer
+  await send("Page.navigate", { url: `${URL_BASE}/?t=github&ch=3&b=1` });
+  await sleep(2200);
+  await click('[data-gh-tab="issues"]', { count: 2 });
+  await click(".ghp-row[data-gh-issue]", { count: 2 });
+  await click('[data-gh-tab="pulls"]', { count: 2 });
+  await click(".ghp-row[data-gh-pr]", { count: 2 });
+  await click(".ghp-back", { drift: 6 });
+  await click('[data-gh-tab="code"]', { count: 2 });
+  await rightClickEmpty("double clicks on the GitHub page's tabs and rows");
 } catch (e) {
   fails++;
   console.error("check-selection failed to run:", e.message);

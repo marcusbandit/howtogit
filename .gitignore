@@ -19,4 +19,4 @@ dist/
 .superpowers/
 
 # typescript build artifacts (compiled .js is committed; maps are dev-only)
-public/*.js.map
+public/**/*.js.map
