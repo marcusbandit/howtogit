@@ -95,7 +95,7 @@ try {
   await click('#mode [data-mode="buttons"]', { count: 2 });
   await rightClickEmpty("double clicks on the mode switch");
   // 7. the tracks: answer buttons, the track pill and its rows, the intro's track cards
-  await send("Page.navigate", { url: `${URL_BASE}/?t=habits&ch=1&b=1` });
+  await send("Page.navigate", { url: `${URL_BASE}/?t=habits&ch=1&b=2` }); // a step with three answer buttons
   await sleep(2200);
   await click('[data-choose="0"]', { count: 2 });
   await click('[data-choose="2"]', { drift: 6 });
