@@ -168,7 +168,7 @@ export const habits = {
                     say: () => `Sometimes the reason for a change isn't clear from the change. Readers kept asking when the survey ran, and that's worth keeping. Where does it go?`,
                     choose: {
                         options: [
-                            { html: "<code>Add the survey date because readers kept asking when the survey ran</code>", right: false, why: "One long line. Lists cut it off, and the what gets lost in the why." },
+                            { html: "<code>Add the survey date because readers kept asking when the survey ran and Toby said it belongs in the report</code>", right: false, why: "One long line. Lists cut it off, and the what gets lost in the why." },
                             { html: "<code>Add the survey date</code>, and the why in the team chat", right: false, why: "Chats scroll away. The commit stays next to the change for as long as the project lives." },
                             { html: "<code>Add the survey date</code><br><br><code>Readers kept asking when the survey ran.</code>", right: true, why: "A short subject, an empty line, then a <b>body</b> with the why. Lists show the subject; the body is there when someone opens the commit." },
                         ],
@@ -617,7 +617,7 @@ export const habits = {
           <li>One change per commit.</li>
           <li>Pull, then one branch per task, named for it: <code>${esc(fixBr(w))}</code>.</li>
           <li>Small pull requests that say what, why, how you checked, and <code>Closes #${deadlineIssue(w)}</code>.</li>
-          <li>Keys and passwords go in .gitignore, never in git. A leaked key gets revoked first.</li>
+          <li>Keys, passwords and files a tool can make again go in .gitignore, never in git. A leaked key gets revoked first.</li>
           <li>An issue says what you did, what you expected and what happened, with one assignee.</li>
           <li>A review is about the change, says what's good, and approves when it's good enough.</li>
         </ul>`,
