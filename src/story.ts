@@ -19,7 +19,7 @@ export type Step = string | ((w: World) => string | void);
 export interface Act {
   label: string;
   steps: (w: World, v: Record<string, string>) => Step[];
-  inputs?: { key: string; label: string; def: (w: World) => string }[];
+  inputs?: { key: string; label: string; def: (w: World) => string; max?: number }[]; // max: longest value, 60 if not set
   ai?: string; // what you'd ask an AI assistant to do; "" marks a happening, same in every mode
   who?: Who; // albert and toby show as watch acts, the same in every mode
   look?: "github"; // drawn as a GitHub button rather than an app button

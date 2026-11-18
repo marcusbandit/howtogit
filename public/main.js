@@ -658,7 +658,7 @@ function renderLesson() {
 function inputsHtml(a, ai) {
     return (a.inputs ?? []).map((inp) => `
     <label class="field"><span>${esc(inp.label)}</span>
-      <input type="text" data-act="${ai}" data-key="${inp.key}" value="${esc(valueFor(beat(), ai, inp, w))}" maxlength="60" ${beatDone ? "disabled" : ""} /></label>`).join("");
+      <input type="text" data-act="${ai}" data-key="${inp.key}" value="${esc(valueFor(beat(), ai, inp, w))}" maxlength="${inp.max ?? 60}" ${beatDone ? "disabled" : ""} /></label>`).join("");
 }
 /* the "do" area: what you press or type, depending on the mode */
 function doHtml(b) {
@@ -689,6 +689,10 @@ function doHtml(b) {
             html += aiHtml(mine);
     }
     const picks = (b.acts ?? []).some((a) => a.pick === "commit");
+    // a step's status line (a picker shows its own beside the history)
+    const st = !picks && b.status ? b.status(w) : "";
+    if (st)
+        html += `<p class="status" aria-live="polite">${st}</p>`;
     if ((picks && mode !== "buttons") || (!picks && log.some((l) => l.kind === "cmd" && /^git\s+log\b/.test(l.text))))
         html += historyHtml();
     if (mode !== "command")
@@ -844,7 +848,7 @@ function historyHtml(pickAct = -1) {
     <p class="hist__k">History of main, newest first</p>
     <div class="hist__cols" aria-hidden="true"><span>ID</span><span>Commit message</span><span>By</span><span></span></div>
     <ol class="hist__list">${list.map((c) => `<li class="${c.id === head ? "is-head" : ""}">
-      <code class="hist__id">${G.short(c.id)}</code><span class="hist__msg">${esc(c.msg)}</span>
+      <code class="hist__id">${G.short(c.id)}</code><span class="hist__msg">${esc(G.subject(c.msg))}</span>
       <span class="hist__who">${esc(c.author)}</span>${c.id === head ? `<span class="hist__head">${marker}</span>`
         : pickAct >= 0 ? `<button type="button" class="hist__open" data-run="${pickAct}" data-pick="${G.short(c.id)}">Open</button>` : "<span></span>"}
     </li>`).join("")}</ol>
@@ -1019,7 +1023,7 @@ const drawn = new Map();
 const COL = 100, X0 = 56;
 const STATE_WORDS = {
     saved: "no changes", changed: "changed", staged: "staged", "staged+changed": "staged, then changed",
-    new: "new", conflict: "conflict!", deleted: "deleted", "staged-deleted": "deletion staged",
+    new: "new", conflict: "conflict!", deleted: "deleted", "staged-deleted": "deletion staged", ignored: "ignored",
 };
 /* parts of the world are only replaced when their markup changed */
 const parts = new Map();
@@ -1270,9 +1274,17 @@ function peekHtml(d, r) {
  * the way a word processor marks them, so it's obvious something needs fixing */
 const TYPOS = /\b(helpd|teh|recieve|seperate|wich|untill|definately)\b/gi;
 const typos = (html) => html.replace(TYPOS, '<span class="typo" title="spelling">$1</span>');
+/* files .gitignore hides: still in the folder, so they stay listed, marked ignored */
+function ignoredFiles(r, d) {
+    const head = G.treeOf(w, G.headId(r, d));
+    return Object.keys(d.work).filter((p) => d.index[p] === undefined && head[p] === undefined && G.isIgnored(d.work, p))
+        .map((p) => ({ path: p, state: "ignored" }));
+}
 function deskHtml(place, r, i) {
     const d = r?.desks[i] ?? null;
-    const files = r && d ? G.fileStates(w, r, d) : Object.keys(w.folder ?? {}).sort().map((p) => ({ path: p, state: "plain" }));
+    const files = r && d
+        ? [...G.fileStates(w, r, d), ...ignoredFiles(r, d)].sort((a, b) => (a.path < b.path ? -1 : 1))
+        : Object.keys(w.folder ?? {}).sort().map((p) => ({ path: p, state: "plain" }));
     const name = d ? d.path.replace("~/", "") : "my-report";
     const on = d ? (d.detached ? `<span class="desk__on">looking at an old version</span>` : `<span class="desk__on">on <b style="color:${colorOf(d.branch)}">${esc(d.branch)}</b></span>`) : "";
     const label = r && r.desks.length > 1 ? `<span class="desk__n">desk ${i + 1}</span>` : "";
