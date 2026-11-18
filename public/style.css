@@ -1136,7 +1136,8 @@ button, .chap, .mode, .deck-btn, .lesson__nav, .beats, .kicker span, .state, .ba
 .btn--toby { background: var(--toby); border-color: var(--toby); color: #fff; justify-self: start; }
 :root[data-theme="dark"] .btn--toby { color: #10262b; }
 .t-toby .who { color: #8fd3df; }
-.cmd-hint.is-toby { background: color-mix(in srgb, var(--toby) 30%, var(--term-bg)); }
+.cmd-hint.is-toby { background: color-mix(in srgb, var(--toby) 10%, #efe6d3); }
+:root[data-theme="dark"] .cmd-hint.is-toby { background: color-mix(in srgb, var(--toby) 14%, #0f1013); }
 
 /* a choose step: answers as buttons, the reason under each one picked */
 .choose { display: grid; gap: 8px; }
