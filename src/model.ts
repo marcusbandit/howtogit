@@ -1943,7 +1943,7 @@ export function parseYaml(src: string): unknown {
       const open = s[k++];
       const close = open === "[" ? "]" : "}";
       const arr: unknown[] = [];
-      const obj: Record<string, unknown> = {};
+      const obj: Record<string, unknown> = Object.create(null);
       for (;;) {
         sp();
         if (s[k] === close) { k++; break; }
@@ -2021,7 +2021,8 @@ export function parseYaml(src: string): unknown {
     }
   }
   function map(n: number): Record<string, unknown> {
-    const out: Record<string, unknown> = {};
+    // no prototype, so keys like constructor or __proto__ are plain keys
+    const out: Record<string, unknown> = Object.create(null);
     for (;;) {
       skip();
       if (i >= L.length || ind(L[i]) < n) return out;
@@ -2029,7 +2030,7 @@ export function parseYaml(src: string): unknown {
       const t = L[i].slice(n);
       if (isItem(t)) return out;
       const k = keyOf(uncomment(t).trimEnd()) ?? fail("could not find expected ':'");
-      if (k.key in out) fail(`duplicated mapping key '${k.key}'`);
+      if (Object.prototype.hasOwnProperty.call(out, k.key)) fail(`duplicated mapping key '${k.key}'`);
       const v = uncomment(k.rest).trim();
       i++;
       if (!v) {

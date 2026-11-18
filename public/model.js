@@ -1899,7 +1899,7 @@ export function parseYaml(src) {
             const open = s[k++];
             const close = open === "[" ? "]" : "}";
             const arr = [];
-            const obj = {};
+            const obj = Object.create(null);
             for (;;) {
                 sp();
                 if (s[k] === close) {
@@ -2013,7 +2013,8 @@ export function parseYaml(src) {
         }
     }
     function map(n) {
-        const out = {};
+        // no prototype, so keys like constructor or __proto__ are plain keys
+        const out = Object.create(null);
         for (;;) {
             skip();
             if (i >= L.length || ind(L[i]) < n)
@@ -2024,7 +2025,7 @@ export function parseYaml(src) {
             if (isItem(t))
                 return out;
             const k = keyOf(uncomment(t).trimEnd()) ?? fail("could not find expected ':'");
-            if (k.key in out)
+            if (Object.prototype.hasOwnProperty.call(out, k.key))
                 fail(`duplicated mapping key '${k.key}'`);
             const v = uncomment(k.rest).trim();
             i++;

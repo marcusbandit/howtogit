@@ -431,6 +431,11 @@ eq(G.parseYaml([
   env: { A: 1, B: "two" }, list: ["a", { key: "v", other: true }], text: "folded line",
 }, "parseYaml");
 ok((() => { try { G.readWorkflow("jobs:\n  a:\n    runs-on: x\n    steps:\n      - run: hi\n"); } catch (e) { return e.message.includes("No event triggers defined in `on`"); } return false; })(), "missing on:");
+{
+  const y = G.parseYaml("jobs:\n  constructor:\n    toString: 1\n    __proto__: x\n  valueOf: { hasOwnProperty: 2 }\n");
+  eq([Object.keys(y.jobs), y.jobs.constructor.toString, y.jobs.constructor.__proto__, y.jobs.valueOf.hasOwnProperty], [["constructor", "valueOf"], 1, "x", 2], "YAML keys named like Object's own methods are plain keys");
+  ok((() => { try { G.parseYaml("a: 1\na: 2\n"); } catch (e) { return e.message.includes("duplicated mapping key 'a'"); } return false; })(), "a real duplicate key still fails");
+}
 
 /* ------------------------------------------------ closing from commits */
 {
