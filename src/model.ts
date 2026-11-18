@@ -1260,15 +1260,24 @@ export function prMerge(w: World, n: number, author: string, o: MergeOpts = {}):
   pr.method = method;
   pr.headCommit = head;
   const out = [`✓ ${method === "squash" ? "Squashed and merged" : "Merged"} pull request ${ref} (${pr.title})`];
-  if (o.deleteBranch && o.local?.r.branches[pr.head]) out.push(deleteLocal(w, o.local.r, o.local.d, pr.head, pr.base, author));
+  // GitHub finishes its side first; the clean up on your computer comes after
+  // and only warns when it can't switch, as gh does
+  // "Closes #N" only works for pull requests into the default branch
+  if (pr.base === "main") autoClose(w, pr.closes ?? [], { pr: n });
+  reachedGithub(w, pr.base, base, id, loginOf(author));
+  if (o.deleteBranch && o.local?.r.branches[pr.head]) {
+    try {
+      out.push(deleteLocal(w, o.local.r, o.local.d, pr.head, pr.base, author));
+    } catch (e) {
+      if (!(e instanceof GitError)) throw e;
+      out.push(`${e.message}\n! warning: could not switch to branch ${pr.base}; local branch ${pr.head} was not deleted`);
+    }
+  }
   if (o.deleteBranch) {
     delete gh.branches[pr.head];
     pr.branchDeleted = true;
     out.push(`✓ Deleted remote branch ${pr.head}`);
   }
-  // "Closes #N" only works for pull requests into the default branch
-  if (pr.base === "main") autoClose(w, pr.closes ?? [], { pr: n });
-  reachedGithub(w, pr.base, base, id, loginOf(author));
   return out.join("\n");
 }
 

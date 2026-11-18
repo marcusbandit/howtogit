@@ -480,6 +480,26 @@ ok((() => { try { G.readWorkflow("jobs:\n  a:\n    runs-on: x\n    steps:\n     
   ok(!G.isIgnored(d.work, "keep.log") && G.isIgnored(d.work, "other.log"), "! takes a file back");
 }
 
+/* ------------------------------------- merge --delete-branch, dirty desk */
+{
+  // the switch back to main fails on your computer; GitHub still finishes the merge
+  const w2 = team();
+  sh(w2, "you", 'gh issue create --title "Notes are short"');
+  sh(w2, "you", "git switch -c notes");
+  edit(you(w2), "notes.txt", (s) => s + "More notes.\n");
+  sh(w2, "you", 'git commit -am "Longer notes"');
+  sh(w2, "you", "git push -u origin notes");
+  sh(w2, "you", 'gh pr create --title "Longer notes" --body "Closes #1"');
+  const p = w2.prs[0];
+  edit(you(w2), "notes.txt", (s) => s + "Not saved yet.\n");
+  sh(w2, "you", `gh pr merge ${p.n} --merge --delete-branch`, {
+    has: ["✓ Merged pull request", "error: Your local changes to the following files would be overwritten:", "! warning: could not switch to branch main; local branch notes was not deleted", "✓ Deleted remote branch notes"],
+    not: ["✓ Deleted local branch"],
+  });
+  eq([p.state, gh(w2).branches.notes, p.branchDeleted, w2.issues[0].state], ["merged", undefined, true, "closed"], "a failed local switch still deletes the remote branch and closes the issue");
+  eq([you(w2).branch, w2.repos.you.branches.notes !== undefined, you(w2).work["notes.txt"].includes("Not saved yet.")], ["notes", true, true], "the local branch and its edits stay");
+}
+
 /* ------------------------------------------------------------ gh itself */
 sh(w, "you", "gh foo", { fails: true, has: ['unknown command "foo" for "gh"', "issue", "pr ", "ruleset"] });
 sh(w, "you", "gh issue foo", { fails: true, has: ['unknown command "foo" for "gh issue"', "gh issue create, list"] });
