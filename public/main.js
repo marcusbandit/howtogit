@@ -716,6 +716,36 @@ function doHtml(b) {
         html += termHtml(true);
     return html;
 }
+/* a finished act says what it did ("Commit" becomes "Committed"), so a step
+ * with several acts never ends as a stack of the same word */
+const DONE_AS = {
+    "New branch": "Branch made",
+    "Show history": "History shown",
+    "Show the checks": "Checks shown",
+    "Show the failed step's log": "Log shown",
+    "Let the cat walk over report.md": "The cat walked over report.md",
+    "Ready for review": "Marked ready for review",
+    "Open": "Opened",
+    "Assign yourself": "Assigned to you",
+    "Assign Albert": "Assigned to Albert",
+};
+const DONE_VERB = [
+    [/^Squash and merge\b/, "Squashed and merged"], [/^Stage (.+) and commit$/, "Committed"],
+    [/^Check out\b/, "Checked out"], [/^Create\b/, "Created"], [/^Commit\b/, "Committed"], [/^Comment\b/, "Commented"],
+    [/^Stage\b/, "Staged"], [/^Discard\b/, "Discarded"], [/^Publish\b/, "Published"], [/^Push\b/, "Pushed"],
+    [/^Pull\b/, "Pulled"], [/^Merge\b/, "Merged"], [/^Open\b/, "Opened"], [/^Submit\b/, "Submitted"],
+    [/^Label\b/, "Labeled"], [/^Assign\b/, "Assigned"], [/^Request\b/, "Requested"], [/^Ask\b/, "Asked"],
+    [/^Approve\b/, "Approved"], [/^Close\b/, "Closed"], [/^Add\b/, "Added"], [/^Write\b/, "Wrote"],
+    [/^Switch\b/, "Switched"], [/^Save\b/, "Saved"],
+];
+function doneLabel(label) {
+    if (DONE_AS[label])
+        return DONE_AS[label];
+    for (const [re, to] of DONE_VERB)
+        if (re.test(label))
+            return label.replace(re, to);
+    return label;
+}
 /* buttons mode looks like the tools people use: an editor's source control
  * panel for git actions, and a browser window for things done on GitHub */
 function buttonsHtml(mine, acts) {
@@ -723,7 +753,7 @@ function buttonsHtml(mine, acts) {
         const used = !beatDone && spent(a);
         return `<div class="act">
       ${inputsHtml(a, acts.indexOf(a))}
-      <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go btn--ide"} ${beatDone ? "is-done" : ""} ${used ? "is-used" : ""}" data-run="${acts.indexOf(a)}" ${beatDone || used ? "disabled" : ""}>${beatDone ? '<span aria-hidden="true">✓</span> Done' : used ? `<span aria-hidden="true">✓</span> ${esc(a.label)}` : `${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}`}</button>
+      <button type="button" class="btn ${a.look === "github" ? "btn--gh" : "btn--go btn--ide"} ${beatDone ? "is-done" : ""} ${used ? "is-used" : ""}" data-run="${acts.indexOf(a)}" ${beatDone || used ? "disabled" : ""}>${beatDone || used ? `<span aria-hidden="true">✓</span> ${esc(doneLabel(a.label))}` : `${a.look === "github" ? '<span class="gh-dot" aria-hidden="true"></span>' : ""}${esc(a.label)}`}</button>
     </div>`;
     };
     const picker = mine.find((a) => a.pick === "commit");
