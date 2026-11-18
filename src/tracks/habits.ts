@@ -350,6 +350,12 @@ export const habits: Track = {
             const b = desk(w)?.branch;
             return !!b && b !== "main" && b !== TIDY && you(w).branches[b] === gh(w).branches.main;
           },
+          status: (w) => {
+            const b = desk(w)?.branch;
+            return b && b !== "main" && b !== TIDY && you(w).branches[b] !== gh(w).branches.main
+              ? `<b>${esc(b)}</b> starts from an old copy of main: GitHub has a newer commit. Press <b>Undo</b>, then switch to main and pull before you branch.`
+              : "";
+          },
           onDone: (w) => { w.vars.fixBranch = desk(w).branch!; },
           after: () => `The pull brought down a change Albert got merged while you were tidying: <i>Add a link to the survey</i>. Your branch starts from it. Branch from an old main and you get conflicts nobody needed.`,
         },
