@@ -2358,6 +2358,7 @@ function boot() {
     $(".brand").addEventListener("click", (e) => { e.preventDefault(); intro(); });
     if (q.has("done")) {
         // dev: finish the current beat the typical way, to screenshot its after state
+        const before = w;
         const done = finishBeat(track, ci, bi);
         w = done.w;
         log = done.log;
@@ -2365,6 +2366,11 @@ function boot() {
         instant = true;
         renderAll();
         instant = false;
+        // the GitHub page turns to what the step changed, as it does in play
+        if (track.id !== "git") {
+            ghState = nextGhState(ghState, before, w, beat().ghTab);
+            renderWorld();
+        }
     }
     // links like ?ch=3 or ?intro=1 apply once; take them off the address bar so
     // a normal reload resumes your saved place instead of applying them again
