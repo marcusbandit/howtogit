@@ -34,7 +34,8 @@ const myPr = (w: World) => w.prs.find((p) => p.author === "You" && p.head === fi
 const myIssue = (w: World) => (w.issues ?? []).find((i) => i.author === "You");
 const albertPr = (w: World) => { const i = myIssue(w); return w.prs.find((p) => p.author === "Albert" && !!i && (p.closes ?? []).includes(i.n)); };
 const reviewedBy = (w: World, state?: G.Review["state"]) =>
-  (albertPr(w)?.reviews ?? []).some((r) => r.who === "you" && (!state || r.state === state) && (state !== "commented" || !!r.text.trim()));
+  (albertPr(w)?.reviews ?? []).some((r) => r.who === "you" && (!state || r.state === state));
+const commentedOn = (w: World) => (albertPr(w)?.reviews ?? []).some((r) => r.who === "you" && !!r.text.trim());
 
 /* the files a commit changed, against its first parent */
 function touched(w: World, id: string | undefined): string[] {
@@ -265,7 +266,9 @@ export const habits: Track = {
             return mine(w) && t.length === 1 && t[0] === MAIN_FILE && !/helpd\b/.test(headTree(w)[MAIN_FILE] ?? "") &&
               changed(w, "notes.txt") && subjectOk(G.subject(headMsg(w)));
           },
-          status: msgStatus,
+          status: (w) => mine(w) && touched(w, head(w)).length > 1
+            ? `That commit holds both changes. Press <b>Undo</b>, and stage only <b>report.md</b> this time.`
+            : msgStatus(w),
           after: () => `One commit, one change. notes.txt is still waiting, untouched.`,
         },
         {
@@ -414,7 +417,7 @@ export const habits: Track = {
           status: (w) => {
             const p = myPr(w);
             return p && !(p.closes ?? []).includes(deadlineIssue(w))
-              ? `Pull request #${p.n} is up, but its description doesn't say <code>Closes #${deadlineIssue(w)}</code>, so the issue would stay open. Press <b>Undo</b> and add it.`
+              ? `Pull request #${p.n} is up, but its description doesn't say <code>Closes #${deadlineIssue(w)}</code>, so the issue would stay open. Press <b>Undo</b> and add it, or fix the description: <code>gh pr edit ${p.n} --body "... Closes #${deadlineIssue(w)}"</code>`
               : "";
           },
           after: (w) => `Pull request #${myPr(w)?.n} is up and linked to issue #${deadlineIssue(w)}: one task, one small change, and a description Toby can read in a few seconds.`,
@@ -602,7 +605,10 @@ export const habits: Track = {
             steps: (w, v) => [`gh pr review ${albertPr(w)?.n} --comment --body "${q(v.body)}"`],
             ai: "leave a friendly review comment on Albert's pull request",
           }],
-          done: (w) => reviewedBy(w, "commented") || reviewedBy(w, "approved"),
+          done: (w) => commentedOn(w),
+          status: (w) => reviewedBy(w) && !commentedOn(w)
+            ? `That review has no words in it. Leave the comment too: <code>gh pr review ${albertPr(w)?.n} --comment --body "..."</code>`
+            : "",
           after: () => `Your comment is on the pull request, under Albert's change.`,
         },
         {
