@@ -2267,6 +2267,8 @@ function switchTrack(t) {
         delete choices[k];
     setTrack(t);
     history = [];
+    // the other track's open issue, pull request, run and filters stay behind
+    ghState = { tab: "code" };
     if (load(true)) {
         undoStack = [];
         ranActs.clear();
