@@ -131,6 +131,7 @@ const ICON = {
   file: () => svg(`<path d="M5.2 2.8h6.2l3.4 3.4v11H5.2Z M11.4 2.8v3.4h3.4"/>`, "is-soft"),
   shield: () => svg(`<path d="M10 2.6l6 2.2v4.6c0 3.8-2.6 6.4-6 7.8-3.4-1.4-6-4-6-7.8V4.8Z"/>`),
   live: () => svg(ring(37) + `<path d="M3 10h14M10 2.8c-2.4 2.2-2.4 12.2 0 14.4M10 2.8c2.4 2.2 2.4 12.2 0 14.4"/>`),
+  skip: () => svg(ring(41) + `<path d="M6.4 13.6l7.2-7.2"/>`, "is-soft"),
 };
 
 function issueIcon(it: Issue) {
@@ -148,8 +149,8 @@ function pill(kind: "open" | "draft" | "merged" | "closed", text: string, icon: 
 
 /* a run's status in one spot: the final mark, plus the queued and spinning
  * marks that the animation shows first. part "k/n" finishes k-th of n. */
-function runMark(run: Run, ok: boolean, part = ""): string {
-  return `<span class="ghp-st" data-run-id="${run.id}"${part ? ` data-part="${part}"` : ""}><span class="ghp-st__q">${ICON.queued()}</span><span class="ghp-st__r">${ICON.spin()}</span><span class="ghp-st__f">${ok ? ICON.ok() : ICON.bad()}</span></span>`;
+function runMark(run: Run, ok: boolean, part = "", skipped = false): string {
+  return `<span class="ghp-st" data-run-id="${run.id}"${part ? ` data-part="${part}"` : ""}><span class="ghp-st__q">${ICON.queued()}</span><span class="ghp-st__r">${ICON.spin()}</span><span class="ghp-st__f">${skipped ? ICON.skip() : ok ? ICON.ok() : ICON.bad()}</span></span>`;
 }
 function runWord(run: Run, done: string): string {
   return `<span class="ghp-ph" data-run-id="${run.id}"><span class="ghp-st__q">Queued</span><span class="ghp-st__r">In progress</span><span class="ghp-st__f">${esc(done)}</span></span>`;
@@ -161,6 +162,8 @@ const issuesOf = (w: World) => w.issues ?? [];
 const runsOf = (w: World) => [...(w.runs ?? [])].sort((a, b) => b.id - a.id);
 const latestRunFor = (w: World, pr: number) => runsOf(w).find((r) => r.pr === pr);
 const commitMsg = (w: World, id: string) => w.commits[id]?.msg.split("\n")[0] ?? "";
+const runTitle = (w: World, r: Run) => r.title || commitMsg(w, r.commit) || r.workflow;
+const runNum = (r: Run) => r.number ?? r.id;
 const branchHtml = (o: GhOpts, b: string) => `<b class="ghp-br" style="--c:${o.colorOf(b)}">${esc(b)}</b>`;
 
 function mergeBaseOf(w: World, a: string, b: string): string | undefined {
@@ -195,25 +198,14 @@ function reviewerStates(p: PR): { who: string; state: RevState }[] {
 }
 const REV_WORD: Record<RevState, string> = { waiting: "waiting", approved: "approved", changes_requested: "changes requested", commented: "commented" };
 
-/* why a pull request can't merge yet, when the model has no answer of its own */
+/* why a pull request can't merge yet: a draft, files that clash, and what
+ * the branch rules ask for (the model's mergeBlockers, in GitHub's words) */
 function blockersOf(w: World, p: PR, o: GhOpts): string[] {
-  if (o.mergeBlockers) return o.mergeBlockers(w, p.n);
   const out: string[] = [];
   if (p.draft) out.push("It is still a draft");
-  const states = reviewerStates(p);
-  for (const s of states) if (s.state === "changes_requested") out.push(`${person(s.who).name} asked for changes`);
-  const rule = w.rules?.find((r) => r.branch === p.base);
-  if (rule) {
-    const ok = states.filter((s) => s.state === "approved").length;
-    if (ok < rule.approvals) out.push(`Needs ${plural(rule.approvals, "approval")}, has ${ok}`);
-    const run = latestRunFor(w, p.n);
-    for (const c of rule.checks) {
-      const job = run?.jobs.find((j) => j.name === c);
-      if (!job) out.push(`${c} has not run`);
-      else if (!job.ok) out.push(`${c} failed`);
-    }
-  }
-  return out;
+  const clash = G.prConflicts(w, p.n);
+  if (clash.length) out.push(`This branch has conflicts in ${clash.join(", ")}`);
+  return [...out, ...(o.mergeBlockers ?? G.mergeBlockers)(w, p.n)];
 }
 
 /* ------------------------------------------------------------ tabs */
@@ -459,10 +451,10 @@ function reviewHtml(w: World, r: Review, placed: Set<Note>, outdated: boolean): 
 function checksHtml(w: World, p: PR): string {
   const run = latestRunFor(w, p.n);
   if (!run) return "";
-  const bad = run.jobs.filter((j) => !j.ok).length;
+  const bad = run.jobs.filter((j) => !j.ok && !j.skipped).length;
   return `<section class="ghp-box">
     <p class="ghp-box__head">${runMark(run, run.ok)}<b>Checks</b>${runWord(run, bad ? `${bad} failed` : "All passed")}</p>
-    <ul class="ghp-jobs">${run.jobs.map((j) => `<li><button type="button" class="ghp-job-link" data-gh-run="${run.id}">${runMark(run, j.ok)}<span><b>${esc(j.name)}</b> <span class="ghp-soft">· ${esc(run.workflow)}</span></span></button></li>`).join("")}</ul>
+    <ul class="ghp-jobs">${run.jobs.map((j) => `<li><button type="button" class="ghp-job-link" data-gh-run="${run.id}">${runMark(run, j.ok, "", j.skipped)}<span><b>${esc(j.name)}</b> <span class="ghp-soft">· ${esc(run.workflow)}</span></span></button></li>`).join("")}</ul>
   </section>`;
 }
 
@@ -545,8 +537,8 @@ const eventWords = (r: Run) => (r.event === "pull_request" ? (r.pr ? `pull reque
 function runRow(w: World, r: Run, o: GhOpts): string {
   return `<li><button type="button" class="ghp-row" data-gh-run="${r.id}">
     <span class="ghp-row__ico">${runMark(r, r.ok)}</span>
-    <span class="ghp-row__main"><span class="ghp-row__title">${esc(commitMsg(w, r.commit) || r.workflow)}</span></span>
-    <span class="ghp-row__meta"><b>${esc(r.workflow)}</b> #${r.id} · ${eventWords(r)} · ${branchHtml(o, r.branch)} · <code>${G.short(r.commit)}</code></span>
+    <span class="ghp-row__main"><span class="ghp-row__title">${esc(runTitle(w, r))}</span></span>
+    <span class="ghp-row__meta"><b>${esc(r.workflow)}</b> #${runNum(r)} · ${eventWords(r)} · ${branchHtml(o, r.branch)} · <code>${G.short(r.commit)}</code></span>
     <span class="ghp-row__side">${runWord(r, r.ok ? "Passed" : "Failed")}</span>
   </button></li>`;
 }
@@ -564,15 +556,19 @@ const ERR = /error|failed|misspell|==>|✗/i;
 function runDetail(w: World, r: Run, o: GhOpts): string {
   return `<article class="ghp-detail">
     ${backHtml("actions")}
-    <h4 class="ghp-detail__title ghp-detail__title--run">${runMark(r, r.ok)}<span>${esc(commitMsg(w, r.commit) || r.workflow)} <span>#${r.id}</span></span></h4>
-    <p class="ghp-detail__state"><span><b>${esc(r.workflow)}</b> · ${eventWords(r)} · ${branchHtml(o, r.branch)} · <code>${G.short(r.commit)}</code> · <code class="ghp-path">${esc(r.file)}</code></span>${runWord(r, r.ok ? "Passed" : "Failed")}</p>
-    ${r.jobs.map((j) => `<section class="ghp-job">
-      <p class="ghp-job__head">${runMark(r, j.ok)}<b>${esc(j.name)}</b></p>
-      <ol class="ghp-steps">${j.steps.map((s, i) => `<li><details class="ghp-step" data-run-id="${r.id}" data-part="${i}/${j.steps.length}"${s.ok ? "" : " open"}>
-        <summary>${runMark(r, s.ok, `${i}/${j.steps.length}`)}<span${s.ok ? "" : ` class="is-bad"`}>${esc(s.name)}</span></summary>
+    <h4 class="ghp-detail__title ghp-detail__title--run">${runMark(r, r.ok)}<span>${esc(runTitle(w, r))} <span>#${runNum(r)}</span></span></h4>
+    <p class="ghp-detail__state"><span><b>${esc(r.workflow)}</b> · ${eventWords(r)}${r.actor ? ` by ${esc(person(r.actor).name)}` : ""} · ${branchHtml(o, r.branch)} · <code>${G.short(r.commit)}</code> · <code class="ghp-path">${esc(r.file)}</code></span>${runWord(r, r.ok ? "Passed" : "Failed")}</p>
+    ${r.error ? `<p class="ghp-run-err">${ICON.bad()}<span>${esc(r.error)}</span></p>` : ""}
+    ${r.annotations?.length ? `<section class="ghp-box ghp-notes"><p class="ghp-box__head"><b>Annotations</b></p><ul>${r.annotations.map((a) =>
+      `<li>${ICON.bad()}<span><code>${esc(a.path)}${a.line ? `:${a.line}` : ""}</code> ${esc(a.message)}</span></li>`).join("")}</ul></section>` : ""}
+    ${r.jobs.map((j) => `<section class="ghp-job${j.skipped ? " is-skipped" : ""}">
+      <p class="ghp-job__head">${runMark(r, j.ok, "", j.skipped)}<b>${esc(j.name)}</b>${j.skipped ? `<span class="ghp-soft">skipped</span>` : ""}</p>
+      ${j.steps.length ? `<ol class="ghp-steps">${j.steps.map((s, i) => `<li><details class="ghp-step" data-run-id="${r.id}" data-part="${i}/${j.steps.length}"${s.ok ? "" : " open"}>
+        <summary>${runMark(r, s.ok, `${i}/${j.steps.length}`, s.skipped)}<span${s.ok ? "" : ` class="is-bad"`}>${esc(s.name)}</span></summary>
         ${s.log.length ? `<div class="ghp-log">${s.log.map((l) => `<div${!s.ok && ERR.test(l) ? ` class="is-err"` : ""}>${esc(l) || " "}</div>`).join("")}</div>` : ""}
-      </details></li>`).join("")}</ol>
+      </details></li>`).join("")}</ol>` : ""}
     </section>`).join("")}
+    ${r.artifacts?.length ? `<p class="ghp-soft ghp-artifacts">Uploaded: ${r.artifacts.map((a) => `<code>${esc(a)}</code>`).join(", ")}</p>` : ""}
   </article>`;
 }
 

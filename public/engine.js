@@ -43,17 +43,8 @@ export function startWorld(t) {
     const w = G.freshWorld();
     if (!t.start)
         return w;
-    // GitHub's side (issues, labels, runs, rules) starts empty, or as the model sets it up
-    const init = G.ghInit;
-    if (typeof init === "function")
-        init(w);
-    else {
-        w.issues ?? (w.issues = []);
-        w.labels ?? (w.labels = []);
-        w.runs ?? (w.runs = []);
-        w.rules ?? (w.rules = []);
-        w.num ?? (w.num = w.prs.length);
-    }
+    // GitHub's side: the repository, the default labels, no issues, runs or rules
+    G.ghInit(w);
     t.start(w, (cmd, who = "you", desk = 0) => {
         const r = exec(w, cmd, who, desk);
         if (!r.ok)

@@ -58,12 +58,7 @@ export const github = {
                     acts: [{
                             label: "Watch Toby open it",
                             who: "toby",
-                            steps: () => [(w) => {
-                                    // STUB until the model has gh issue create
-                                    w.num = Math.max(w.num ?? 0, w.prs.length) + 1;
-                                    (w.issues ?? (w.issues = [])).push({ n: w.num, title: "Add a chart", body: "Readers will want to see the numbers.", author: "Toby", labels: [], assignees: [], state: "open", comments: [] });
-                                    return "(Toby opens issue #1, Add a chart)";
-                                }],
+                            steps: () => [`gh issue create --title "Add a chart" --body "Readers will want to see the numbers."`],
                         }],
                     done: (w) => (w.issues?.length ?? 0) >= 1,
                     after: () => `The issue is on GitHub with a number. Anyone on the team can pick it up.`,
@@ -121,13 +116,7 @@ export const github = {
                     acts: [{
                             label: "Watch Toby review it",
                             who: "toby",
-                            steps: () => [(w) => {
-                                    // STUB until the model has gh pr review
-                                    const p = lastPr(w);
-                                    p.approved = true;
-                                    p.comments.push({ who: "Toby", text: "Looks good to me." });
-                                    return "(Toby approves the pull request)";
-                                }],
+                            steps: (w) => [`gh pr review ${lastPr(w).n} --approve --body "Looks good to me."`],
                         }],
                     done: (w) => !!lastPr(w)?.approved,
                 },
