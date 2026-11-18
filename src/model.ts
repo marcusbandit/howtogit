@@ -1322,6 +1322,16 @@ export function mergeBlockers(w: World, n: number): string[] {
   return uniq(out);
 }
 
+/* the files GitHub cannot merge for pull request n ("This branch has
+ * conflicts that must be resolved"); [] when it merges cleanly */
+export function prConflicts(w: World, n: number): string[] {
+  const pr = prOf(w, n);
+  const gh = w.repos.github;
+  const base = gh?.branches[pr?.base ?? ""], head = gh?.branches[pr?.head ?? ""];
+  if (!pr || pr.state !== "open" || !base || !head) return [];
+  return mergeTrees(w, mergeBase(w, base, head), base, head, ["base", "head"]).conflicts;
+}
+
 export interface RulesetSpec {
   name?: string;
   branch?: string;

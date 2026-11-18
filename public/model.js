@@ -1256,6 +1256,16 @@ export function mergeBlockers(w, n) {
     }
     return uniq(out);
 }
+/* the files GitHub cannot merge for pull request n ("This branch has
+ * conflicts that must be resolved"); [] when it merges cleanly */
+export function prConflicts(w, n) {
+    const pr = prOf(w, n);
+    const gh = w.repos.github;
+    const base = gh?.branches[pr?.base ?? ""], head = gh?.branches[pr?.head ?? ""];
+    if (!pr || pr.state !== "open" || !base || !head)
+        return [];
+    return mergeTrees(w, mergeBase(w, base, head), base, head, ["base", "head"]).conflicts;
+}
 /* the JSON GitHub's REST API takes for a branch ruleset: write it to a file
  * and send it with `gh api --method POST repos/you/my-report/rulesets --input FILE` */
 export function rulesetJson(o = {}) {

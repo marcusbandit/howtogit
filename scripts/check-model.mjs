@@ -312,6 +312,20 @@ sh(w, "you", `gh pr checks ${prCi.n} --required`, { has: ["Checks/spelling"] });
   eq(G.mergeBlockers(w2, prCi.n), ['Required status check "spelling" is failing.', 'Required status check "tests" is expected.'], "blocked: a check that never ran");
   w2.rules[0].enforcement = "disabled";
   eq(G.mergeBlockers(w2, prCi.n), [], "a disabled ruleset blocks nothing");
+  eq(G.prConflicts(w2, prCi.n), [], "no conflicts");
+  // main changes the same line the pull request changed: GitHub cannot merge it
+  sh(w2, "albert", "git switch main");
+  sh(w2, "albert", "git pull");
+  edit(albert(w2), "report.md", (s) => s.replace(/^Deadline: .*$/m, "Deadline: never"));
+  sh(w2, "albert", 'git commit -am "Move the deadline"');
+  sh(w2, "albert", "git push"); // the ruleset is disabled on this copy
+  const head2 = gh(w2).branches["spell-check"];
+  edit(you(w2), "report.md", (s) => s.replace(/^Deadline: .*$/m, "Deadline: soon"));
+  sh(w2, "you", 'git commit -am "Deadline soon"');
+  sh(w2, "you", "git push");
+  eq(G.prConflicts(w2, prCi.n), ["report.md"], "prConflicts names the file");
+  sh(w2, "you", `gh pr merge ${prCi.n} --merge`, { fails: true, has: [`X Pull request you/my-report#${prCi.n} is not mergeable: the merge commit cannot be cleanly created.`, `gh pr checkout ${prCi.n} && git fetch origin main && git merge origin/main`] });
+  ok(head2 !== gh(w2).branches["spell-check"], "the push moved the PR branch");
 }
 sh(w, "toby", `gh pr review ${prCi.n} --approve -b "Thanks"`);
 eq(G.mergeBlockers(w, prCi.n), [], "nothing blocks once approved and green");
