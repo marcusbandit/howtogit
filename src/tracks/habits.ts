@@ -490,6 +490,7 @@ export const habits: Track = {
           done: (w) => desk(w)?.branch === TIDY && !!headTree(w)[".gitignore"] && headTree(w)[".env"] === undefined && clean(w) && subjectOk(G.subject(headMsg(w))),
           status: (w) => {
             const b = desk(w)?.branch;
+            if (mine(w) && headTree(w)[".env"] !== undefined) return `That commit has <b>.env</b> in it, key and all. Press <b>Undo</b> before anything gets pushed.`;
             if (b && b !== TIDY && mine(w) && touched(w, head(w)).includes(".gitignore"))
               return `That commit went onto <b>${esc(b)}</b>. Press <b>Undo</b>, and switch to ${TIDY} first.`;
             return b === TIDY ? msgStatus(w) : "";
