@@ -941,7 +941,7 @@ function hoodHtml() {
     ${earlier.length ? `<details class="hood__earlier"><summary>Show ${earlier.length} earlier command${earlier.length > 1 ? "s" : ""}</summary>${rows(earlier)}</details>` : ""}
     ${rows(now)}
     ${errs.length ? `<pre class="hood__err">${esc(errs[errs.length - 1].text)}</pre>` : ""}
-    <details><summary>Show git's full answer</summary><pre>${esc(log.filter((l) => l.kind === "out" || l.kind === "err").map((l) => l.text).join("\n\n")) || "(nothing printed)"}</pre></details>
+    <details><summary>Show ${cmds.some((l) => /^\s*git\b/.test(l.text)) ? "git" : "gh"}'s full answer</summary><pre>${esc(log.filter((l) => l.kind === "out" || l.kind === "err").map((l) => l.text).join("\n\n")) || "(nothing printed)"}</pre></details>
   </div>`;
 }
 /* a choose step: answer buttons; a picked answer shows why under it, a wrong
