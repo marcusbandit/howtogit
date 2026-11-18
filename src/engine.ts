@@ -23,10 +23,8 @@ const refused = (out: string) => /\[(remote )?rejected\]/.test(out);
 export function startWorld(t: Track): G.World {
   const w = G.freshWorld();
   if (!t.start) return w;
-  // GitHub's side (issues, labels, runs, rules) starts empty, or as the model sets it up
-  const init = (G as unknown as { ghInit?: (w: G.World) => void }).ghInit;
-  if (typeof init === "function") init(w);
-  else { w.issues ??= []; w.labels ??= []; w.runs ??= []; w.rules ??= []; w.num ??= w.prs.length; }
+  // GitHub's side: the repository, the default labels, no issues, runs or rules
+  G.ghInit(w);
   t.start(w, (cmd, who = "you", desk = 0) => {
     const r = exec(w, cmd, who, desk);
     if (!r.ok) throw new Error(`start of ${t.id}: ${cmd}\n${r.out}`);

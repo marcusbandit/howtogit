@@ -15,6 +15,7 @@ import { MAIN_FILE, choices, choiceKey, valueFor, picks, pickAnswer, type Act, t
 import { exec, replayTo, finishBeat } from "./engine.js";
 import { tracks, trackById, git, type Track } from "./tracks.js";
 import { showIntro, introSeen, whyGithub, trackIcon } from "./intro.js";
+import { renderGhPage, unmountGhPage, wireGhPage, nextGhState, type GhState } from "./ghpage.js";
 import { explain } from "./explain.js";
 import { circlePath, linePath, elbowPath, drawOn, el, prefersReduced } from "./sketch.js";
 
@@ -129,6 +130,11 @@ let termDesk = 0;
 let justDone = false;
 let instant = true; // draw without animation (first paint, jumps)
 let history: Snap[] = []; // where you've been, so Back can return there exactly
+/* the GitHub page (tracks past git): which tab and what is open. ghBefore is
+ * the world as it was before the action being drawn, so the page can turn to
+ * where the change happened */
+let ghState: GhState = { tab: "code" };
+let ghBefore: string | null = null;
 
 function save() {
   try {
@@ -184,7 +190,8 @@ function setTrack(t: Track) {
 let undoStack: { w: string; log: string; beatDone: boolean }[] = [];
 const canUndo = () => undoStack.length > 0 || (beatDone && beat().kind !== "next");
 const keepForUndo = () => {
-  undoStack.push({ w: JSON.stringify(w), log: JSON.stringify(log), beatDone });
+  ghBefore = JSON.stringify(w);
+  undoStack.push({ w: ghBefore, log: JSON.stringify(log), beatDone });
   if (undoStack.length > 30) undoStack.shift();
 };
 function undo() {
@@ -202,6 +209,7 @@ function undo() {
     beatDone = beat().kind === "next";
   }
   termDesk = beatDesk();
+  ghState = nextGhState(ghState, null, w, beat().ghTab);
   renderWorld();
   renderLesson();
   renderDeck();
@@ -306,6 +314,8 @@ function showPlace(id: string | null) {
 }
 
 function afterChange() {
+  if (track.id !== "git") ghState = nextGhState(ghState, ghBefore ? JSON.parse(ghBefore) : null, w, beat().ghTab);
+  ghBefore = null;
   if (focusPlace && (focusPlace === "you" || w.repos[focusPlace as Place])) phoneTab = focusPlace as Place;
   if (!beatDone && beat().done(w)) {
     beatDone = true;
@@ -360,7 +370,7 @@ function flushWorld() {
  * to the place it happened in, and a dot marks any other place that changed */
 let phoneTab: Place = "you";
 const seenSig = new Map<string, string>();
-const placeSig = (id: Place) => JSON.stringify(w.repos[id] ?? null) + (id === "github" ? JSON.stringify(w.prs) : "");
+const placeSig = (id: Place) => JSON.stringify(w.repos[id] ?? null) + (id === "github" ? JSON.stringify([w.prs, w.issues, w.runs, w.rules, w.pages]) : "");
 const narrow = () => window.innerWidth <= 860;
 function showTab(id: Place, scroll = false) {
   phoneTab = id;
@@ -494,6 +504,7 @@ function jumpBeat(i: number) {
 /* ---------------------------------------------------------------- render */
 
 function renderAll() {
+  ghState = nextGhState(ghState, null, w, beat().ghTab);
   renderChapters();
   renderMode();
   renderWorld();
@@ -1122,15 +1133,23 @@ function renderWorld() {
       row.addEventListener("animationend", () => row.classList.remove("is-new"), { once: true });
       rowsBox.append(row);
     }
+    // past the git track, GitHub is a page with tabs; on wide screens its
+    // history strip moves into the Code tab (so look strips up by name)
+    const ghBox = sec.querySelector<HTMLElement>(".place__prs")!;
+    const ghOn = id === "github" && track.id !== "git";
+    if (ghOn) {
+      renderGhPage(ghBox, w, { ...ghState, colorOf, mergeBlockers: G.mergeBlockers }, document.querySelector<HTMLElement>('[data-strip="github"]'), { instant });
+      parts.delete(ghBox);
+    } else if (unmountGhPage(ghBox)) parts.delete(ghBox);
     [...rowsBox.children].forEach((row, i) => {
       const key = i ? `${id}:${i}` : id;
-      setPart(row.querySelector(".place__left"), id === "github" ? ghLeftHtml() : r ? deskHtml(id as "you" | "albert", r, i) : deskHtml("you", null, 0));
-      const strip = row.querySelector<HTMLElement>(".strip")!;
+      setPart(row.querySelector(".place__left"), ghOn ? "" : id === "github" ? ghLeftHtml() : r ? deskHtml(id as "you" | "albert", r, i) : deskHtml("you", null, 0));
+      const strip = document.querySelector<HTMLElement>(`[data-strip="${key}"]`)!;
       if (r) { if (!strip.querySelector("svg")) { strip.innerHTML = `<svg class="strip__svg"></svg>`; parts.delete(strip); } }
       else setPart(strip, `<p class="strip__empty">No version history yet.<br>Just files.</p>`);
       glideStrip(key, cols, heres);
     });
-    setPart(sec.querySelector(".place__prs"), id === "github" ? ghPanelHtml() : "");
+    if (!ghOn) setPart(ghBox, id === "github" ? prsHtml() : "");
   }
   // file state chips that changed get a little pop, so you see what moved
   root.querySelectorAll<HTMLElement>("[data-state-key]").forEach((chip) => {
@@ -1232,13 +1251,6 @@ function ghLeftHtml(): string {
     <ul class="branches">${bs.map((b) => `<li><span class="dot" style="background:${colorOf(b)}"></span>${esc(b)}</li>`).join("")}</ul>
     <p class="gh-files">Files: ${Object.keys(tree).sort().map((p) => `<button type="button" class="fname" data-file="${p}" data-place="github" data-desk="0">${esc(p)}</button>`).join(" ")}</p>
   </div>`;
-}
-
-/* GitHub's side beyond branches and files. The git track shows its pull
- * requests; the other tracks get the GitHub page (src/ghpage.ts) here, opened
- * on the tab the step is about: beat().ghTab */
-function ghPanelHtml(): string {
-  return prsHtml();
 }
 
 function prsHtml(): string {
@@ -1683,6 +1695,7 @@ function bringIntoView(els: Element[], focus: Element | null): Promise<void> {
 const nodeEl = (place: string, cid: string) =>
   document.querySelector<SVGGElement>(`[data-strip="${place}"] [data-c="${cid}"]`);
 const centre = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+const shown = (el: Element) => el.getBoundingClientRect().width > 0;
 
 function celebrate(before: FxSnap, ok: boolean, who: Who = "you") {
   if (!ok) {
@@ -1722,7 +1735,7 @@ function celebrateNow(before: FxSnap, who: Who) {
     const poppedAt = new Map<string, number>();
     for (const a of list.filter((x) => !x.from)) {
       const target = nodeEl(a.id, a.cid);
-      if (!target) continue;
+      if (!target || !shown(target)) continue;
       if (target.closest(".place.is-new")) delay = Math.max(delay, 480);
       const files = staged.filter((s) => s.place === a.id);
       saved(target, w.commits[a.cid], files, delay);
@@ -1731,7 +1744,8 @@ function celebrateNow(before: FxSnap, who: Who) {
     }
     for (const a of list.filter((x) => x.from)) {
       const target = nodeEl(a.id, a.cid), src = nodeEl(a.from!, a.cid);
-      if (!target || !src) { landed(a.id, a.cid); continue; }
+      // a line that is not on screen (GitHub's, while the page shows another tab) gets no flight
+      if (!target || !src || !shown(target) || !shown(src)) { landed(a.id, a.cid); continue; }
       if (target.closest(".place.is-new")) delay = Math.max(delay, 480);
       const start = poppedAt.has(a.cid) ? Math.max(delay, poppedAt.get(a.cid)! + 420) : delay;
       travel(src, target, a.id === "github" ? "push" : "pull", start);
@@ -2146,6 +2160,11 @@ function boot() {
   });
   $("#lesson").addEventListener("animationend", (e) => (e.target as HTMLElement).classList.remove("shake"));
   $("#deck-btn").addEventListener("click", openDeck);
+  // the GitHub page's tabs, lists and links only change what it shows
+  wireGhPage($("#world"), (patch) => {
+    ghState = { ...ghState, ...patch };
+    instant = true; renderWorld(); instant = false;
+  });
   // fold-outs (more info, under the hood) open and close smoothly, no jumps
   document.addEventListener("click", (e) => {
     const sum = (e.target as HTMLElement).closest("summary");

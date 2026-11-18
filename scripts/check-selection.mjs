@@ -111,6 +111,16 @@ try {
   await click('[data-pick-track="github"]', { count: 2 });
   await click('[data-pick-track="habits"]', { drift: 6 });
   await rightClickEmpty("double clicks on the intro's track cards");
+  // 8. the GitHub page: tabs, rows and back links change the view under the pointer
+  await send("Page.navigate", { url: `${URL_BASE}/?t=github&ch=3&b=1` });
+  await sleep(2200);
+  await click('[data-gh-tab="issues"]', { count: 2 });
+  await click(".ghp-row[data-gh-issue]", { count: 2 });
+  await click('[data-gh-tab="pulls"]', { count: 2 });
+  await click(".ghp-row[data-gh-pr]", { count: 2 });
+  await click(".ghp-back", { drift: 6 });
+  await click('[data-gh-tab="code"]', { count: 2 });
+  await rightClickEmpty("double clicks on the GitHub page's tabs and rows");
 } catch (e) {
   fails++;
   console.error("check-selection failed to run:", e.message);

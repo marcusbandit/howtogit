@@ -5,14 +5,12 @@
  * file names (.fname) and folders (.folder). */
 
 :root {
-  --toby: #0f7c86;          /* Toby's colour, beside You (pen blue) and Albert (friend purple) */
   --gh-open: #1f7a3a;
   --gh-merged: #8250df;
   --gh-closed: #c8321f;
   --gh-draft: var(--ink-soft);
 }
 :root[data-theme="dark"] {
-  --toby: #62cfd9;
   --gh-open: #6fd39a;
   --gh-merged: #b49bff;
   --gh-closed: #ff8b7a;
@@ -208,6 +206,8 @@
   .ghp-side { order: -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; padding-bottom: 6px; border-bottom: 1.5px solid var(--line); }
   .ghp-side__box + .ghp-side__box { border-top: 0; }
   .ghp-side__box { padding: 6px 0 8px; }
+  /* reviewers carry a state each, so they get the full width */
+  .ghp-side__box:has(.ghp-rev) { grid-column: 1 / -1; }
   .ghp-thread { padding-top: 8px; }
 }
 
@@ -343,3 +343,13 @@
   .ghp-tab .ghp-i { display: none; }
   .ghp-tab[aria-selected="true"]::after { left: 3px; right: 3px; }
 }
+
+/* a run that could not start, its annotations, skipped jobs, uploads */
+.ghp-run-err { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; font-size: 14px;
+  border: 1.5px solid var(--gh-closed); background: color-mix(in srgb, var(--gh-closed) 8%, var(--card)); overflow-wrap: anywhere; }
+.ghp-notes ul { list-style: none; display: grid; gap: 6px; padding: 8px 12px 10px; }
+.ghp-notes li { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; overflow-wrap: anywhere; }
+.ghp-notes code { font-size: 12px; }
+.ghp-job.is-skipped .ghp-job__head { border-bottom: 0; color: var(--ink-soft); }
+.ghp-job__head .ghp-soft { margin-left: auto; font-size: 14px; }
+.ghp-artifacts { font-size: 14px; }

@@ -22,7 +22,7 @@
   --pen-amber: #c07a12;
   --pen-remote: #6d4fc2;
   --friend: #9a3fb5;
-  --toby: #1f7a8c;
+  --toby: #0f7c86; /* Toby's colour, beside You (pen blue) and Albert (friend purple) */
 
   --ok: #2f8a57;
   --warn: #c2571d;
@@ -63,7 +63,7 @@
   --pen-amber: #f2b552;
   --pen-remote: #b29cff;
   --friend: #e29cf5;
-  --toby: #6cc7d6;
+  --toby: #62cfd9;
   --ok: #6fd39a;
   --warn: #ffa166;
   --bad: #ff8b7a;
