@@ -61,10 +61,10 @@ function fileNotes(path, text, parts) {
 }
 const newBranch = (name, ai) => ({ label: "New branch", steps: () => [`git checkout -b ${name}`], ai });
 const publish = (name) => ({ label: "Publish branch", steps: () => [`git push -u origin ${name}`], ai: "put my branch on GitHub" });
-const openPr = (title, head) => ({
+const openPr = (title, head, body) => ({
     label: "Create pull request",
     look: "github",
-    steps: () => [`gh pr create --title "${title}" --base main --head ${head}`],
+    steps: () => [`gh pr create --title "${title}" --body "${body}" --base main --head ${head}`],
     ai: "open a pull request for it",
 });
 const mergePr = (pr, ai) => ({
@@ -151,7 +151,7 @@ export const ci = {
                         newBranch("spell-check", "start a branch called spell-check"),
                         commitAct("Add a spell check"),
                         publish("spell-check"),
-                        openPr("Add a spell check", "spell-check"),
+                        openPr("Add a spell check", "spell-check", "Checks the spelling on every pull request."),
                     ],
                     done: (w) => !!spellPr(w) && !!G.treeOf(w, gh(w).branches["spell-check"])[CHECKS],
                     after: () => `GitHub found the workflow in your pull request and started it at once: queued while it waits for a computer, then running. The part of GitHub that does this is <b>GitHub Actions</b>.`,
@@ -249,7 +249,7 @@ export const ci = {
                                 (w) => { const d = albert(w).desks[0]; d.work[MAIN_FILE] = insertAfter(d.work[MAIN_FILE], /^Next step/, PLAN); return "(Albert edits report.md)"; },
                                 `git commit -am "Plan next month"`,
                                 "git push -u origin next-month",
-                                `gh pr create --title "Plan next month" --base main --head next-month`,
+                                `gh pr create --title "Plan next month" --body "What we do next month." --base main --head next-month`,
                             ],
                         }],
                     done: (w) => !!albertPr(w),
@@ -274,7 +274,7 @@ export const ci = {
                     id: "review",
                     kind: "act",
                     ghTab: onPr(albertPr),
-                    say: () => `Red means stop. GitHub still says <b>Ready to merge</b>, because nothing makes the check count yet, so stopping is up to you. Ask Albert for changes.<br><br>The check found the typo. Your part is what a computer can't judge: does the plan make sense? <b>1000 people</b> in one month is a lot.`,
+                    say: () => `Red means stop. The merge button still works, because nothing makes the check count yet, so stopping is up to you. Ask Albert for changes.<br><br>The check found the typo. Your part is what a computer can't judge: does the plan make sense? <b>1000 people</b> in one month is a lot.`,
                     acts: [{
                             label: "Request changes",
                             look: "github",
@@ -350,7 +350,7 @@ export const ci = {
                     id: "rule-why",
                     kind: "choose",
                     ghTab: "settings",
-                    say: () => `The check only helps if nobody can skip it. Albert just skipped it, and a red pull request can be merged too: Albert's said <b>Ready to merge</b> while it was red.<br><br>What would stop both?`,
+                    say: () => `The check only helps if nobody can skip it. Albert just skipped it, and a red pull request can be merged too: its merge button still works.<br><br>What would stop both?`,
                     choose: {
                         options: [
                             { html: "Asking everyone to always open a pull request and wait for green", right: false, why: "People forget, or they're in a hurry, like Albert just now." },
@@ -358,7 +358,7 @@ export const ci = {
                         ],
                     },
                     done: (w) => chose(w, "rule-why"),
-                    term: ["ruleset", "Rules GitHub enforces on a branch: for example, changes only through a pull request, with an approval and green checks. The older name is <b>branch protection</b>."],
+                    term: ["ruleset", "Rules GitHub enforces on a branch: for example, changes only through a pull request, with an approval and green checks. GitHub's older way to do this, <b>branch protection rules</b>, still works too."],
                     more: [["Can't we just trust each other?", "You can, and still use rules. They aren't about trust: they catch the day someone is in a hurry, you included."]],
                 },
                 {
@@ -434,7 +434,7 @@ export const ci = {
                     kind: "act",
                     ghTab: "pulls",
                     say: () => `Your fix is stuck on your laptop's main. Put it on a branch of its own and open a pull request: that's the only way in now.`,
-                    acts: [newBranch("fix-typo", "start a branch called fix-typo from here"), publish("fix-typo"), openPr("Fix a typo", "fix-typo")],
+                    acts: [newBranch("fix-typo", "start a branch called fix-typo from here"), publish("fix-typo"), openPr("Fix a typo", "fix-typo", "Fixes a spelling mistake.")],
                     done: (w) => fixPr(w)?.state === "open",
                     after: () => `The check runs on the pull request: green, the typo is gone.`,
                 },
@@ -504,15 +504,15 @@ export const ci = {
                         + fileNotes(PAGES, G.WORKFLOWS.pages, [
                             [1, "The name."],
                             [3, "When: every push to main. Merging a pull request is one."],
-                            [4, "What the run may do: read the files and publish them."],
-                            [6, "One job, <b>deploy</b>, on a fresh Linux computer. It publishes to <b>github-pages</b>, where GitHub serves websites from."],
+                            [4, "What the run may do: read the files, publish to Pages, and get a token that proves to Pages the request comes from this workflow."],
+                            [6, "One job, <b>deploy</b>, on a fresh Linux computer. It deploys to an <b>environment</b> called github-pages: GitHub's record of where the site lives and which version is live."],
                             [5, "Copy the project, then pack its files up as the website."],
                             [2, "Put it online."],
                         ]),
                     acts: [addFile(PAGES, G.WORKFLOWS.pages, "Add the workflow file")],
                     done: (w) => !!work(w, PAGES).trim(),
                     after: () => `<b>pages.yml</b> is on your laptop. main takes changes only through a pull request now, so this goes the same way.`,
-                    more: [["Do I need to switch Pages on?", "On a real repository, once: <b>Settings, Pages</b>, and under Source pick <b>GitHub Actions</b>."]],
+                    more: [["Do I need to switch Pages on?", "On a real repository, once: <b>Settings, Pages</b>, and under Source pick <b>GitHub Actions</b>. Private repositories need a paid plan for Pages."]],
                 },
                 {
                     id: "pages-pr",
@@ -523,7 +523,7 @@ export const ci = {
                         newBranch("publish", "start a branch called publish"),
                         commitAct("Publish the report", ".github"),
                         publish("publish"),
-                        openPr("Publish the report", "publish"),
+                        openPr("Publish the report", "publish", "Puts the report online after every merge to main."),
                     ],
                     done: (w) => pagesPr(w)?.state === "open" && !!G.treeOf(w, gh(w).branches.publish)[PAGES],
                     after: () => `The spelling check ran and passed. Publish didn't run: it only runs on pushes to main.`,

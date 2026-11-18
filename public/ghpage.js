@@ -449,11 +449,18 @@ function mergeBoxHtml(w, p, o) {
     const approvers = reviewerStates(p).filter((s) => s.state === "approved").map((s) => person(s.who).name);
     if (approvers.length)
         ok.push(`Approved by ${approvers.join(" and ")}`);
+    const okList = ok.length ? `<ul class="ghp-reasons ghp-reasons--ok">${ok.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : "";
+    // like GitHub: a red check that no rule requires still leaves merging open
     const run = latestRunFor(w, p.n);
-    if (run?.ok)
-        ok.push("Checks passed");
-    return `<section class="ghp-merge ghp-merge--ok">${ICON.ok()}<div><b>Ready to merge</b>
-    ${ok.length ? `<ul class="ghp-reasons ghp-reasons--ok">${ok.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}</div></section>`;
+    const bad = run && !run.ok ? run.jobs.filter((j) => !j.ok && !j.skipped).length : 0;
+    if (bad) {
+        ok.push("No conflicts with the base branch");
+        return `<section class="ghp-merge ghp-merge--blocked">${ICON.bad()}<div><b>Some checks were not successful</b>
+      <ul class="ghp-reasons"><li>${bad} failing check${bad > 1 ? "s" : ""}</li></ul>
+      <ul class="ghp-reasons ghp-reasons--ok">${ok.map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div></section>`;
+    }
+    return `<section class="ghp-merge ghp-merge--ok">${ICON.ok()}<div><b>${run?.ok ? "All checks have passed" : "Ready to merge"}</b>
+    ${okList}</div></section>`;
 }
 function prDetail(w, p, o) {
     const { from, to, tip } = prRange(w, p);

@@ -477,7 +477,8 @@ export const habits: Track = {
           done: (w) => G.isIgnored(desk(w).work, ".env"),
           after: () => `.env now says <b>ignored</b>. It's still in the folder for the survey tool, but <code>git status</code> won't list it and <code>git add</code> skips it. .gitignore itself is a <b>new</b> file.`,
           term: [".gitignore", "A file of names and patterns git should leave alone, one per line: <code>.env</code>, <code>*.log</code>, <code>build/</code>."],
-          more: [["What else goes in it?", "Anything private, and anything a tool makes from your files: <code>build/</code>, <code>dist/</code>, <code>node_modules/</code>, logs, big exports. If a command can make it again, it doesn't belong in git, and huge files slow down every clone for everyone."]],
+          more: [["What else goes in it?", "Anything private, and anything a tool makes from your files: <code>build/</code>, <code>dist/</code>, <code>node_modules/</code>, logs, big exports. If a command can make it again, it doesn't belong in git, and huge files slow down every clone for everyone."],
+            ["Already committed it?", ".gitignore only covers files git isn't tracking yet. For one already committed: <code>git rm --cached .env</code>, then commit. Old commits still have it, so revoke the key too."]],
         },
         {
           id: "commit-ignore",
@@ -511,7 +512,7 @@ export const habits: Track = {
           done: (w) => chose(w, "leaked"),
           term: ["revoke", "Cancel a key or password so it stops working. The first thing to do when one leaks."],
           more: [
-            ["Does GitHub help?", "GitHub's <b>secret scanning</b> knows many kinds of keys and can block a push that contains one. Don't count on it: it doesn't know every kind."],
+            ["Does GitHub help?", "GitHub's <b>secret scanning</b> knows many kinds of keys and can block a push that contains one. Don't count on it: it doesn't know every kind. It's on for public repositories; private ones need a paid add-on."],
           ],
         },
       ],
