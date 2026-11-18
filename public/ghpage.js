@@ -148,7 +148,8 @@ function prRange(w, p) {
         const m = w.commits[p.mergeCommit];
         if (m.parents.length > 1)
             return { from: mergeBaseOf(w, m.parents[0], m.parents[1]), to: m.parents[1], tip: m.parents[1] };
-        return { from: m.parents[0], to: m.id }; // squashed: one new commit on the base
+        // squashed: one new commit on the base; reviews of the branch's last commit are the current ones
+        return { from: m.parents[0], to: m.id, tip: p.headCommit };
     }
     const to = gh?.branches[p.head], base = gh?.branches[p.base];
     if (!to || !base)
@@ -721,7 +722,9 @@ export function wireGhPage(root, onState) {
  * A beat can name its tab (ghTab). Otherwise the page turns to where the
  * newest change happened, and opens the thing that changed. */
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-export function changedTab(before, after) {
+/* prefer: the beat's tab. One action can change a pull request and an issue
+ * at once (a merge that closes an issue); the beat's tab says which to open. */
+export function changedTab(before, after, prefer) {
     if (!same(before.rules, after.rules))
         return { tab: "settings" };
     const oldRuns = new Set((before.runs ?? []).map((r) => r.id));
@@ -729,9 +732,11 @@ export function changedTab(before, after) {
     if (fresh.length)
         return { tab: "actions", openRun: fresh[0].id };
     const pr = [...after.prs].sort((a, b) => b.n - a.n).find((p) => !same(p, before.prs.find((q) => q.n === p.n)));
+    const it = [...issuesOf(after)].sort((a, b) => b.n - a.n).find((i) => !same(i, issuesOf(before).find((q) => q.n === i.n)));
+    if (it && prefer === "issues")
+        return { tab: "issues", openIssue: it.n };
     if (pr)
         return { tab: "pulls", openPr: pr.n };
-    const it = [...issuesOf(after)].sort((a, b) => b.n - a.n).find((i) => !same(i, issuesOf(before).find((q) => q.n === i.n)));
     if (it)
         return { tab: "issues", openIssue: it.n };
     if (issuesOf(after).length < issuesOf(before).length)
@@ -745,7 +750,7 @@ export function changedTab(before, after) {
 /* the state to draw next. cur: the state now; before: the world before the
  * last action (null when arriving at a beat); beatTab: the beat's ghTab. */
 export function nextGhState(cur, before, after, beatTab) {
-    const ch = before ? changedTab(before, after) : null;
+    const ch = before ? changedTab(before, after, beatTab) : null;
     const shut = { openIssue: null, openPr: null, openRun: null };
     let next = cur;
     if (beatTab)

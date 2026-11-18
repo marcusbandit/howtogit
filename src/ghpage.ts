@@ -174,7 +174,8 @@ function prRange(w: World, p: PR): { from?: string; to?: string; tip?: string } 
   if (p.state === "merged" && p.mergeCommit && w.commits[p.mergeCommit]) {
     const m = w.commits[p.mergeCommit];
     if (m.parents.length > 1) return { from: mergeBaseOf(w, m.parents[0], m.parents[1]), to: m.parents[1], tip: m.parents[1] };
-    return { from: m.parents[0], to: m.id }; // squashed: one new commit on the base
+    // squashed: one new commit on the base; reviews of the branch's last commit are the current ones
+    return { from: m.parents[0], to: m.id, tip: p.headCommit };
   }
   const to = gh?.branches[p.head], base = gh?.branches[p.base];
   if (!to || !base) return {};
@@ -724,14 +725,17 @@ export function wireGhPage(root: HTMLElement, onState: (patch: Partial<GhState>)
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
-export function changedTab(before: World, after: World): Partial<GhState> | null {
+/* prefer: the beat's tab. One action can change a pull request and an issue
+ * at once (a merge that closes an issue); the beat's tab says which to open. */
+export function changedTab(before: World, after: World, prefer?: GhTab): Partial<GhState> | null {
   if (!same(before.rules, after.rules)) return { tab: "settings" };
   const oldRuns = new Set((before.runs ?? []).map((r) => r.id));
   const fresh = (after.runs ?? []).filter((r) => !oldRuns.has(r.id)).sort((a, b) => b.id - a.id);
   if (fresh.length) return { tab: "actions", openRun: fresh[0].id };
   const pr = [...after.prs].sort((a, b) => b.n - a.n).find((p) => !same(p, before.prs.find((q) => q.n === p.n)));
-  if (pr) return { tab: "pulls", openPr: pr.n };
   const it = [...issuesOf(after)].sort((a, b) => b.n - a.n).find((i) => !same(i, issuesOf(before).find((q) => q.n === i.n)));
+  if (it && prefer === "issues") return { tab: "issues", openIssue: it.n };
+  if (pr) return { tab: "pulls", openPr: pr.n };
   if (it) return { tab: "issues", openIssue: it.n };
   if (issuesOf(after).length < issuesOf(before).length) return { tab: "issues", openIssue: null };
   if (!same(before.labels, after.labels)) return { tab: "issues", openIssue: null };
@@ -742,7 +746,7 @@ export function changedTab(before: World, after: World): Partial<GhState> | null
 /* the state to draw next. cur: the state now; before: the world before the
  * last action (null when arriving at a beat); beatTab: the beat's ghTab. */
 export function nextGhState(cur: GhState, before: World | null, after: World, beatTab?: GhTab): GhState {
-  const ch = before ? changedTab(before, after) : null;
+  const ch = before ? changedTab(before, after, beatTab) : null;
   const shut = { openIssue: null, openPr: null, openRun: null };
   let next: GhState = cur;
   if (beatTab) next = ch?.tab === beatTab ? { ...cur, ...shut, ...ch } : cur.tab === beatTab ? cur : { ...cur, ...shut, tab: beatTab };
