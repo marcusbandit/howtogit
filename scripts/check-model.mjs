@@ -502,6 +502,35 @@ ok((() => { try { G.readWorkflow("jobs:\n  a:\n    runs-on: x\n    steps:\n     
   ok(!G.isIgnored(d.work, "keep.log") && G.isIgnored(d.work, "other.log"), "! takes a file back");
 }
 
+/* ------------------------------------- gh pr checkout, a branch you have */
+{
+  const w2 = team();
+  sh(w2, "you", "git switch -c fix-notes");
+  edit(you(w2), "notes.txt", (s) => s + "One.\n");
+  sh(w2, "you", 'git commit -am "One note"');
+  sh(w2, "you", "git push -u origin fix-notes");
+  sh(w2, "you", 'gh pr create --title "More notes"');
+  const p = w2.prs[0];
+  sh(w2, "you", "git switch main");
+  sh(w2, "albert", "git fetch");
+  sh(w2, "albert", "git switch fix-notes");
+  edit(albert(w2), "notes.txt", (s) => s + "Two.\n");
+  sh(w2, "albert", 'git commit -am "Second note"');
+  sh(w2, "albert", "git push");
+  sh(w2, "you", `gh pr checkout ${p.n}`, { has: ["Switched to branch 'fix-notes'", "Fast-forward"] });
+  eq([you(w2).branch, w2.repos.you.branches["fix-notes"], you(w2).work["notes.txt"].includes("Two.")], ["fix-notes", gh(w2).branches["fix-notes"], true], "gh pr checkout brings a branch you had up to the PR's head");
+  sh(w2, "you", `gh pr checkout ${p.n}`, { has: ["Already on 'fix-notes'"], not: ["Fast-forward"] });
+  // your copy and the PR went separate ways: gh refuses, as git merge --ff-only does
+  edit(you(w2), "notes.txt", (s) => s + "Mine.\n");
+  sh(w2, "you", 'git commit -am "My note"');
+  edit(albert(w2), "report.md", (s) => s + "Albert's line.\n");
+  sh(w2, "albert", 'git commit -am "Albert line"');
+  sh(w2, "albert", "git push");
+  const mine = w2.repos.you.branches["fix-notes"];
+  sh(w2, "you", `gh pr checkout ${p.n}`, { fails: true, has: ["fatal: Not possible to fast-forward, aborting."] });
+  eq(w2.repos.you.branches["fix-notes"], mine, "a branch that went its own way is left alone");
+}
+
 /* ------------------------------------- merge --delete-branch, dirty desk */
 {
   // the switch back to main fails on your computer; GitHub still finishes the merge

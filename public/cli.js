@@ -867,7 +867,15 @@ function gh(w, ctx, t) {
                         throw new G.GitError("fatal: not a git repository (or any of the parent directories): .git");
                     const fetched = G.fetch(w, r);
                     const sw = d.branch === pr.head ? `Already on '${pr.head}'` : G.switchTo(w, r, d, pr.head);
-                    return ok([fetched, sw].filter(Boolean).join("\n"));
+                    // a branch you already had is brought up to the pull request's head,
+                    // fast-forward only, as gh does
+                    const up = r.tracking[`origin/${pr.head}`], at = r.branches[pr.head];
+                    let ff = "";
+                    if (up && at !== up && G.isAncestor(w, at, up))
+                        ff = G.merge(w, r, d, `origin/${pr.head}`, ctx.author);
+                    else if (up && at !== up && !G.isAncestor(w, up, at))
+                        return { ok: false, out: [fetched, sw, "fatal: Not possible to fast-forward, aborting."].filter(Boolean).join("\n") };
+                    return ok([fetched, sw, ff].filter(Boolean).join("\n"));
                 }
                 case "merge": {
                     const sq = f.bool("-s", "--squash"), mg = f.bool("-m", "--merge"), rb = f.bool("-r", "--rebase");
