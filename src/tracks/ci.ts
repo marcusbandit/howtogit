@@ -15,7 +15,7 @@
 import * as G from "../model.js";
 import type { World, PR, Run } from "../model.js";
 import type { Track } from "../tracks.js";
-import type { Act } from "../story.js";
+import type { Act, GhView } from "../story.js";
 import { MAIN_FILE, work, setWork, insertAfter, commitAct, pushAct, pullAct, desk, gh, albert, synced, changed, chose, q } from "../story.js";
 
 const REPORT = "# Team report\n\nWe tested three ideas this month.\nThe second one worked best.\nNext step: try it with real users.\n\nDeadline: Friday\nThanks to everyone who helped.\n";
@@ -36,6 +36,8 @@ const albertPr = (w: World) => prBy(w, "Albert");
 const fixPr = (w: World) => prFrom(w, "fix-typo");
 const pagesPr = (w: World) => prFrom(w, "publish");
 const n = (p: PR | undefined) => p?.n ?? 1;
+/* the Pull requests tab, with this pull request open once it exists */
+const onPr = (pr: (w: World) => PR | undefined) => (w: World): GhView => ({ tab: "pulls", pr: pr(w)?.n });
 
 const runsOf = (w: World, p: PR | undefined): Run[] => (p ? (w.runs ?? []).filter((r) => r.pr === p.n) : []);
 const lastRun = (w: World, p: PR | undefined) => runsOf(w, p).at(-1);
@@ -171,7 +173,7 @@ export const ci: Track = {
         {
           id: "red-why",
           kind: "choose",
-          ghTab: "pulls",
+          ghTab: onPr(spellPr),
           say: () => `The run failed, and the pull request shows it as a red <b>check</b>.<br><br>Your pull request only adds the workflow file. So why is it red?`,
           choose: {
             options: [
@@ -193,7 +195,7 @@ export const ci: Track = {
         {
           id: "read-log",
           kind: "act",
-          ghTab: "actions",
+          ghTab: (w) => ({ tab: "actions", run: redRun(w, spellPr(w))?.id }),
           say: () => `To find out what failed, read the run's <b>log</b>: everything the computer printed while it worked. The failed step is the part that matters.`,
           acts: [{
             label: "Show the failed step's log",
@@ -212,7 +214,7 @@ export const ci: Track = {
         {
           id: "fix",
           kind: "edit",
-          ghTab: "pulls",
+          ghTab: onPr(spellPr),
           say: () => `Fix it in <b>report.md</b>: <b>recieved</b> should be <b>received</b>. You're still on the spell-check branch, so the fix joins the same pull request.`,
           edit: {
             files: [MAIN_FILE],
@@ -225,7 +227,7 @@ export const ci: Track = {
         {
           id: "push-fix",
           kind: "act",
-          ghTab: "pulls",
+          ghTab: onPr(spellPr),
           say: () => `Commit it and push. The pull request picks up the new commit, and the check runs again.`,
           acts: [commitAct("Fix a typo"), pushAct],
           done: (w) => synced(w, "spell-check") && !!lastRun(w, spellPr(w))?.ok,
@@ -271,7 +273,7 @@ export const ci: Track = {
         {
           id: "checks",
           kind: "act",
-          ghTab: "pulls",
+          ghTab: onPr(albertPr),
           say: (w) => `Every pull request lists its checks. Look at the ones on Albert's, #${n(albertPr(w))}.`,
           acts: [{
             label: "Show the checks",
@@ -286,7 +288,7 @@ export const ci: Track = {
         {
           id: "review",
           kind: "act",
-          ghTab: "pulls",
+          ghTab: onPr(albertPr),
           say: () => `Red means stop: this doesn't go into main yet. Ask Albert for changes.<br><br>The check found the typo. Your part is what a computer can't judge: does the plan make sense? <b>1000 people</b> in one month is a lot.`,
           acts: [{
             label: "Request changes",
@@ -301,7 +303,7 @@ export const ci: Track = {
         {
           id: "albert-fix",
           kind: "watch",
-          ghTab: "pulls",
+          ghTab: onPr(albertPr),
           say: () => `Albert fixes both and pushes to his branch.`,
           acts: [{
             label: "Watch Albert fix it",
@@ -318,7 +320,7 @@ export const ci: Track = {
         {
           id: "approve",
           kind: "act",
-          ghTab: "pulls",
+          ghTab: onPr(albertPr),
           say: () => `Green, and the plan makes sense now. Approve it.`,
           acts: [{ label: "Approve", look: "github", steps: (w) => [`gh pr review ${n(albertPr(w))} --approve`], ai: "approve Albert's pull request" }],
           done: (w) => reviewed(albertPr(w), "you", "approved"),
@@ -327,7 +329,7 @@ export const ci: Track = {
         {
           id: "merge-albert",
           kind: "act",
-          ghTab: "pulls",
+          ghTab: onPr(albertPr),
           say: () => `Merge it.`,
           acts: [mergePr(albertPr, "merge Albert's pull request")],
           done: (w) => albertPr(w)?.state === "merged",
@@ -456,7 +458,7 @@ export const ci: Track = {
         {
           id: "try-merge",
           kind: "act",
-          ghTab: "pulls",
+          ghTab: onPr(fixPr),
           say: () => `Green. Try to merge it.`,
           acts: [mergePr(fixPr, "merge my pull request")],
           done: (w) => !!fixPr(w) && w.vars.mergeBlocked === String(fixPr(w)!.n),
@@ -466,7 +468,7 @@ export const ci: Track = {
         {
           id: "toby-approve",
           kind: "watch",
-          ghTab: "pulls",
+          ghTab: onPr(fixPr),
           say: () => `Toby reviews it.`,
           acts: [{ label: "Watch Toby review it", who: "toby", steps: (w) => [`gh pr review ${n(fixPr(w))} --approve --body "Good catch, thanks."`] }],
           done: (w) => reviewed(fixPr(w), "toby", "approved"),
@@ -475,7 +477,7 @@ export const ci: Track = {
         {
           id: "merge-fix",
           kind: "act",
-          ghTab: "pulls",
+          ghTab: onPr(fixPr),
           say: () => `Merge it.`,
           acts: [mergePr(fixPr, "merge my pull request")],
           done: (w) => fixPr(w)?.state === "merged",
@@ -547,7 +549,7 @@ export const ci: Track = {
         {
           id: "toby-approve-pages",
           kind: "watch",
-          ghTab: "pulls",
+          ghTab: onPr(pagesPr),
           say: () => `Toby takes a look.`,
           acts: [{ label: "Watch Toby review it", who: "toby", steps: (w) => [`gh pr review ${n(pagesPr(w))} --approve --body "Nice, a link I can send people."`] }],
           done: (w) => reviewed(pagesPr(w), "toby", "approved"),
