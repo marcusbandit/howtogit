@@ -445,6 +445,12 @@ function mergeBoxHtml(w, p, o) {
         return `<section class="ghp-merge ghp-merge--blocked">${ICON.bad()}<div><b>Merging is blocked</b>
       <ul class="ghp-reasons">${blockers.map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div></section>`;
     }
+    // like GitHub: a review asking for changes shows first; merging still works
+    const asked = reviewerStates(p).filter((s) => s.state === "changes_requested").map((s) => person(s.who).name);
+    if (asked.length) {
+        return `<section class="ghp-merge ghp-merge--blocked">${ICON.bad()}<div><b>Changes requested</b>
+      <ul class="ghp-reasons"><li>${esc(asked.join(" and "))} requested changes</li></ul></div></section>`;
+    }
     const ok = [];
     const approvers = reviewerStates(p).filter((s) => s.state === "approved").map((s) => person(s.who).name);
     if (approvers.length)
