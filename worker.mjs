@@ -1,10 +1,12 @@
 export default {
   async fetch(request, env) {
     const originalScheme = getOriginalScheme(request);
+    const url = new URL(request.url);
 
-    if (originalScheme === "http") {
-      const url = new URL(request.url);
+    // One address for search engines: http and www both land on https://howtogit.dev.
+    if (originalScheme === "http" || url.hostname.startsWith("www.")) {
       url.protocol = "https:";
+      url.hostname = url.hostname.replace(/^www\./, "");
       return Response.redirect(url.toString(), 301);
     }
 
